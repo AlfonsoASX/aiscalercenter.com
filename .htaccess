@@ -1,0 +1,10 @@
+<Files .env>
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Opcional: Proteger también la carpeta includes y config de acceso directo
+<Directory ./config>
+    Order allow,deny
+    Deny from all
+</Directory>

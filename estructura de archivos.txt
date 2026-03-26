@@ -1,0 +1,47 @@
+/ (Raíz del Servidor)
+│
+├── .env                    # Claves (Protégelo con .htaccess)
+├── composer.json           # Dependencias
+├── index.php               # Dashboard Principal
+│
+├── src/                    # Lógica de Negocio (Clases)
+│   ├── Bootstrap.php       # Inicia sesión, carga env y verifica auth
+│   ├── Auth.php            # Conexión a Supabase
+│   ├── Billing.php         # Conexión a Stripe SDK
+│   └── AI.php              # Conexión a OpenAI/Gemini
+│
+├── includes/               # HTML Compartido
+│   ├── header.php
+│   ├── sidebar.php
+│   └── footer.php
+│
+├── auth/                   # Pantallas de Acceso
+│   ├── login.php
+│   └── register.php
+│
+├── billing/                # Pantallas de Pago
+│   ├── checkout.php
+│   └── webhook.php
+│
+├── tools/                  # TUS HERRAMIENTAS (Archivos independientes)
+│   │   # --- PILAR 1: IDEAR ---
+│   ├── idear_prospector.php
+│   ├── idear_nicho.php
+│   ├── idear_validador.php
+│   │
+│   │   # --- PILAR 2: DISEÑAR ---
+│   ├── disenar_flujos.php
+│   ├── disenar_prompts.php
+│   ├── disenar_identidad.php
+│   │
+│   │   # --- PILAR 3: EJECUTAR ---
+│   ├── ejecutar_ads.php
+│   ├── ejecutar_repurposing.php
+│   ├── ejecutar_ventas.php
+│   │
+│   │   # --- PILAR 4: AUTOMATIZAR ---
+│   ├── auto_webhooks.php
+│   ├── auto_json_sql.php
+│   └── auto_monitor.php
+│
+└── vendor/                 # Generado por Composer
