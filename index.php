@@ -1,66 +1,40 @@
 <?php
 declare(strict_types=1);
 
-session_start();
+$supabaseConfig = require __DIR__ . '/config/supabase.php';
 
-$sessionKey = 'aiscaler_authenticated';
-$userEmailKey = 'aiscaler_user_email';
+$supabaseProjectUrl = trim((string) ($supabaseConfig['project_url'] ?? ''));
+$publishableKey = trim((string) ($supabaseConfig['publishable_key'] ?? ''));
+$anonKey = trim((string) ($supabaseConfig['anon_key'] ?? ''));
+$supabasePublicKey = $publishableKey !== '' && $publishableKey !== 'tu_publishable_key' ? $publishableKey : $anonKey;
+
 $redirectUrl = strtok($_SERVER['REQUEST_URI'] ?? '/index.php', '?') ?: '/index.php';
 $loginUrl = $redirectUrl . '?view=login';
-$showLoginForm = ($_GET['view'] ?? '') === 'login';
-$loginError = null;
-$loginEmail = '';
+$appUrl = $redirectUrl . '?view=app';
+$view = (string) ($_GET['view'] ?? '');
+$showLoginView = $view === 'login';
+$showAppView = $view === 'app';
+$hasSupabaseConfig = $supabaseProjectUrl !== ''
+    && $supabaseProjectUrl !== 'https://tu-project-ref.supabase.co'
+    && $supabasePublicKey !== ''
+    && $supabasePublicKey !== 'tu_publishable_key'
+    && $supabasePublicKey !== 'tu_anon_key';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-
-    if ($action === 'login') {
-        $loginEmail = trim((string) ($_POST['email'] ?? ''));
-        $password = trim((string) ($_POST['password'] ?? ''));
-
-        if ($loginEmail === '' || $password === '') {
-            $loginError = 'Ingresa tu correo y tu contrasena para continuar.';
-            $showLoginForm = true;
-        } else {
-            session_regenerate_id(true);
-            $_SESSION[$sessionKey] = true;
-            $_SESSION[$userEmailKey] = $loginEmail;
-            header("Location: {$redirectUrl}");
-            exit;
-        }
-    }
-
-    if ($action === 'logout') {
-        $_SESSION = [];
-
-        if (ini_get('session.use_cookies')) {
-            $params = session_get_cookie_params();
-            setcookie(
-                session_name(),
-                '',
-                time() - 42000,
-                $params['path'],
-                $params['domain'],
-                $params['secure'],
-                $params['httponly']
-            );
-        }
-
-        session_destroy();
-        header("Location: {$redirectUrl}");
-        exit;
-    }
-}
-
-$isAuthenticated = !empty($_SESSION[$sessionKey]);
-$userEmail = (string) ($_SESSION[$userEmailKey] ?? '');
+$authClientConfig = [
+    'supabaseUrl' => $supabaseProjectUrl,
+    'supabaseKey' => $supabasePublicKey,
+    'landingUrl' => $redirectUrl,
+    'loginUrl' => $loginUrl,
+    'appUrl' => $appUrl,
+    'hasSupabaseConfig' => $hasSupabaseConfig,
+];
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $isAuthenticated ? 'AiScaler Center - Plataforma' : ($showLoginForm ? 'AiScaler Center - Iniciar sesion' : 'AiScaler Center - Transforma tu Futuro Profesional'); ?></title>
+    <title><?= $showAppView ? 'AiScaler Center - Panel de control' : ($showLoginView ? 'AiScaler Center - Acceso' : 'AiScaler Center - Transforma tu Futuro Profesional'); ?></title>
 
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -105,9 +79,16 @@ $userEmail = (string) ($_SESSION[$userEmailKey] ?? '');
 
         html { scroll-behavior: smooth; }
     </style>
+
+    <?php if ($showLoginView || $showAppView): ?>
+        <script>
+            window.AISCALER_AUTH_CONFIG = <?= json_encode($authClientConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
+        </script>
+        <script type="module" src="js/supabase-auth.js"></script>
+    <?php endif; ?>
 </head>
-<?php if ($isAuthenticated): ?>
-<body class="bg-slate-950 text-slate-100 antialiased">
+<?php if ($showAppView): ?>
+<body data-view="app" class="bg-slate-950 text-slate-100 antialiased">
     <div class="min-h-screen platform-shell">
         <header class="border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -118,63 +99,133 @@ $userEmail = (string) ($_SESSION[$userEmailKey] ?? '');
                         </div>
                         <div>
                             <p class="text-xs uppercase tracking-[0.35em] text-sky-300/80">AiScaler Center</p>
-                            <h1 class="text-2xl font-extrabold text-white">Plataforma</h1>
-                            <?php if ($userEmail !== ''): ?>
-                                <p class="mt-1 text-sm text-slate-400"><?= htmlspecialchars($userEmail, ENT_QUOTES, 'UTF-8'); ?></p>
-                            <?php endif; ?>
+                            <h1 class="text-2xl font-extrabold text-white">Panel de control</h1>
+                            <p id="app-user-email" class="mt-1 text-sm text-slate-400">Validando sesion...</p>
                         </div>
                     </div>
 
-                    <form method="POST" class="shrink-0">
-                        <input type="hidden" name="action" value="logout">
-                        <button type="submit" class="btn-font rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-bold text-white transition duration-300 hover:bg-white/20">
-                            Salir
-                        </button>
-                    </form>
+                    <button id="logout-button" type="button" class="btn-font shrink-0 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-bold text-white transition duration-300 hover:bg-white/20">
+                        Salir
+                    </button>
                 </div>
             </div>
         </header>
 
         <main class="max-w-7xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
-            <section class="grid gap-6 lg:grid-cols-[280px,minmax(0,1fr)]">
+            <div id="app-notice" class="hidden mb-6 rounded-2xl px-4 py-3 text-sm font-semibold"></div>
+
+            <div id="app-loading" class="platform-panel flex min-h-[420px] items-center justify-center rounded-3xl border border-white/10 p-10 text-center">
+                <div>
+                    <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-sky-400/10 text-sky-300">
+                        <i class="fas fa-circle-notch animate-spin text-2xl"></i>
+                    </div>
+                    <h2 class="text-3xl font-extrabold text-white">Preparando tu panel</h2>
+                    <p class="mt-3 text-sm leading-7 text-slate-300">
+                        Estamos validando tu sesion con Supabase para llevarte directo a tu espacio privado.
+                    </p>
+                </div>
+            </div>
+
+            <section id="app-shell" class="hidden grid gap-6 lg:grid-cols-[320px,minmax(0,1fr)]">
                 <aside class="platform-panel rounded-3xl border border-white/10 p-6">
-                    <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Base</p>
-                    <h2 class="mt-4 text-3xl font-extrabold text-white">Interfaz lista para crecer</h2>
-                    <p class="mt-4 text-sm leading-7 text-slate-300">
-                        Ya es posible entrar y salir de la plataforma. Este espacio queda preparado para agregar modulos, menu y contenido en la siguiente etapa.
+                    <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Cuenta</p>
+                    <h2 id="app-user-name" class="mt-4 text-3xl font-extrabold text-white">Tu espacio</h2>
+                    <p id="app-verification-copy" class="mt-4 text-sm leading-7 text-slate-300">
+                        Cargando informacion de tu cuenta...
                     </p>
 
-                    <div class="mt-8 space-y-3">
-                        <div class="h-12 rounded-2xl border border-white/10 bg-white/5"></div>
-                        <div class="h-12 rounded-2xl border border-white/10 bg-white/5"></div>
-                        <div class="h-12 rounded-2xl border border-white/10 bg-white/5"></div>
+                    <div class="mt-8 grid gap-3">
+                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Estado</p>
+                            <p id="app-status-badge" class="mt-2 text-sm font-semibold text-sky-200">Pendiente</p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Metodo</p>
+                            <p id="app-provider" class="mt-2 text-sm font-semibold text-slate-200">email</p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Ultimo acceso</p>
+                            <p id="app-last-sign-in" class="mt-2 text-sm font-semibold text-slate-200">--</p>
+                        </div>
+                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">User ID</p>
+                            <p id="app-user-id" class="mt-2 break-all text-sm font-semibold text-slate-200">--</p>
+                        </div>
                     </div>
+
+                    <form id="change-password-form" class="mt-8 space-y-4">
+                        <div>
+                            <label for="app-new-password" class="mb-2 block text-sm font-semibold text-slate-200">Cambiar contrasena</label>
+                            <input
+                                id="app-new-password"
+                                name="password"
+                                type="password"
+                                minlength="8"
+                                required
+                                class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                placeholder="Minimo 8 caracteres"
+                            >
+                        </div>
+
+                        <div>
+                            <label for="app-confirm-password" class="mb-2 block text-sm font-semibold text-slate-200">Confirmar contrasena</label>
+                            <input
+                                id="app-confirm-password"
+                                name="password_confirm"
+                                type="password"
+                                minlength="8"
+                                required
+                                class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                placeholder="Repite la contrasena"
+                            >
+                        </div>
+
+                        <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-sm font-bold text-white transition duration-300 hover:bg-blue-700">
+                            Actualizar contrasena
+                        </button>
+                    </form>
                 </aside>
 
                 <div class="platform-grid min-h-[520px] rounded-3xl border border-white/10 p-6 sm:p-8">
                     <div class="flex h-full flex-col rounded-[1.75rem] border border-dashed border-sky-400/25 bg-slate-950/50 p-6 sm:p-10">
-                        <div class="max-w-2xl">
+                        <div class="max-w-3xl">
                             <span class="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-4 py-1 text-sm font-semibold text-sky-200">
-                                Vista inicial
+                                Panel inicial
                             </span>
-                            <h2 class="mt-6 text-4xl font-extrabold text-white sm:text-5xl">Aqui ira la plataforma.</h2>
+                            <h2 class="mt-6 text-4xl font-extrabold text-white sm:text-5xl">Ya entraste como debe ser.</h2>
                             <p class="mt-4 text-base leading-8 text-slate-300">
-                                Por ahora solo se muestra la interfaz grafica base para que el acceso ya funcione. El contenido interno todavia esta vacio a proposito.
+                                El acceso ahora corre con Supabase Auth real: registro, confirmacion por correo, login con contrasena, magic link, recuperacion de acceso y sesion persistente.
                             </p>
                         </div>
 
-                        <div class="mt-auto grid gap-4 pt-12 md:grid-cols-2 xl:grid-cols-3">
+                        <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                             <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                                <div class="h-4 w-24 rounded-full bg-white/10"></div>
-                                <div class="mt-6 h-24 rounded-2xl bg-white/5"></div>
+                                <p class="text-sm font-semibold text-sky-200">Acceso persistente</p>
+                                <p class="mt-3 text-sm leading-7 text-slate-300">
+                                    Si la sesion sigue activa, el sistema te devuelve al panel sin pedirte pasos extra.
+                                </p>
                             </div>
                             <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                                <div class="h-4 w-28 rounded-full bg-white/10"></div>
-                                <div class="mt-6 h-24 rounded-2xl bg-white/5"></div>
+                                <p class="text-sm font-semibold text-sky-200">Autogestion de cuenta</p>
+                                <p class="mt-3 text-sm leading-7 text-slate-300">
+                                    Desde aqui puedes cambiar tu contrasena y ver el estado real de tu correo y tu ultimo acceso.
+                                </p>
                             </div>
-                            <div class="rounded-3xl border border-white/10 bg-white/5 p-5 md:col-span-2 xl:col-span-1">
-                                <div class="h-4 w-20 rounded-full bg-white/10"></div>
-                                <div class="mt-6 h-24 rounded-2xl bg-white/5"></div>
+                            <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
+                                <p class="text-sm font-semibold text-sky-200">Base lista para crecer</p>
+                                <p class="mt-3 text-sm leading-7 text-slate-300">
+                                    El siguiente paso natural ya es conectar tablas, permisos y herramientas de IA al usuario autenticado.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-auto pt-12">
+                            <div class="rounded-3xl border border-white/10 bg-slate-950/40 p-6">
+                                <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Proxima iteracion</p>
+                                <h3 class="mt-3 text-2xl font-extrabold text-white">Tus modulos de IA iran aqui.</h3>
+                                <p class="mt-3 text-sm leading-7 text-slate-300">
+                                    Dejamos el panel despejado y con la base de autenticacion terminada para que ahora podamos conectar herramientas, historial, creditos, billing y roles sin rehacer el acceso.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -183,8 +234,8 @@ $userEmail = (string) ($_SESSION[$userEmailKey] ?? '');
         </main>
     </div>
 </body>
-<?php elseif ($showLoginForm): ?>
-<body class="bg-slate-950 text-slate-100 antialiased">
+<?php elseif ($showLoginView): ?>
+<body data-view="login" class="bg-slate-950 text-slate-100 antialiased">
     <div class="min-h-screen hero-bg">
         <nav class="bg-slate-950/55 backdrop-blur-md">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -201,75 +252,291 @@ $userEmail = (string) ($_SESSION[$userEmailKey] ?? '');
         </nav>
 
         <main class="px-4 py-10 sm:px-6 lg:px-8">
-            <div class="mx-auto grid max-w-6xl gap-8 pt-10 lg:grid-cols-[1.1fr,0.9fr] lg:items-center lg:pt-20">
+            <div class="mx-auto grid max-w-6xl gap-8 pt-10 lg:grid-cols-[1.1fr,0.9fr] lg:items-center lg:pt-16">
                 <section class="max-w-2xl">
                     <p class="text-sm font-bold uppercase tracking-[0.35em] text-sky-300">Acceso privado</p>
                     <h1 class="mt-6 text-4xl font-extrabold text-white md:text-6xl leading-tight">
-                        Entra a tu plataforma AiScaler.
+                        Entra de la forma mas simple y comoda posible.
                     </h1>
                     <p class="mt-6 max-w-xl text-lg leading-8 text-slate-200">
-                        Este formulario ya controla el acceso a la interfaz base. Al iniciar sesion entraras al panel inicial y desde ahi podras salir para volver a la landing.
+                        Esta pantalla ya usa Supabase Auth real para que el usuario pueda crear cuenta, entrar con contrasena, recibir un magic link, recuperar acceso y volver directo al panel.
                     </p>
 
                     <div class="mt-10 grid gap-4 sm:grid-cols-2">
                         <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-                            <p class="text-sm font-semibold text-sky-200">Acceso simple</p>
-                            <p class="mt-2 text-sm leading-7 text-slate-300">Por ahora el formulario sirve como base funcional del login para preparar la plataforma.</p>
+                            <p class="text-sm font-semibold text-sky-200">Inicio de sesion real</p>
+                            <p class="mt-2 text-sm leading-7 text-slate-300">El acceso ya no depende de una sesion temporal del sitio, sino de la identidad real del usuario en Supabase.</p>
                         </div>
                         <div class="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-                            <p class="text-sm font-semibold text-sky-200">Siguiente etapa</p>
-                            <p class="mt-2 text-sm leading-7 text-slate-300">Despues podemos conectar usuarios reales, base de datos y recuperacion de contrasena.</p>
+                            <p class="text-sm font-semibold text-sky-200">UX preparada</p>
+                            <p class="mt-2 text-sm leading-7 text-slate-300">Confirmacion por correo, reenvio de email, recuperacion y sesion persistente ya forman parte del flujo.</p>
                         </div>
                     </div>
                 </section>
 
                 <section class="rounded-[2rem] border border-white/10 bg-slate-950/75 p-6 shadow-2xl shadow-slate-950/50 backdrop-blur-xl sm:p-8">
+                    <div id="auth-notice" class="hidden mb-6 rounded-2xl px-4 py-3 text-sm font-semibold"></div>
+
                     <div class="mb-8">
-                        <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Iniciar sesion</p>
-                        <h2 class="mt-3 text-3xl font-extrabold text-white">Bienvenido de nuevo</h2>
-                        <p class="mt-3 text-sm leading-7 text-slate-300">
-                            Ingresa tus datos para continuar al espacio privado.
+                        <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Supabase Auth</p>
+                        <h2 class="mt-3 text-3xl font-extrabold text-white">Bienvenido a AiScaler Center</h2>
+                        <p id="auth-settings-hint" class="mt-3 text-sm leading-7 text-slate-300">
+                            El sistema detectara si necesitas confirmar tu correo antes de entrar.
                         </p>
                     </div>
 
-                    <?php if ($loginError !== null): ?>
-                        <div class="mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                            <?= htmlspecialchars($loginError, ENT_QUOTES, 'UTF-8'); ?>
-                        </div>
-                    <?php endif; ?>
-
-                    <form method="POST" class="space-y-5">
-                        <input type="hidden" name="action" value="login">
-
-                        <div>
-                            <label for="email" class="mb-2 block text-sm font-semibold text-slate-200">Correo electronico</label>
-                            <input
-                                id="email"
-                                name="email"
-                                type="email"
-                                value="<?= htmlspecialchars($loginEmail, ENT_QUOTES, 'UTF-8'); ?>"
-                                required
-                                class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
-                                placeholder="tu@empresa.com"
-                            >
-                        </div>
-
-                        <div>
-                            <label for="password" class="mb-2 block text-sm font-semibold text-slate-200">Contrasena</label>
-                            <input
-                                id="password"
-                                name="password"
-                                type="password"
-                                required
-                                class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
-                                placeholder="********"
-                            >
-                        </div>
-
-                        <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-base font-bold text-white transition duration-300 hover:bg-blue-700">
-                            Entrar a la plataforma
+                    <div class="grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/5 p-2">
+                        <button type="button" data-auth-target="signin" data-auth-tab class="btn-font rounded-2xl px-3 py-3 text-sm font-bold text-white transition duration-300 hover:bg-white/10">
+                            Entrar
                         </button>
-                    </form>
+                        <button type="button" data-auth-target="signup" data-auth-tab class="btn-font rounded-2xl px-3 py-3 text-sm font-bold text-white transition duration-300 hover:bg-white/10">
+                            Crear cuenta
+                        </button>
+                        <button type="button" data-auth-target="magic" data-auth-tab class="btn-font rounded-2xl px-3 py-3 text-sm font-bold text-white transition duration-300 hover:bg-white/10">
+                            Magic link
+                        </button>
+                    </div>
+
+                    <div id="oauth-section" class="hidden mt-6">
+                        <p class="mb-3 text-xs uppercase tracking-[0.25em] text-slate-500">Otros accesos habilitados</p>
+                        <div id="oauth-provider-list" class="grid gap-3"></div>
+                    </div>
+
+                    <div class="mt-6 space-y-6">
+                        <div data-auth-panel="signin">
+                            <h3 class="text-2xl font-extrabold text-white">Entrar con correo y contrasena</h3>
+                            <p class="mt-2 text-sm leading-7 text-slate-300">
+                                Si ya tienes cuenta, entra directo al panel con tu correo confirmado.
+                            </p>
+
+                            <form id="signin-form" class="mt-6 space-y-5">
+                                <div>
+                                    <label for="signin-email" class="mb-2 block text-sm font-semibold text-slate-200">Correo electronico</label>
+                                    <input
+                                        id="signin-email"
+                                        name="email"
+                                        type="email"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="tu@empresa.com"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="signin-password" class="mb-2 block text-sm font-semibold text-slate-200">Contrasena</label>
+                                    <input
+                                        id="signin-password"
+                                        name="password"
+                                        type="password"
+                                        minlength="8"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="********"
+                                    >
+                                </div>
+
+                                <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-base font-bold text-white transition duration-300 hover:bg-blue-700">
+                                    Entrar al panel
+                                </button>
+                            </form>
+
+                            <div class="mt-6 flex flex-wrap gap-3 text-sm">
+                                <button type="button" data-auth-target="forgot" class="font-semibold text-sky-300 transition duration-300 hover:text-sky-200">
+                                    Olvide mi contrasena
+                                </button>
+                                <button type="button" data-auth-target="resend" class="font-semibold text-slate-300 transition duration-300 hover:text-white">
+                                    Reenviar confirmacion
+                                </button>
+                            </div>
+                        </div>
+
+                        <div data-auth-panel="signup" class="hidden">
+                            <h3 class="text-2xl font-extrabold text-white">Crear cuenta nueva</h3>
+                            <p class="mt-2 text-sm leading-7 text-slate-300">
+                                Registra al usuario y deja listo el correo de confirmacion para su primer acceso.
+                            </p>
+
+                            <form id="signup-form" class="mt-6 space-y-5">
+                                <div>
+                                    <label for="signup-name" class="mb-2 block text-sm font-semibold text-slate-200">Nombre</label>
+                                    <input
+                                        id="signup-name"
+                                        name="full_name"
+                                        type="text"
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="Tu nombre"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="signup-email" class="mb-2 block text-sm font-semibold text-slate-200">Correo electronico</label>
+                                    <input
+                                        id="signup-email"
+                                        name="email"
+                                        type="email"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="tu@empresa.com"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="signup-password" class="mb-2 block text-sm font-semibold text-slate-200">Contrasena</label>
+                                    <input
+                                        id="signup-password"
+                                        name="password"
+                                        type="password"
+                                        minlength="8"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="Minimo 8 caracteres"
+                                    >
+                                </div>
+
+                                <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-base font-bold text-white transition duration-300 hover:bg-blue-700">
+                                    Crear cuenta
+                                </button>
+                            </form>
+
+                            <div class="mt-6 text-sm">
+                                <button type="button" data-auth-target="signin" class="font-semibold text-sky-300 transition duration-300 hover:text-sky-200">
+                                    Ya tengo cuenta
+                                </button>
+                            </div>
+                        </div>
+
+                        <div data-auth-panel="magic" class="hidden">
+                            <h3 class="text-2xl font-extrabold text-white">Entrar sin contrasena</h3>
+                            <p class="mt-2 text-sm leading-7 text-slate-300">
+                                Supabase puede enviarte un enlace magico para entrar con un solo clic desde tu correo.
+                            </p>
+
+                            <form id="magic-form" class="mt-6 space-y-5">
+                                <div>
+                                    <label for="magic-email" class="mb-2 block text-sm font-semibold text-slate-200">Correo electronico</label>
+                                    <input
+                                        id="magic-email"
+                                        name="email"
+                                        type="email"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="tu@empresa.com"
+                                    >
+                                </div>
+
+                                <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-base font-bold text-white transition duration-300 hover:bg-blue-700">
+                                    Enviar magic link
+                                </button>
+                            </form>
+
+                            <div class="mt-6 text-sm">
+                                <button type="button" data-auth-target="signin" class="font-semibold text-sky-300 transition duration-300 hover:text-sky-200">
+                                    Prefiero usar contrasena
+                                </button>
+                            </div>
+                        </div>
+
+                        <div data-auth-panel="forgot" class="hidden">
+                            <h3 class="text-2xl font-extrabold text-white">Recuperar contrasena</h3>
+                            <p class="mt-2 text-sm leading-7 text-slate-300">
+                                Te enviaremos un enlace para crear una nueva contrasena sin salir del flujo de acceso.
+                            </p>
+
+                            <form id="forgot-form" class="mt-6 space-y-5">
+                                <div>
+                                    <label for="forgot-email" class="mb-2 block text-sm font-semibold text-slate-200">Correo electronico</label>
+                                    <input
+                                        id="forgot-email"
+                                        name="email"
+                                        type="email"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="tu@empresa.com"
+                                    >
+                                </div>
+
+                                <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-base font-bold text-white transition duration-300 hover:bg-blue-700">
+                                    Enviar enlace de recuperacion
+                                </button>
+                            </form>
+
+                            <div class="mt-6 text-sm">
+                                <button type="button" data-auth-target="signin" class="font-semibold text-sky-300 transition duration-300 hover:text-sky-200">
+                                    Volver a entrar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div data-auth-panel="resend" class="hidden">
+                            <h3 class="text-2xl font-extrabold text-white">Reenviar confirmacion</h3>
+                            <p class="mt-2 text-sm leading-7 text-slate-300">
+                                Si el usuario no encontro el correo de confirmacion, puedes reenviarlo desde aqui.
+                            </p>
+
+                            <form id="resend-form" class="mt-6 space-y-5">
+                                <div>
+                                    <label for="resend-email" class="mb-2 block text-sm font-semibold text-slate-200">Correo electronico</label>
+                                    <input
+                                        id="resend-email"
+                                        name="email"
+                                        type="email"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="tu@empresa.com"
+                                    >
+                                </div>
+
+                                <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-base font-bold text-white transition duration-300 hover:bg-blue-700">
+                                    Reenviar correo
+                                </button>
+                            </form>
+
+                            <div class="mt-6 text-sm">
+                                <button type="button" data-auth-target="signin" class="font-semibold text-sky-300 transition duration-300 hover:text-sky-200">
+                                    Volver a entrar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div data-auth-panel="reset" class="hidden">
+                            <h3 class="text-2xl font-extrabold text-white">Crear nueva contrasena</h3>
+                            <p class="mt-2 text-sm leading-7 text-slate-300">
+                                Estas dentro del flujo de recuperacion. Define una nueva contrasena para continuar al panel.
+                            </p>
+
+                            <form id="reset-form" class="mt-6 space-y-5">
+                                <div>
+                                    <label for="reset-password" class="mb-2 block text-sm font-semibold text-slate-200">Nueva contrasena</label>
+                                    <input
+                                        id="reset-password"
+                                        name="password"
+                                        type="password"
+                                        minlength="8"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="Minimo 8 caracteres"
+                                    >
+                                </div>
+
+                                <div>
+                                    <label for="reset-password-confirm" class="mb-2 block text-sm font-semibold text-slate-200">Confirmar contrasena</label>
+                                    <input
+                                        id="reset-password-confirm"
+                                        name="password_confirm"
+                                        type="password"
+                                        minlength="8"
+                                        required
+                                        class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
+                                        placeholder="Repite la contrasena"
+                                    >
+                                </div>
+
+                                <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-base font-bold text-white transition duration-300 hover:bg-blue-700">
+                                    Guardar nueva contrasena
+                                </button>
+                            </form>
+                        </div>
+                    </div>
                 </section>
             </div>
         </main>
@@ -286,7 +553,7 @@ $userEmail = (string) ($_SESSION[$userEmailKey] ?? '');
 
                 <div class="flex items-center gap-3">
                     <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8'); ?>" class="btn-font rounded-full bg-brand-dark px-5 py-2.5 text-sm font-bold text-white transition duration-300 hover:bg-slate-800">
-                            Iniciar sesion
+                        Iniciar sesion
                     </a>
 
                     <a href="#registro" class="hidden rounded-full bg-brand-blue px-6 py-2.5 text-sm font-bold text-white transition duration-300 hover:bg-blue-700 md:block btn-font">
