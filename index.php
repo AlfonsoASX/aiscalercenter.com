@@ -784,6 +784,629 @@ $authClientConfig = [
             }
         }
 
+        .workspace-app {
+            min-height: 100vh;
+            display: flex;
+            background: #ffffff;
+            color: var(--md-text);
+        }
+
+        .workspace-sidebar {
+            position: fixed;
+            inset: 0 auto 0 0;
+            z-index: 50;
+            width: 19.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: #eef3fb;
+            border-right: 1px solid rgba(19, 42, 74, 0.08);
+            transform: translateX(-100%);
+            transition: width 180ms ease, transform 180ms ease;
+        }
+
+        .workspace-sidebar.is-open {
+            transform: translateX(0);
+        }
+
+        .workspace-sidebar-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0 0.25rem 0.5rem;
+        }
+
+        .workspace-icon-button,
+        .workspace-logout-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            min-height: 2.9rem;
+            border: 0;
+            background: transparent;
+            color: #3c4043;
+            transition: background-color 160ms ease, color 160ms ease;
+        }
+
+        .workspace-icon-button {
+            width: 2.9rem;
+            border-radius: 999px;
+        }
+
+        .workspace-icon-button:hover,
+        .workspace-logout-button:hover {
+            background: rgba(47, 124, 239, 0.08);
+            color: #163b7a;
+        }
+
+        .workspace-icon-button.is-active {
+            background: #dbe8ff;
+            color: #1f5fd6;
+        }
+
+        .workspace-icon-button:focus-visible,
+        .workspace-logout-button:focus-visible,
+        .workspace-nav-button:focus-visible {
+            outline: 3px solid rgba(47, 124, 239, 0.28);
+            outline-offset: 2px;
+        }
+
+        .workspace-nav {
+            display: grid;
+            gap: 0.12rem;
+        }
+
+        .workspace-nav-button {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.95rem;
+            padding: 0.68rem 0.9rem;
+            border: 0;
+            border-radius: 1rem;
+            background: transparent;
+            color: #3c4043;
+            text-align: left;
+            cursor: pointer;
+            transition: background-color 160ms ease, color 160ms ease;
+        }
+
+        .workspace-nav-button:hover {
+            background: rgba(47, 124, 239, 0.08);
+            color: #163b7a;
+        }
+
+        .workspace-nav-button.is-active {
+            background: #dbe8ff;
+            color: #1f5fd6;
+            font-weight: 600;
+        }
+
+        .workspace-nav-icon {
+            width: 2.75rem;
+            height: 2.75rem;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.66);
+        }
+
+        .workspace-nav-icon img {
+            width: 1.35rem;
+            height: 1.35rem;
+            object-fit: contain;
+        }
+
+        .workspace-nav-copy {
+            position: relative;
+            display: block;
+            flex: 1;
+            min-height: 1.5rem;
+            overflow: hidden;
+        }
+
+        .workspace-nav-text {
+            position: absolute;
+            inset: 0 auto auto 0;
+            white-space: nowrap;
+            font-size: 0.98rem;
+            line-height: 1.5rem;
+            transition: opacity 160ms ease, transform 160ms ease;
+        }
+
+        .workspace-nav-text--default {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .workspace-nav-text--hover {
+            opacity: 0;
+            transform: translateY(0.45rem);
+        }
+
+        .workspace-nav-button:hover .workspace-nav-text--default,
+        .workspace-nav-button:focus-visible .workspace-nav-text--default {
+            opacity: 0;
+            transform: translateY(-0.45rem);
+        }
+
+        .workspace-nav-button:hover .workspace-nav-text--hover,
+        .workspace-nav-button:focus-visible .workspace-nav-text--hover {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .workspace-main {
+            min-width: 0;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .workspace-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, 0.92);
+            border-bottom: 1px solid rgba(19, 42, 74, 0.08);
+            backdrop-filter: blur(14px);
+        }
+
+        .workspace-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            min-width: 0;
+        }
+
+        .workspace-logo-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .workspace-logo-button:focus-visible {
+            outline: 3px solid rgba(47, 124, 239, 0.28);
+            outline-offset: 4px;
+            border-radius: 0.75rem;
+        }
+
+        .workspace-header-logo {
+            width: auto;
+            height: 2.6rem;
+            object-fit: contain;
+        }
+
+        .workspace-header-copy {
+            min-width: 0;
+        }
+
+        .workspace-header-eyebrow {
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #6b7280;
+        }
+
+        .workspace-header h1 {
+            margin-top: 0.18rem;
+            font-size: clamp(1.45rem, 3vw, 2rem);
+            font-weight: 500;
+            color: #202124;
+            letter-spacing: -0.03em;
+        }
+
+        .workspace-mobile-toggle {
+            flex-shrink: 0;
+        }
+
+        .workspace-user-menu {
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .workspace-user-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.7rem;
+            min-height: 3rem;
+            padding: 0 1rem;
+            border: 1px solid rgba(19, 42, 74, 0.08);
+            border-radius: 999px;
+            background: #ffffff;
+            color: #202124;
+            transition: border-color 160ms ease, background-color 160ms ease;
+        }
+
+        .workspace-user-button:hover {
+            background: rgba(47, 124, 239, 0.05);
+            border-color: rgba(47, 124, 239, 0.14);
+        }
+
+        .workspace-user-button:focus-visible,
+        .workspace-user-link:focus-visible {
+            outline: 3px solid rgba(47, 124, 239, 0.28);
+            outline-offset: 2px;
+        }
+
+        .workspace-user-name {
+            max-width: 12rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-weight: 600;
+        }
+
+        .workspace-user-panel {
+            position: absolute;
+            top: calc(100% + 0.7rem);
+            right: 0;
+            width: min(21rem, calc(100vw - 2rem));
+            padding: 0.65rem;
+            border: 1px solid rgba(19, 42, 74, 0.08);
+            border-radius: 1.2rem;
+            background: #ffffff;
+            box-shadow: 0 22px 50px rgba(15, 23, 42, 0.12);
+        }
+
+        .workspace-user-panel.hidden {
+            display: none;
+        }
+
+        .workspace-user-panel-head {
+            padding: 0.65rem 0.75rem 0.8rem;
+            border-bottom: 1px solid rgba(19, 42, 74, 0.08);
+        }
+
+        .workspace-user-panel-head strong,
+        .workspace-user-panel-head span {
+            display: block;
+        }
+
+        .workspace-user-panel-head strong {
+            color: #202124;
+            font-weight: 700;
+        }
+
+        .workspace-user-panel-head span {
+            margin-top: 0.28rem;
+            color: #6b7280;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .workspace-user-links {
+            margin-top: 0.45rem;
+            display: grid;
+            gap: 0.15rem;
+        }
+
+        .workspace-user-link {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.8rem 0.75rem;
+            border: 0;
+            border-radius: 0.95rem;
+            background: transparent;
+            color: #374151;
+            text-align: left;
+            transition: background-color 160ms ease, color 160ms ease;
+        }
+
+        .workspace-user-link:hover {
+            background: rgba(47, 124, 239, 0.08);
+            color: #163b7a;
+        }
+
+        .workspace-user-link--danger:hover {
+            background: rgba(234, 67, 53, 0.08);
+            color: #b3261e;
+        }
+
+        .workspace-content {
+            flex: 1;
+            padding: 1.5rem;
+        }
+
+        .workspace-notice {
+            margin-bottom: 1rem;
+            border-radius: 1rem;
+        }
+
+        .workspace-loading,
+        .workspace-section-card {
+            border: 1px solid rgba(19, 42, 74, 0.08);
+            background: #ffffff;
+            box-shadow: 0 10px 30px rgba(16, 24, 40, 0.04);
+        }
+
+        .workspace-loading {
+            min-height: calc(100vh - 10rem);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            border-radius: 1.5rem;
+            color: #4b5563;
+            padding: 2rem;
+        }
+
+        .workspace-sections-stack {
+            display: grid;
+        }
+
+        .workspace-section {
+            display: none;
+        }
+
+        .workspace-section.is-active {
+            display: block;
+        }
+
+        .workspace-section-card {
+            min-height: calc(100vh - 10rem);
+            border-radius: 1.5rem;
+            padding: 2rem;
+        }
+
+        .workspace-section-card h2 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            line-height: 1;
+            font-weight: 500;
+            color: #202124;
+            letter-spacing: -0.05em;
+        }
+
+        .workspace-section-subtitle {
+            margin-top: 0.85rem;
+            max-width: 44rem;
+            color: #6b7280;
+            line-height: 1.7;
+        }
+
+        .workspace-dashboard-grid {
+            margin-top: 1.75rem;
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .workspace-dashboard-card {
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+            width: 100%;
+            padding: 1rem;
+            border: 1px solid rgba(19, 42, 74, 0.08);
+            border-radius: 1.1rem;
+            background: #f8fafc;
+            color: #202124;
+            text-align: left;
+            transition: transform 160ms ease, border-color 160ms ease, background-color 160ms ease;
+        }
+
+        .workspace-dashboard-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(47, 124, 239, 0.18);
+            background: #f1f6ff;
+        }
+
+        .workspace-dashboard-card:focus-visible {
+            outline: 3px solid rgba(47, 124, 239, 0.28);
+            outline-offset: 2px;
+        }
+
+        .workspace-dashboard-card img {
+            width: 2.1rem;
+            height: 2.1rem;
+            object-fit: contain;
+            flex-shrink: 0;
+        }
+
+        .workspace-dashboard-card strong {
+            display: block;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .workspace-dashboard-card p {
+            margin-top: 0.3rem;
+            color: #6b7280;
+            line-height: 1.55;
+        }
+
+        .workspace-form-grid {
+            margin-top: 1.75rem;
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .workspace-form-card {
+            border: 1px solid rgba(19, 42, 74, 0.08);
+            border-radius: 1.25rem;
+            background: #f8fafc;
+            padding: 1.25rem;
+        }
+
+        .workspace-form-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #202124;
+            letter-spacing: -0.02em;
+        }
+
+        .workspace-form-copy {
+            margin-top: 0.45rem;
+            color: #6b7280;
+            line-height: 1.65;
+        }
+
+        .workspace-form {
+            margin-top: 1rem;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .workspace-field-block {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        .workspace-field-label {
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .workspace-field {
+            width: 100%;
+            min-height: 3.2rem;
+            padding: 0.85rem 1rem;
+            border: 1px solid rgba(19, 42, 74, 0.14);
+            border-radius: 0.95rem;
+            background: #ffffff;
+            color: #111827;
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .workspace-field:focus {
+            outline: none;
+            border-color: rgba(47, 124, 239, 0.48);
+            box-shadow: 0 0 0 4px rgba(47, 124, 239, 0.12);
+        }
+
+        .workspace-field::placeholder {
+            color: #9ca3af;
+        }
+
+        .workspace-primary-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            min-height: 3.1rem;
+            padding: 0 1.15rem;
+            border: 0;
+            border-radius: 999px;
+            background: #1f5fd6;
+            color: #ffffff;
+            font-weight: 600;
+            transition: background-color 160ms ease, transform 160ms ease;
+        }
+
+        .workspace-primary-button:hover {
+            background: #194fb0;
+            transform: translateY(-1px);
+        }
+
+        .workspace-primary-button:focus-visible {
+            outline: 3px solid rgba(47, 124, 239, 0.28);
+            outline-offset: 2px;
+        }
+
+        .workspace-helper-text {
+            font-size: 0.84rem;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .workspace-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 45;
+            border: 0;
+            background: rgba(15, 23, 42, 0.32);
+        }
+
+        .workspace-backdrop.hidden {
+            display: none;
+        }
+
+        .workspace-app.is-sidebar-collapsed .workspace-sidebar {
+            width: 5.5rem;
+        }
+
+        .workspace-app.is-sidebar-collapsed .workspace-nav-button {
+            justify-content: center;
+            gap: 0;
+            padding-inline: 0.5rem;
+        }
+
+        .workspace-app.is-sidebar-collapsed .workspace-nav-copy {
+            width: 0;
+            min-width: 0;
+            opacity: 0;
+        }
+
+        .workspace-app.is-sidebar-collapsed .workspace-nav-button:hover .workspace-nav-text--default,
+        .workspace-app.is-sidebar-collapsed .workspace-nav-button:hover .workspace-nav-text--hover,
+        .workspace-app.is-sidebar-collapsed .workspace-nav-button:focus-visible .workspace-nav-text--default,
+        .workspace-app.is-sidebar-collapsed .workspace-nav-button:focus-visible .workspace-nav-text--hover {
+            opacity: 0;
+        }
+
+        @media (min-width: 1024px) {
+            .workspace-sidebar {
+                position: sticky;
+                top: 0;
+                inset: auto;
+                min-height: 100vh;
+                transform: none;
+            }
+
+            .workspace-form-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                align-items: start;
+            }
+
+            .workspace-mobile-toggle,
+            .workspace-backdrop {
+                display: none;
+            }
+        }
+
+        @media (max-width: 1023px) {
+            .workspace-content {
+                padding: 1rem;
+            }
+
+            .workspace-header {
+                padding: 0.85rem 1rem;
+            }
+
+            .workspace-section-card,
+            .workspace-loading {
+                min-height: calc(100vh - 8.5rem);
+                border-radius: 1.25rem;
+                padding: 1.5rem;
+            }
+
+            .workspace-header-logo {
+                height: 2.1rem;
+            }
+
+            .workspace-user-name {
+                max-width: 8rem;
+            }
+        }
+
         html { scroll-behavior: smooth; }
     </style>
 
@@ -796,218 +1419,59 @@ $authClientConfig = [
 </head>
 <?php if ($showAppView): ?>
 <body data-view="app" class="antialiased">
-    <div class="md3-shell">
-        <div class="md3-layout">
-            <aside class="md3-rail" aria-label="Navigation Rail">
-                <div>
-                    <div class="md3-rail-brand">
-                        <div class="md3-rail-logo">
-                            <img src="img/logoAiScalerCenter.png" alt="AiScaler Center Logo">
-                        </div>
-                        <div class="md3-brand-copy">
-                            <strong>AiScaler</strong>
-                            <span>Control Center</span>
-                        </div>
-                    </div>
+    <div id="app-layout" class="workspace-app">
+        <aside id="app-sidebar" class="workspace-sidebar" aria-label="Menú lateral">
+            <div class="workspace-sidebar-head">
+                <button id="sidebar-toggle" type="button" class="workspace-icon-button" aria-label="Comprimir menú lateral">
+                    <span class="material-symbols-rounded">menu</span>
+                </button>
 
-                    <nav id="app-rail-nav" class="md3-rail-nav" aria-label="Menú principal"></nav>
-                </div>
-
-                <div class="md3-rail-footer">
-                    <p id="app-rail-footnote">Preparando el menú de trabajo según el rol del usuario autenticado.</p>
-                </div>
-            </aside>
-
-            <div class="md3-main">
-                <header class="md3-topbar">
-                    <div class="md3-topbar-header">
-                        <div class="md3-topbar-copy">
-                            <small><span class="material-symbols-rounded">dashboard</span>Workspace AiScaler</small>
-                            <h1>Panel de control</h1>
-                        </div>
-                    </div>
-
-                    <div class="md3-search" role="search" aria-label="Vista del módulo activo">
-                        <span class="material-symbols-rounded">search</span>
-                        <div>
-                            <strong id="app-search-copy">Cargando módulo...</strong>
-                            <span id="app-search-subcopy">Estamos preparando la navegación según tu rol.</span>
-                        </div>
-                    </div>
-
-                    <div class="md3-top-actions">
-                        <button type="button" class="md3-chip-button" aria-label="Diseño adaptado a Material 3">
-                            <span class="material-symbols-rounded">palette</span>
-                            <span>M3 Ready</span>
-                        </button>
-
-                        <button id="logout-button" type="button" class="md3-icon-button" aria-label="Cerrar sesión">
-                            <span class="material-symbols-rounded">logout</span>
-                            <span>Salir</span>
-                        </button>
-
-                        <div class="md3-avatar" aria-hidden="true">
-                            <img src="img/logoAiScalerCenter.png" alt="">
-                        </div>
-                    </div>
-                </header>
-
-                <main class="md3-content">
-                    <div id="app-notice" class="md3-notice hidden mb-5 px-4 py-3 text-sm font-semibold"></div>
-
-                    <div id="app-loading" class="md3-loading">
-                        <div>
-                            <div class="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--md-primary-container)] text-[var(--md-primary-strong)]">
-                                <span class="material-symbols-rounded text-3xl animate-spin">progress_activity</span>
-                            </div>
-                            <h2 class="text-3xl font-bold tracking-tight text-[var(--md-text)]">Preparando tu espacio de trabajo</h2>
-                            <p class="mt-3 max-w-xl text-sm leading-7 text-[var(--md-text-muted)]">
-                                Estamos validando tu sesión con Supabase y cargando la experiencia que corresponde a tu rol.
-                            </p>
-                        </div>
-                    </div>
-
-                    <section id="app-shell" class="md3-shell-grid hidden">
-                        <section class="md3-card md3-hero-card">
-                            <div class="md3-hero-layout">
-                                <div class="md3-hero-copy">
-                                    <span id="app-section-kicker" class="md3-chip md3-chip--primary">Menú activo</span>
-                                    <h2 id="app-section-title">Cargando panel...</h2>
-                                    <p id="app-section-description">
-                                        Estamos organizando el área de trabajo según el rol del usuario autenticado.
-                                    </p>
-                                </div>
-
-                                <div class="md3-card p-5 sm:p-6">
-                                    <span class="md3-card-label"><span class="material-symbols-rounded">person</span>Perfil activo</span>
-                                    <h3 id="app-user-name" class="mt-3 text-2xl font-bold tracking-tight text-[var(--md-text)]">Tu espacio</h3>
-                                    <p id="app-user-email" class="mt-2 text-sm leading-7 text-[var(--md-text-muted)]">Validando sesión...</p>
-
-                                    <div class="md3-chip-row">
-                                        <span id="app-role-badge" class="md3-chip md3-chip--primary">Usuario</span>
-                                        <span id="app-status-badge" class="md3-chip">Pendiente</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div id="app-meta-chips" class="md3-chip-row"></div>
-                        </section>
-
-                        <div class="md3-main-grid">
-                            <section class="md3-card md3-module-card">
-                                <div class="md3-section-header">
-                                    <div id="app-module-icon" class="md3-section-icon">
-                                        <span class="material-symbols-rounded">dashboard</span>
-                                    </div>
-                                    <div>
-                                        <span class="md3-section-label"><span class="material-symbols-rounded">deployed_code</span>Vista estructural</span>
-                                        <h3 id="app-module-empty-title" class="mt-2">Aquí irá el primer módulo.</h3>
-                                        <p id="app-module-empty-copy" class="mt-2">
-                                            Esta vista se irá llenando con herramientas reales según el menú seleccionado.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div id="app-feature-grid" class="md3-feature-grid"></div>
-                            </section>
-
-                            <div class="md3-side-stack">
-                                <section class="md3-card md3-side-card">
-                                    <span class="md3-card-label"><span class="material-symbols-rounded">manage_accounts</span>Cuenta</span>
-                                    <p id="app-verification-copy" class="mt-4 text-sm leading-7 text-[var(--md-text-muted)]">
-                                        Cargando información de la cuenta...
-                                    </p>
-
-                                    <div class="md3-info-grid">
-                                        <div class="md3-info-item">
-                                            <small>Método</small>
-                                            <strong id="app-provider">email</strong>
-                                        </div>
-                                        <div class="md3-info-item">
-                                            <small>Último acceso</small>
-                                            <strong id="app-last-sign-in">--</strong>
-                                        </div>
-                                        <div class="md3-info-item">
-                                            <small>User ID</small>
-                                            <strong id="app-user-id">--</strong>
-                                        </div>
-                                    </div>
-
-                                    <div class="md3-highlight-card">
-                                        <p class="text-sm font-semibold text-[var(--md-text)]">Alcance del rol</p>
-                                        <p id="app-role-copy" class="mt-3 text-sm leading-7 text-[var(--md-text-muted)]">
-                                            Estamos preparando el alcance de este usuario.
-                                        </p>
-                                    </div>
-                                </section>
-
-                                <section class="md3-card md3-side-card">
-                                    <span class="md3-card-label"><span class="material-symbols-rounded">shield_person</span>Permisos</span>
-                                    <h3 id="app-menu-scope" class="mt-3 text-2xl font-bold tracking-tight text-[var(--md-text)]">Cargando menú</h3>
-                                    <p id="app-role-helper" class="mt-4 text-sm leading-7 text-[var(--md-text-muted)]">
-                                        Estamos preparando la lógica base para distinguir usuarios regulares y administradores.
-                                    </p>
-
-                                    <div class="md3-highlight-card">
-                                        <p class="text-sm font-semibold text-[var(--md-text)]">Nota de administración</p>
-                                        <p id="app-admin-note" class="mt-3 text-sm leading-7 text-[var(--md-text-muted)]">
-                                            El primer admin servirá como punto de arranque para habilitar áreas exclusivas y después poder promover más administradores.
-                                        </p>
-                                    </div>
-                                </section>
-
-                                <section class="md3-card md3-side-card">
-                                    <span class="md3-card-label"><span class="material-symbols-rounded">lock</span>Seguridad</span>
-                                    <h3 class="mt-3 text-2xl font-bold tracking-tight text-[var(--md-text)]">Actualiza tu contraseña</h3>
-                                    <p class="mt-3 text-sm leading-7 text-[var(--md-text-muted)]">
-                                        Este panel deja listo el acceso para móvil y escritorio sin sacar al usuario de su flujo principal.
-                                    </p>
-
-                                    <form id="change-password-form" class="mt-8 space-y-4">
-                                        <div>
-                                            <label for="app-new-password" class="mb-2 block text-sm font-semibold text-[var(--md-text)]">Nueva contraseña</label>
-                                            <input
-                                                id="app-new-password"
-                                                name="password"
-                                                type="password"
-                                                minlength="8"
-                                                required
-                                                class="w-full rounded-[1.4rem] border border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-4 py-3 text-[var(--md-text)] outline-none transition duration-300 placeholder:text-[var(--md-text-subtle)] focus:border-[var(--md-primary)]"
-                                                placeholder="Mínimo 8 caracteres"
-                                            >
-                                        </div>
-
-                                        <div>
-                                            <label for="app-confirm-password" class="mb-2 block text-sm font-semibold text-[var(--md-text)]">Confirmar contraseña</label>
-                                            <input
-                                                id="app-confirm-password"
-                                                name="password_confirm"
-                                                type="password"
-                                                minlength="8"
-                                                required
-                                                class="w-full rounded-[1.4rem] border border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-4 py-3 text-[var(--md-text)] outline-none transition duration-300 placeholder:text-[var(--md-text-subtle)] focus:border-[var(--md-primary)]"
-                                                placeholder="Repite la contraseña"
-                                            >
-                                        </div>
-
-                                        <button type="submit" class="btn-font w-full rounded-[1.4rem] bg-[var(--md-primary)] px-6 py-3.5 text-sm font-bold text-white transition duration-300 hover:bg-[var(--md-primary-strong)]">
-                                            Actualizar contraseña
-                                        </button>
-                                    </form>
-                                </section>
-                            </div>
-                        </div>
-                    </section>
-                </main>
+                <button id="dashboard-link" type="button" class="workspace-icon-button" data-menu-id="dashboard" aria-label="Ir al dashboard" title="Dashboard">
+                    <span class="material-symbols-rounded">space_dashboard</span>
+                </button>
             </div>
+
+            <nav id="app-rail-nav" class="workspace-nav" aria-label="Menú principal"></nav>
+        </aside>
+
+        <button id="app-sidebar-backdrop" type="button" class="workspace-backdrop hidden" aria-label="Cerrar menú"></button>
+
+        <div class="workspace-main">
+            <header class="workspace-header">
+                <div class="workspace-header-left">
+                    <button id="mobile-menu-toggle" type="button" class="workspace-icon-button workspace-mobile-toggle" aria-label="Abrir menú lateral">
+                        <span class="material-symbols-rounded">menu</span>
+                    </button>
+
+                    <div>
+                        <p class="workspace-header-eyebrow">Panel</p>
+                        <h1 id="app-current-title">Cargando sección...</h1>
+                    </div>
+                </div>
+
+                <button id="logout-button" type="button" class="workspace-logout-button" aria-label="Cerrar sesión">
+                    <span class="material-symbols-rounded">logout</span>
+                    <span>Salir</span>
+                </button>
+            </header>
+
+            <main class="workspace-content">
+                <div id="app-notice" class="workspace-notice hidden px-4 py-3 text-sm font-semibold"></div>
+
+                <section id="app-loading" class="workspace-loading">
+                    <div>
+                        <div class="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-[var(--md-primary-container)] text-[var(--md-primary-strong)]">
+                            <span class="material-symbols-rounded text-3xl animate-spin">progress_activity</span>
+                        </div>
+                        <h2 class="text-3xl font-medium tracking-tight text-[var(--md-text)]">Preparando tu menú</h2>
+                    </div>
+                </section>
+
+                <section id="app-shell" class="workspace-sections hidden">
+                    <div id="app-sections" class="workspace-sections-stack"></div>
+                </section>
+            </main>
         </div>
-
-        <nav id="app-bottom-nav" class="md3-bottom-nav" aria-label="Menú móvil"></nav>
-
-        <button id="app-fab" type="button" class="md3-fab" aria-label="Acción principal del módulo">
-            <span id="app-fab-icon" class="material-symbols-rounded">add</span>
-            <span id="app-fab-label" class="md3-fab-label">Nueva acción</span>
-        </button>
     </div>
 </body>
 <?php elseif ($showLoginView): ?>

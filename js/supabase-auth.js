@@ -14,6 +14,9 @@ const state = {
     isBootstrapAdmin: false,
     activeMenuItem: null,
     userContext: null,
+    currentUser: null,
+    sidebarCollapsed: false,
+    sidebarOpen: false,
 };
 const absoluteUrls = {
     landing: new URL(authConfig?.landingUrl ?? '/', window.location.origin).toString(),
@@ -107,10 +110,13 @@ function bindLoginView() {
 }
 
 function bindAppView() {
-    bindForm('change-password-form', handleChangePassword);
-
     const logoutButton = document.getElementById('logout-button');
-    const appFab = document.getElementById('app-fab');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const sidebarBackdrop = document.getElementById('app-sidebar-backdrop');
+
+    state.sidebarCollapsed = window.localStorage.getItem('aiscaler_sidebar_collapsed') === 'true';
+    applySidebarState();
 
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
@@ -130,17 +136,34 @@ function bindAppView() {
         });
     }
 
-    if (appFab) {
-        appFab.addEventListener('click', () => {
-            if (!state.activeMenuItem) {
-                showNotice('info', 'Elige primero un módulo del menú para continuar.');
-                return;
-            }
+    const toggleSidebar = () => {
+        if (window.innerWidth >= 1024) {
+            state.sidebarCollapsed = !state.sidebarCollapsed;
+            window.localStorage.setItem('aiscaler_sidebar_collapsed', String(state.sidebarCollapsed));
+            applySidebarState();
+            return;
+        }
 
-            const fabLabel = state.activeMenuItem.fab_label ?? 'Nueva acción';
-            showNotice('info', `La acción "${fabLabel}" se conectará aquí dentro de ${state.activeMenuItem.label}.`);
+        state.sidebarOpen = !state.sidebarOpen;
+        applySidebarState();
+    };
+
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', toggleSidebar);
+    }
+
+    if (mobileMenuToggle) {
+        mobileMenuToggle.addEventListener('click', toggleSidebar);
+    }
+
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener('click', () => {
+            state.sidebarOpen = false;
+            applySidebarState();
         });
     }
+
+    window.addEventListener('resize', applySidebarState);
 }
 
 function bindForm(formId, handler) {
@@ -562,98 +585,82 @@ async function handleChangePassword(form) {
     showNotice('success', 'Tu contrasena se actualizo correctamente.');
 }
 
-function renderAppSession(session) {
-    const user = session.user;
-    const userEmail = document.getElementById('app-user-email');
-    const userName = document.getElementById('app-user-name');
-    const verificationCopy = document.getElementById('app-verification-copy');
-    const statusBadge = document.getElementById('app-status-badge');
-    const roleBadge = document.getElementById('app-role-badge');
-    const roleCopy = document.getElementById('app-role-copy');
-    const roleHelper = document.getElementById('app-role-helper');
-    const adminNote = document.getElementById('app-admin-note');
-    const menuScope = document.getElementById('app-menu-scope');
-    const provider = document.getElementById('app-provider');
-    const lastSignIn = document.getElementById('app-last-sign-in');
-    const userId = document.getElementById('app-user-id');
-    const appShell = document.getElementById('app-shell');
-    const appLoading = document.getElementById('app-loading');
+async function handleProfileUpdate(form) {
+    if (!state.currentUser) {
+        showNotice('error', 'No encontramos el usuario activo para actualizar el perfil.');
+        return;
+    }
 
-    const fullName = user.user_metadata?.full_name?.trim();
-    const providers = user.app_metadata?.providers ?? ['email'];
-    const isVerified = Boolean(user.email_confirmed_at);
-    const role = resolveUserRole(user);
-    const roleMeta = getRoleMeta(role);
-    const email = user.email ?? 'Cuenta activa';
+    const fullName = form.full_name.value.trim();
+    const email = form.email.value.trim().toLowerCase();
+    const currentEmail = normalizeEmail(state.currentUser.email);
+    const currentName = String(state.currentUser.user_metadata?.full_name ?? '').trim();
+    const submitButton = form.querySelector('button[type="submit"]');
+    const payload = {};
 
-    state.role = role;
-    state.userContext = {
-        email,
-        providers: providers.join(', '),
-        isVerified,
-        roleLabel: roleMeta.label ?? 'Usuario',
-        roleMenuLabel: roleMeta.menu_label ?? 'Menú',
+    if (!email) {
+        showNotice('error', 'El correo electronico es obligatorio.');
+        return;
+    }
+
+    if (email !== currentEmail) {
+        payload.email = email;
+    }
+
+    if (fullName !== currentName) {
+        payload.data = {
+            ...(state.currentUser.user_metadata ?? {}),
+            full_name: fullName,
+        };
+    }
+
+    if (Object.keys(payload).length === 0) {
+        showNotice('info', 'No hay cambios pendientes en tu perfil.');
+        return;
+    }
+
+    setButtonBusy(submitButton, true, 'Guardando...');
+
+    const { error } = await supabase.auth.updateUser(payload);
+
+    setButtonBusy(submitButton, false);
+
+    if (error) {
+        showNotice('error', humanizeAuthError(error.message));
+        return;
+    }
+
+    state.currentUser = {
+        ...state.currentUser,
+        email: payload.email ?? state.currentUser.email,
+        user_metadata: payload.data
+            ? {
+                ...(state.currentUser.user_metadata ?? {}),
+                ...payload.data,
+            }
+            : state.currentUser.user_metadata,
     };
 
-    if (userEmail) {
-        userEmail.textContent = email;
-    }
+    showNotice(
+        'success',
+        email !== currentEmail
+            ? 'Perfil actualizado. Revisa tu correo para confirmar el cambio de email si Supabase lo solicita.'
+            : 'Perfil actualizado correctamente.',
+    );
+}
 
-    if (userName) {
-        userName.textContent = fullName || email || 'Tu espacio';
-    }
+function renderAppSession(session) {
+    const user = session.user;
+    const appShell = document.getElementById('app-shell');
+    const appLoading = document.getElementById('app-loading');
+    const role = resolveUserRole(user);
 
-    if (verificationCopy) {
-        verificationCopy.textContent = isVerified
-            ? 'Tu correo esta verificado y la sesion se mantendra lista para devolverte al panel sin pasos extra.'
-            : 'Todavia tienes pendiente confirmar tu correo. Puedes seguir trabajando y terminarlo desde tu bandeja de entrada.';
-    }
-
-    if (statusBadge) {
-        statusBadge.textContent = isVerified ? 'Correo verificado' : 'Correo pendiente';
-        statusBadge.className = isVerified
-            ? 'md3-chip md3-chip--accent-green'
-            : 'md3-chip md3-chip--accent-yellow';
-    }
-
-    if (roleBadge) {
-        roleBadge.textContent = roleMeta.label ?? 'Usuario';
-        roleBadge.className = role === 'admin'
-            ? 'md3-chip md3-chip--accent-red'
-            : 'md3-chip md3-chip--primary';
-    }
-
-    if (roleCopy) {
-        roleCopy.textContent = roleMeta.role_copy ?? '';
-    }
-
-    if (roleHelper) {
-        roleHelper.textContent = roleMeta.helper_copy ?? '';
-    }
-
-    if (adminNote) {
-        adminNote.textContent = state.isBootstrapAdmin
-            ? 'Este usuario coincide con el admin bootstrap inicial. Desde aqui podremos preparar el flujo para promover nuevos administradores.'
-            : role === 'admin'
-                ? 'Este admin ya puede ver catalogos internos. El siguiente paso es construir el flujo seguro para nombrar mas admins.'
-                : 'El usuario regular solo ve el menu operativo. Los catalogos internos y contenido de administracion quedan ocultos.';
-    }
-
-    if (menuScope) {
-        menuScope.textContent = roleMeta.menu_label ?? 'Menú';
-    }
-
-    if (provider) {
-        provider.textContent = providers.join(', ');
-    }
-
-    if (lastSignIn) {
-        lastSignIn.textContent = formatDate(user.last_sign_in_at);
-    }
-
-    if (userId) {
-        userId.textContent = user.id;
-    }
+    state.currentUser = user;
+    state.role = role;
+    state.userContext = {
+        email: user.email ?? '',
+        roleLabel: getRoleMeta(role).label ?? 'Usuario',
+    };
 
     if (appLoading) {
         appLoading.classList.add('hidden');
@@ -664,7 +671,6 @@ function renderAppSession(session) {
     }
 
     renderMenuForRole(role);
-    updateRailFootnote(roleMeta);
 }
 
 function resolveUserRole(user) {
@@ -692,23 +698,27 @@ function resolveUserRole(user) {
 
 function renderMenuForRole(role) {
     const railMenu = document.getElementById('app-rail-nav');
-    const bottomMenu = document.getElementById('app-bottom-nav');
     const items = getMenuItems(role);
+    const panelItems = getPanelItems(role);
 
-    if (!railMenu || !bottomMenu) {
+    if (!railMenu) {
         return;
     }
 
     railMenu.innerHTML = '';
-    bottomMenu.innerHTML = '';
-    bottomMenu.style.gridTemplateColumns = `repeat(${Math.max(items.length, 1)}, minmax(0, 1fr))`;
+    renderSections(panelItems);
+    bindForm('settings-profile-form', handleProfileUpdate);
+    bindForm('settings-password-form', handleChangePassword);
 
     items.forEach((item) => {
-        railMenu.appendChild(createMenuButton(item, 'rail'));
-        bottomMenu.appendChild(createMenuButton(item, 'bottom'));
+        railMenu.appendChild(createMenuButton(item));
     });
 
-    const defaultItem = items.find((item) => item.id === state.activeMenuId) ?? items[0] ?? null;
+    const requestedMenuId = getRequestedMenuId();
+    const defaultItem = panelItems.find((item) => item.id === requestedMenuId)
+        ?? panelItems.find((item) => item.id === state.activeMenuId)
+        ?? panelItems.find((item) => item.id === getDashboardItem().id)
+        ?? null;
 
     if (defaultItem) {
         selectMenu(defaultItem.id);
@@ -716,7 +726,7 @@ function renderMenuForRole(role) {
 }
 
 function selectMenu(menuId) {
-    const items = getMenuItems(state.role);
+    const items = getPanelItems(state.role);
     const selectedItem = items.find((item) => item.id === menuId);
 
     if (!selectedItem) {
@@ -732,138 +742,44 @@ function selectMenu(menuId) {
         button.setAttribute('aria-current', isActive ? 'page' : 'false');
     });
 
-    const sectionKicker = document.getElementById('app-section-kicker');
-    const sectionTitle = document.getElementById('app-section-title');
-    const sectionDescription = document.getElementById('app-section-description');
-    const moduleEmptyTitle = document.getElementById('app-module-empty-title');
-    const moduleEmptyCopy = document.getElementById('app-module-empty-copy');
-    const featureGrid = document.getElementById('app-feature-grid');
-    const moduleIcon = document.getElementById('app-module-icon');
-    const metaChips = document.getElementById('app-meta-chips');
-    const searchCopy = document.getElementById('app-search-copy');
-    const searchSubcopy = document.getElementById('app-search-subcopy');
-    const fabIcon = document.getElementById('app-fab-icon');
-    const fabLabel = document.getElementById('app-fab-label');
+    document.querySelectorAll('[data-panel-section]').forEach((section) => {
+        section.classList.toggle('is-active', section.dataset.panelSection === menuId);
+    });
 
-    if (sectionKicker) {
-        sectionKicker.textContent = selectedItem.kicker;
-        sectionKicker.className = `md3-chip ${accentChipClass(selectedItem.accent)}`;
+    const currentTitle = document.getElementById('app-current-title');
+
+    if (currentTitle) {
+        currentTitle.textContent = selectedItem.label;
     }
 
-    if (sectionTitle) {
-        sectionTitle.textContent = selectedItem.label;
-    }
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}#${menuId}`);
 
-    if (sectionDescription) {
-        sectionDescription.textContent = selectedItem.description;
-    }
-
-    if (moduleEmptyTitle) {
-        moduleEmptyTitle.textContent = selectedItem.placeholder_title;
-    }
-
-    if (moduleEmptyCopy) {
-        moduleEmptyCopy.textContent = selectedItem.placeholder_copy;
-    }
-
-    if (searchCopy) {
-        searchCopy.textContent = selectedItem.label;
-    }
-
-    if (searchSubcopy) {
-        searchSubcopy.textContent = selectedItem.description;
-    }
-
-    if (fabIcon) {
-        fabIcon.textContent = selectedItem.icon ?? 'add';
-    }
-
-    if (fabLabel) {
-        fabLabel.textContent = selectedItem.fab_label ?? 'Nueva acción';
-    }
-
-    if (moduleIcon) {
-        const accent = getAccentPalette(selectedItem.accent);
-        moduleIcon.innerHTML = `<span class="material-symbols-rounded">${selectedItem.icon ?? 'dashboard'}</span>`;
-        moduleIcon.style.background = accent.surface;
-        moduleIcon.style.color = accent.text;
-        moduleIcon.style.border = `1px solid ${accent.border}`;
-    }
-
-    if (featureGrid) {
-        featureGrid.innerHTML = '';
-
-        (selectedItem.feature_highlights ?? []).forEach((feature) => {
-            const card = document.createElement('div');
-
-            card.className = 'md3-feature-card';
-            card.innerHTML = `
-                <strong>${feature.title}</strong>
-                <p>${feature.copy}</p>
-            `;
-
-            featureGrid.appendChild(card);
-        });
-    }
-
-    if (metaChips) {
-        metaChips.innerHTML = '';
-
-        [
-            {
-                label: state.userContext?.roleLabel ?? 'Usuario',
-                icon: state.role === 'admin' ? 'shield_person' : 'person',
-                tone: state.role === 'admin' ? 'red' : 'primary',
-            },
-            {
-                label: state.userContext?.isVerified ? 'Correo verificado' : 'Correo pendiente',
-                icon: state.userContext?.isVerified ? 'verified' : 'mark_email_unread',
-                tone: state.userContext?.isVerified ? 'green' : 'yellow',
-            },
-            {
-                label: state.userContext?.providers ?? 'email',
-                icon: 'alternate_email',
-                tone: 'default',
-            },
-            {
-                label: selectedItem.fab_label ?? 'Nueva acción',
-                icon: selectedItem.icon ?? 'add',
-                tone: selectedItem.accent ?? 'default',
-            },
-        ].forEach((chip) => {
-            metaChips.appendChild(createMetaChip(chip));
-        });
+    if (window.innerWidth < 1024) {
+        state.sidebarOpen = false;
+        applySidebarState();
     }
 }
 
-function createMenuButton(item, mode) {
+function createMenuButton(item) {
     const button = document.createElement('button');
-    const label = item.short_label ?? item.label;
+    const hoverLabel = item.hover_label ?? item.label;
 
     button.type = 'button';
     button.dataset.menuId = item.id;
-    button.className = mode === 'bottom'
-        ? 'md3-nav-button md3-bottom-button'
-        : 'md3-nav-button md3-rail-button';
+    button.className = 'workspace-nav-button';
     button.setAttribute('aria-label', item.label);
+    button.setAttribute('title', item.label);
     button.innerHTML = `
-        <span class="material-symbols-rounded">${item.icon ?? 'dashboard'}</span>
-        <span class="md3-nav-label">${label}</span>
+        <span class="workspace-nav-icon" aria-hidden="true">
+            <img src="${item.icon_path}" alt="">
+        </span>
+        <span class="workspace-nav-copy">
+            <span class="workspace-nav-text workspace-nav-text--default">${item.label}</span>
+            <span class="workspace-nav-text workspace-nav-text--hover">${hoverLabel}</span>
+        </span>
     `;
 
     return button;
-}
-
-function createMetaChip(chip) {
-    const element = document.createElement('span');
-
-    element.className = `md3-chip ${chipToneClass(chip.tone)}`;
-    element.innerHTML = `
-        <span class="material-symbols-rounded">${chip.icon}</span>
-        <span>${chip.label}</span>
-    `;
-
-    return element;
 }
 
 function getRoleMeta(role) {
@@ -874,67 +790,218 @@ function getMenuItems(role) {
     return panelConfig.menus?.[role] ?? panelConfig.menus?.regular ?? [];
 }
 
-function updateRailFootnote(roleMeta) {
-    const footnote = document.getElementById('app-rail-footnote');
+function getDashboardItem() {
+    return panelConfig.dashboard ?? {
+        id: 'dashboard',
+        label: 'Dashboard',
+        section_title: 'Dashboard',
+    };
+}
 
-    if (!footnote) {
+function getAccountSectionItem() {
+    return panelConfig.account_section ?? {
+        id: 'configuracion',
+        label: 'Configuracion',
+        section_title: 'Configuracion',
+    };
+}
+
+function getPanelItems(role) {
+    return [
+        getDashboardItem(),
+        ...getMenuItems(role),
+        getAccountSectionItem(),
+    ];
+}
+
+function renderSections(items) {
+    const sections = document.getElementById('app-sections');
+
+    if (!sections) {
         return;
     }
 
-    footnote.textContent = roleMeta.helper_copy ?? 'Navegación lista para crecer.';
+    sections.innerHTML = '';
+
+    items.forEach((item) => {
+        const section = document.createElement('section');
+
+        section.id = `section-${item.id}`;
+        section.dataset.panelSection = item.id;
+        section.className = 'workspace-section';
+        section.innerHTML = item.id === getDashboardItem().id
+            ? renderDashboardSection(item)
+            : item.id === getAccountSectionItem().id
+            ? renderSettingsSection(item)
+            : `
+                <div class="workspace-section-card">
+                    <h2>${item.section_title ?? item.label}</h2>
+                </div>
+            `;
+
+        sections.appendChild(section);
+    });
 }
 
-function accentChipClass(accent) {
-    return chipToneClass(accent === 'blue' ? 'primary' : accent);
+function renderDashboardSection(item) {
+    const cards = getMenuItems(state.role).map((menuItem) => {
+        return `
+            <button type="button" class="workspace-dashboard-card" data-menu-id="${menuItem.id}">
+                <img src="${menuItem.icon_path}" alt="">
+                <span>
+                    <strong>${menuItem.label}</strong>
+                    <p>Ir a ${menuItem.label.toLowerCase()}.</p>
+                </span>
+            </button>
+        `;
+    }).join('');
+
+    return `
+        <div class="workspace-section-card">
+            <h2>${item.section_title ?? item.label}</h2>
+            <p class="workspace-section-subtitle">
+                Este es tu punto de entrada al panel. Desde aqui puedes saltar rapidamente a cualquiera de las secciones disponibles segun tu rol.
+            </p>
+            <div class="workspace-dashboard-grid">
+                ${cards}
+            </div>
+        </div>
+    `;
 }
 
-function chipToneClass(tone) {
-    const map = {
-        primary: 'md3-chip--primary',
-        blue: 'md3-chip--primary',
-        red: 'md3-chip--accent-red',
-        yellow: 'md3-chip--accent-yellow',
-        green: 'md3-chip--accent-green',
-        default: '',
-    };
+function renderSettingsSection(item) {
+    const fullName = escapeHtml(String(state.currentUser?.user_metadata?.full_name ?? ''));
+    const email = escapeHtml(String(state.currentUser?.email ?? ''));
 
-    return map[tone] ?? '';
+    return `
+        <div class="workspace-section-card">
+            <h2>${item.section_title ?? item.label}</h2>
+            <p class="workspace-section-subtitle">
+                Desde aqui el usuario puede mantener su perfil al dia y actualizar su contrasena sin salir del panel.
+            </p>
+
+            <div class="workspace-form-grid">
+                <section class="workspace-form-card">
+                    <h3>Perfil</h3>
+                    <p class="workspace-form-copy">
+                        Cambia tu nombre y tu correo. Si modificas el email, Supabase puede pedirte confirmacion por correo.
+                    </p>
+
+                    <form id="settings-profile-form" class="workspace-form">
+                        <div class="workspace-field-block">
+                            <label for="settings-full-name" class="workspace-field-label">Nombre</label>
+                            <input
+                                id="settings-full-name"
+                                name="full_name"
+                                type="text"
+                                class="workspace-field"
+                                placeholder="Tu nombre"
+                                value="${fullName}"
+                            >
+                        </div>
+
+                        <div class="workspace-field-block">
+                            <label for="settings-email" class="workspace-field-label">Correo electronico</label>
+                            <input
+                                id="settings-email"
+                                name="email"
+                                type="email"
+                                required
+                                class="workspace-field"
+                                placeholder="tu@empresa.com"
+                                value="${email}"
+                            >
+                        </div>
+
+                        <button type="submit" class="workspace-primary-button">
+                            <span class="material-symbols-rounded">save</span>
+                            <span>Guardar perfil</span>
+                        </button>
+                    </form>
+                </section>
+
+                <section class="workspace-form-card">
+                    <h3>Contrasena</h3>
+                    <p class="workspace-form-copy">
+                        Cambia tu contrasena aqui mismo. Debe tener al menos 8 caracteres.
+                    </p>
+
+                    <form id="settings-password-form" class="workspace-form">
+                        <div class="workspace-field-block">
+                            <label for="settings-password" class="workspace-field-label">Nueva contrasena</label>
+                            <input
+                                id="settings-password"
+                                name="password"
+                                type="password"
+                                minlength="8"
+                                required
+                                class="workspace-field"
+                                placeholder="Minimo 8 caracteres"
+                            >
+                        </div>
+
+                        <div class="workspace-field-block">
+                            <label for="settings-password-confirm" class="workspace-field-label">Confirmar contrasena</label>
+                            <input
+                                id="settings-password-confirm"
+                                name="password_confirm"
+                                type="password"
+                                minlength="8"
+                                required
+                                class="workspace-field"
+                                placeholder="Repite la contraseña"
+                            >
+                        </div>
+
+                        <button type="submit" class="workspace-primary-button">
+                            <span class="material-symbols-rounded">lock_reset</span>
+                            <span>Actualizar contrasena</span>
+                        </button>
+                    </form>
+
+                    <p class="workspace-helper-text">
+                        El cambio de contrasena usa Supabase Auth directamente, asi que aplica a tu proximo inicio de sesion.
+                    </p>
+                </section>
+            </div>
+        </div>
+    `;
 }
 
-function getAccentPalette(accent) {
-    const map = {
-        blue: {
-            surface: 'rgba(47, 124, 239, 0.12)',
-            text: 'var(--md-primary-strong)',
-            border: 'rgba(47, 124, 239, 0.16)',
-        },
-        red: {
-            surface: 'rgba(234, 67, 53, 0.12)',
-            text: '#b3261e',
-            border: 'rgba(234, 67, 53, 0.16)',
-        },
-        yellow: {
-            surface: 'rgba(251, 188, 4, 0.16)',
-            text: '#835b00',
-            border: 'rgba(251, 188, 4, 0.2)',
-        },
-        green: {
-            surface: 'rgba(52, 168, 83, 0.14)',
-            text: '#0c6a33',
-            border: 'rgba(52, 168, 83, 0.18)',
-        },
-        default: {
-            surface: 'var(--md-surface-container-high)',
-            text: 'var(--md-primary-strong)',
-            border: 'var(--md-outline)',
-        },
-    };
+function getRequestedMenuId() {
+    return window.location.hash.replace('#', '').trim();
+}
 
-    return map[accent] ?? map.default;
+function applySidebarState() {
+    const layout = document.getElementById('app-layout');
+    const sidebar = document.getElementById('app-sidebar');
+    const backdrop = document.getElementById('app-sidebar-backdrop');
+    const isDesktop = window.innerWidth >= 1024;
+
+    if (layout) {
+        layout.classList.toggle('is-sidebar-collapsed', isDesktop && state.sidebarCollapsed);
+    }
+
+    if (sidebar) {
+        sidebar.classList.toggle('is-open', !isDesktop && state.sidebarOpen);
+    }
+
+    if (backdrop) {
+        backdrop.classList.toggle('hidden', isDesktop || !state.sidebarOpen);
+    }
 }
 
 function normalizeEmail(value) {
     return String(value ?? '').trim().toLowerCase();
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
 }
 
 function formatDate(dateString) {
@@ -985,9 +1052,9 @@ function showNotice(type, message) {
     }
 
     const appPalettes = {
-        success: 'md3-notice mb-5 border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-900 dark:text-emerald-100',
-        error: 'md3-notice mb-5 border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-900 dark:text-red-100',
-        info: 'md3-notice mb-5 border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-900 dark:text-sky-100',
+        success: 'workspace-notice mb-4 border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-900 dark:text-emerald-100',
+        error: 'workspace-notice mb-4 border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-900 dark:text-red-100',
+        info: 'workspace-notice mb-4 border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-900 dark:text-sky-100',
     };
     const authPalettes = {
         success: 'mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100',
