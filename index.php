@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 $supabaseConfig = require __DIR__ . '/config/supabase.php';
+$panelConfig = require __DIR__ . '/config/panel.php';
 
 $supabaseProjectUrl = trim((string) ($supabaseConfig['project_url'] ?? ''));
 $publishableKey = trim((string) ($supabaseConfig['publishable_key'] ?? ''));
@@ -27,6 +28,7 @@ $authClientConfig = [
     'loginUrl' => $loginUrl,
     'appUrl' => $appUrl,
     'hasSupabaseConfig' => $hasSupabaseConfig,
+    'panel' => $panelConfig,
 ];
 ?>
 <!DOCTYPE html>
@@ -38,11 +40,58 @@ $authClientConfig = [
 
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;800&family=Open+Sans:wght@400;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
 
     <style>
+        :root {
+            --md-primary: #2f7cef;
+            --md-primary-strong: #1f5fd6;
+            --md-primary-container: #dce8ff;
+            --md-secondary: #163b7a;
+            --md-tertiary: #0f9d58;
+            --md-error: #ea4335;
+            --md-warning: #fbbc04;
+            --md-surface: #f5f7fb;
+            --md-surface-elevated: rgba(255, 255, 255, 0.82);
+            --md-surface-container: #ffffff;
+            --md-surface-container-low: #eef3ff;
+            --md-surface-container-high: #e7edf8;
+            --md-outline: rgba(36, 52, 71, 0.12);
+            --md-outline-strong: rgba(36, 52, 71, 0.22);
+            --md-shadow: 0 24px 60px rgba(24, 39, 75, 0.08);
+            --md-text: #202124;
+            --md-text-muted: #5f6368;
+            --md-text-subtle: #738093;
+            --md-inverse: #101418;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --md-primary: #aac7ff;
+                --md-primary-strong: #6ea4ff;
+                --md-primary-container: rgba(47, 124, 239, 0.18);
+                --md-secondary: #c4d7ff;
+                --md-tertiary: #8de0b4;
+                --md-error: #ffb4ab;
+                --md-warning: #ffd45a;
+                --md-surface: #0f141b;
+                --md-surface-elevated: rgba(22, 28, 36, 0.84);
+                --md-surface-container: #151c25;
+                --md-surface-container-low: #18212d;
+                --md-surface-container-high: #1f2935;
+                --md-outline: rgba(213, 221, 235, 0.12);
+                --md-outline-strong: rgba(213, 221, 235, 0.24);
+                --md-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+                --md-text: #f3f6fb;
+                --md-text-muted: #c4ccd8;
+                --md-text-subtle: #9aa4b2;
+                --md-inverse: #ffffff;
+            }
+        }
+
         body { font-family: 'Open Sans', sans-serif; }
         h1, h2, h3, h4, .btn-font { font-family: 'Montserrat', sans-serif; }
 
@@ -77,6 +126,664 @@ $authClientConfig = [
             background-size: auto, 40px 40px, 40px 40px;
         }
 
+        .material-symbols-rounded {
+            font-variation-settings:
+                'FILL' 0,
+                'wght' 500,
+                'GRAD' 0,
+                'opsz' 24;
+            font-size: 1.25rem;
+            line-height: 1;
+        }
+
+        [data-view="app"] {
+            font-family: 'Roboto', 'Open Sans', sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(47, 124, 239, 0.14), transparent 32%),
+                radial-gradient(circle at top right, rgba(234, 67, 53, 0.09), transparent 22%),
+                radial-gradient(circle at bottom left, rgba(251, 188, 4, 0.1), transparent 24%),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(241, 245, 251, 0.98)),
+                var(--md-surface);
+            color: var(--md-text);
+        }
+
+        [data-view="app"] h1,
+        [data-view="app"] h2,
+        [data-view="app"] h3,
+        [data-view="app"] h4,
+        [data-view="app"] .btn-font {
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .md3-shell {
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .md3-layout {
+            margin: 0 auto;
+            display: flex;
+            gap: 1.25rem;
+            max-width: 1680px;
+        }
+
+        .md3-rail {
+            display: none;
+            width: 112px;
+            flex-shrink: 0;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 1.25rem 0.875rem 1.1rem;
+            border-radius: 2rem;
+            border: 1px solid var(--md-outline);
+            background: var(--md-surface-elevated);
+            backdrop-filter: blur(22px);
+            box-shadow: var(--md-shadow);
+            position: sticky;
+            top: 1rem;
+            max-height: calc(100vh - 2rem);
+        }
+
+        .md3-rail-brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.875rem;
+        }
+
+        .md3-rail-logo {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 4rem;
+            height: 4rem;
+            border-radius: 1.5rem;
+            background: linear-gradient(145deg, rgba(47, 124, 239, 0.18), rgba(47, 124, 239, 0.08));
+            border: 1px solid rgba(47, 124, 239, 0.12);
+        }
+
+        .md3-rail-logo img {
+            width: 2.5rem;
+            height: auto;
+        }
+
+        .md3-brand-copy {
+            text-align: center;
+        }
+
+        .md3-brand-copy strong {
+            display: block;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--md-text);
+        }
+
+        .md3-brand-copy span {
+            display: block;
+            margin-top: 0.2rem;
+            font-size: 0.72rem;
+            color: var(--md-text-muted);
+        }
+
+        .md3-rail-nav,
+        .md3-bottom-nav {
+            display: grid;
+            gap: 0.55rem;
+        }
+
+        .md3-rail-nav {
+            margin-top: 1.5rem;
+            flex: 1;
+            align-content: start;
+        }
+
+        .md3-nav-button {
+            border: 0;
+            background: transparent;
+            color: var(--md-text-muted);
+            border-radius: 1.6rem;
+            transition: background-color 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+            cursor: pointer;
+        }
+
+        .md3-nav-button:focus-visible,
+        .md3-chip-button:focus-visible,
+        .md3-fab:focus-visible,
+        .md3-icon-button:focus-visible {
+            outline: 3px solid rgba(47, 124, 239, 0.35);
+            outline-offset: 2px;
+        }
+
+        .md3-rail-button {
+            width: 100%;
+            padding: 0.75rem 0.35rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        .md3-rail-button .material-symbols-rounded,
+        .md3-bottom-button .material-symbols-rounded,
+        .md3-fab .material-symbols-rounded,
+        .md3-icon-button .material-symbols-rounded {
+            font-size: 1.35rem;
+        }
+
+        .md3-nav-label {
+            font-size: 0.72rem;
+            line-height: 1.2;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .md3-nav-button.is-active {
+            color: var(--md-primary-strong);
+            background: var(--md-primary-container);
+            box-shadow: inset 0 0 0 1px rgba(47, 124, 239, 0.12);
+            transform: translateY(-1px);
+        }
+
+        .md3-rail-footer {
+            margin-top: 1rem;
+            padding: 0.9rem 0.85rem;
+            border-radius: 1.6rem;
+            background: var(--md-surface-container-low);
+            border: 1px solid var(--md-outline);
+            text-align: center;
+        }
+
+        .md3-rail-footer p {
+            font-size: 0.72rem;
+            line-height: 1.45;
+            color: var(--md-text-subtle);
+        }
+
+        .md3-main {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .md3-topbar {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1rem 1.15rem;
+            border-radius: 2rem;
+            border: 1px solid var(--md-outline);
+            background: var(--md-surface-elevated);
+            backdrop-filter: blur(22px);
+            box-shadow: var(--md-shadow);
+        }
+
+        .md3-topbar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .md3-topbar-copy small,
+        .md3-section-label,
+        .md3-card-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.74rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--md-text-subtle);
+        }
+
+        .md3-topbar-copy h1 {
+            margin-top: 0.28rem;
+            font-size: clamp(1.6rem, 3vw, 2rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            color: var(--md-text);
+        }
+
+        .md3-search {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            min-height: 3.5rem;
+            width: 100%;
+            padding: 0.95rem 1.05rem;
+            border-radius: 999px;
+            background: var(--md-surface-container-low);
+            border: 1px solid var(--md-outline);
+            color: var(--md-text-muted);
+        }
+
+        .md3-search strong {
+            display: block;
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--md-text);
+        }
+
+        .md3-search span:last-child {
+            font-size: 0.82rem;
+            color: var(--md-text-subtle);
+        }
+
+        .md3-top-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        .md3-chip-button,
+        .md3-icon-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            min-height: 2.85rem;
+            padding: 0 1rem;
+            border: 1px solid var(--md-outline);
+            border-radius: 999px;
+            background: var(--md-surface-container);
+            color: var(--md-text);
+            transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
+        }
+
+        .md3-chip-button:hover,
+        .md3-icon-button:hover,
+        .md3-nav-button:hover,
+        .md3-fab:hover {
+            transform: translateY(-1px);
+        }
+
+        .md3-icon-button {
+            padding: 0 0.95rem;
+            font-weight: 600;
+        }
+
+        .md3-avatar {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 3rem;
+            height: 3rem;
+            border-radius: 1rem;
+            background: linear-gradient(145deg, rgba(47, 124, 239, 0.15), rgba(22, 59, 122, 0.08));
+            border: 1px solid var(--md-outline);
+            overflow: hidden;
+            color: var(--md-primary-strong);
+            font-weight: 700;
+        }
+
+        .md3-avatar img {
+            width: 2rem;
+            height: auto;
+        }
+
+        .md3-content {
+            margin-top: 1.25rem;
+            padding-bottom: 7rem;
+        }
+
+        .md3-notice {
+            border-radius: 1.35rem;
+        }
+
+        .md3-loading,
+        .md3-card {
+            border: 1px solid var(--md-outline);
+            border-radius: 2rem;
+            background: var(--md-surface-elevated);
+            backdrop-filter: blur(18px);
+            box-shadow: var(--md-shadow);
+        }
+
+        .md3-loading {
+            min-height: 22rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2.5rem;
+            color: var(--md-text);
+        }
+
+        .md3-loading p {
+            color: var(--md-text-muted);
+        }
+
+        .md3-shell-grid {
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .md3-hero-card {
+            padding: clamp(1.35rem, 2vw, 2rem);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .md3-hero-card::before {
+            content: '';
+            position: absolute;
+            inset: auto -4rem -5rem auto;
+            width: 18rem;
+            height: 18rem;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(47, 124, 239, 0.18), transparent 62%);
+            pointer-events: none;
+        }
+
+        .md3-hero-layout {
+            display: grid;
+            gap: 1.25rem;
+            align-items: start;
+        }
+
+        .md3-hero-copy h2 {
+            margin-top: 0.65rem;
+            font-size: clamp(2rem, 4vw, 3.35rem);
+            line-height: 1;
+            font-weight: 700;
+            letter-spacing: -0.045em;
+            color: var(--md-text);
+        }
+
+        .md3-hero-copy p {
+            margin-top: 0.95rem;
+            max-width: 58rem;
+            font-size: 1rem;
+            line-height: 1.8;
+            color: var(--md-text-muted);
+        }
+
+        .md3-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 1.35rem;
+        }
+
+        .md3-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            min-height: 2.4rem;
+            padding: 0.55rem 0.9rem;
+            border-radius: 999px;
+            background: var(--md-surface-container-low);
+            border: 1px solid var(--md-outline);
+            color: var(--md-text);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .md3-chip--primary {
+            background: var(--md-primary-container);
+            color: var(--md-primary-strong);
+            border-color: rgba(47, 124, 239, 0.18);
+        }
+
+        .md3-chip--accent-red {
+            background: rgba(234, 67, 53, 0.12);
+            color: #b3261e;
+            border-color: rgba(234, 67, 53, 0.18);
+        }
+
+        .md3-chip--accent-yellow {
+            background: rgba(251, 188, 4, 0.16);
+            color: #835b00;
+            border-color: rgba(251, 188, 4, 0.24);
+        }
+
+        .md3-chip--accent-green {
+            background: rgba(52, 168, 83, 0.15);
+            color: #0c6a33;
+            border-color: rgba(52, 168, 83, 0.22);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .md3-chip--accent-red { color: #ffcdc7; }
+            .md3-chip--accent-yellow { color: #ffe28b; }
+            .md3-chip--accent-green { color: #b8f0ce; }
+        }
+
+        .md3-main-grid {
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .md3-module-card,
+        .md3-side-card {
+            padding: 1.4rem;
+        }
+
+        .md3-section-header {
+            display: flex;
+            align-items: center;
+            gap: 0.95rem;
+        }
+
+        .md3-section-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 3.25rem;
+            height: 3.25rem;
+            border-radius: 1.15rem;
+            background: var(--md-surface-container-high);
+            color: var(--md-primary-strong);
+        }
+
+        .md3-section-header h3 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--md-text);
+        }
+
+        .md3-section-header p,
+        .md3-card-description,
+        .md3-side-card p {
+            margin-top: 0.18rem;
+            color: var(--md-text-muted);
+            line-height: 1.75;
+        }
+
+        .md3-feature-grid {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1.4rem;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        }
+
+        .md3-feature-card {
+            padding: 1rem;
+            border-radius: 1.55rem;
+            border: 1px solid var(--md-outline);
+            background: var(--md-surface-container-low);
+        }
+
+        .md3-feature-card strong {
+            display: block;
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: var(--md-text);
+        }
+
+        .md3-feature-card p {
+            margin-top: 0.6rem;
+            font-size: 0.9rem;
+            line-height: 1.65;
+            color: var(--md-text-muted);
+        }
+
+        .md3-side-stack {
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .md3-info-grid {
+            display: grid;
+            gap: 0.85rem;
+            margin-top: 1rem;
+        }
+
+        .md3-info-item {
+            padding: 0.95rem 1rem;
+            border-radius: 1.4rem;
+            border: 1px solid var(--md-outline);
+            background: var(--md-surface-container-low);
+        }
+
+        .md3-info-item small {
+            display: block;
+            font-size: 0.74rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--md-text-subtle);
+        }
+
+        .md3-info-item strong {
+            display: block;
+            margin-top: 0.4rem;
+            font-size: 0.98rem;
+            font-weight: 600;
+            color: var(--md-text);
+        }
+
+        .md3-highlight-card {
+            margin-top: 1.1rem;
+            padding: 1rem;
+            border-radius: 1.55rem;
+            border: 1px solid rgba(47, 124, 239, 0.14);
+            background: linear-gradient(145deg, rgba(47, 124, 239, 0.1), rgba(255, 255, 255, 0.72));
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .md3-highlight-card {
+                background: linear-gradient(145deg, rgba(47, 124, 239, 0.16), rgba(21, 28, 37, 0.8));
+            }
+        }
+
+        .md3-bottom-nav {
+            position: fixed;
+            left: 1rem;
+            right: 1rem;
+            bottom: 1rem;
+            z-index: 40;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0.45rem;
+            padding: 0.45rem;
+            border-radius: 1.85rem;
+            border: 1px solid var(--md-outline);
+            background: var(--md-surface-elevated);
+            backdrop-filter: blur(22px);
+            box-shadow: var(--md-shadow);
+        }
+
+        .md3-bottom-button {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.32rem;
+            padding: 0.75rem 0.4rem;
+        }
+
+        .md3-bottom-button .md3-nav-label {
+            font-size: 0.68rem;
+        }
+
+        .md3-fab {
+            position: fixed;
+            right: 1rem;
+            bottom: 6.25rem;
+            z-index: 50;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.7rem;
+            min-height: 3.5rem;
+            padding: 0 1.25rem;
+            border: 0;
+            border-radius: 1.4rem;
+            background: linear-gradient(135deg, var(--md-primary), var(--md-primary-strong));
+            color: #ffffff;
+            box-shadow: 0 16px 40px rgba(47, 124, 239, 0.28);
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        .md3-fab-label {
+            display: none;
+            font-size: 0.94rem;
+        }
+
+        @media (min-width: 640px) {
+            .md3-fab-label {
+                display: inline;
+            }
+
+            .md3-topbar {
+                padding: 1.05rem 1.35rem;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .md3-shell {
+                padding: 1.25rem;
+            }
+
+            .md3-layout {
+                align-items: flex-start;
+            }
+
+            .md3-rail {
+                display: flex;
+            }
+
+            .md3-content {
+                padding-bottom: 3rem;
+            }
+
+            .md3-topbar {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+            }
+
+            .md3-topbar-header {
+                flex: 0 0 auto;
+            }
+
+            .md3-search {
+                max-width: 34rem;
+                flex: 1;
+            }
+
+            .md3-main-grid {
+                grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+                align-items: start;
+            }
+
+            .md3-hero-layout {
+                grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+                align-items: start;
+            }
+
+            .md3-bottom-nav {
+                display: none;
+            }
+
+            .md3-fab {
+                right: 2rem;
+                bottom: 2rem;
+            }
+        }
+
         html { scroll-behavior: smooth; }
     </style>
 
@@ -88,150 +795,219 @@ $authClientConfig = [
     <?php endif; ?>
 </head>
 <?php if ($showAppView): ?>
-<body data-view="app" class="bg-slate-950 text-slate-100 antialiased">
-    <div class="min-h-screen platform-shell">
-        <header class="border-b border-white/10 bg-slate-950/80 backdrop-blur-xl">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex min-h-[5.5rem] items-center justify-between gap-4">
-                    <div class="flex items-center gap-4">
-                        <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/10">
-                            <img class="h-9 w-auto" src="img/logoAiScalerCenter.png" alt="AiScaler Center Logo">
-                        </div>
-                        <div>
-                            <p class="text-xs uppercase tracking-[0.35em] text-sky-300/80">AiScaler Center</p>
-                            <h1 class="text-2xl font-extrabold text-white">Panel de control</h1>
-                            <p id="app-user-email" class="mt-1 text-sm text-slate-400">Validando sesion...</p>
-                        </div>
-                    </div>
-
-                    <button id="logout-button" type="button" class="btn-font shrink-0 rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-bold text-white transition duration-300 hover:bg-white/20">
-                        Salir
-                    </button>
-                </div>
-            </div>
-        </header>
-
-        <main class="max-w-7xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
-            <div id="app-notice" class="hidden mb-6 rounded-2xl px-4 py-3 text-sm font-semibold"></div>
-
-            <div id="app-loading" class="platform-panel flex min-h-[420px] items-center justify-center rounded-3xl border border-white/10 p-10 text-center">
+<body data-view="app" class="antialiased">
+    <div class="md3-shell">
+        <div class="md3-layout">
+            <aside class="md3-rail" aria-label="Navigation Rail">
                 <div>
-                    <div class="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-sky-400/10 text-sky-300">
-                        <i class="fas fa-circle-notch animate-spin text-2xl"></i>
+                    <div class="md3-rail-brand">
+                        <div class="md3-rail-logo">
+                            <img src="img/logoAiScalerCenter.png" alt="AiScaler Center Logo">
+                        </div>
+                        <div class="md3-brand-copy">
+                            <strong>AiScaler</strong>
+                            <span>Control Center</span>
+                        </div>
                     </div>
-                    <h2 class="text-3xl font-extrabold text-white">Preparando tu panel</h2>
-                    <p class="mt-3 text-sm leading-7 text-slate-300">
-                        Estamos validando tu sesion con Supabase para llevarte directo a tu espacio privado.
-                    </p>
+
+                    <nav id="app-rail-nav" class="md3-rail-nav" aria-label="Menú principal"></nav>
                 </div>
-            </div>
 
-            <section id="app-shell" class="hidden grid gap-6 lg:grid-cols-[320px,minmax(0,1fr)]">
-                <aside class="platform-panel rounded-3xl border border-white/10 p-6">
-                    <p class="text-sm uppercase tracking-[0.3em] text-slate-400">Cuenta</p>
-                    <h2 id="app-user-name" class="mt-4 text-3xl font-extrabold text-white">Tu espacio</h2>
-                    <p id="app-verification-copy" class="mt-4 text-sm leading-7 text-slate-300">
-                        Cargando informacion de tu cuenta...
-                    </p>
+                <div class="md3-rail-footer">
+                    <p id="app-rail-footnote">Preparando el menú de trabajo según el rol del usuario autenticado.</p>
+                </div>
+            </aside>
 
-                    <div class="mt-8 grid gap-3">
-                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Estado</p>
-                            <p id="app-status-badge" class="mt-2 text-sm font-semibold text-sky-200">Pendiente</p>
-                        </div>
-                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Metodo</p>
-                            <p id="app-provider" class="mt-2 text-sm font-semibold text-slate-200">email</p>
-                        </div>
-                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Ultimo acceso</p>
-                            <p id="app-last-sign-in" class="mt-2 text-sm font-semibold text-slate-200">--</p>
-                        </div>
-                        <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                            <p class="text-xs uppercase tracking-[0.2em] text-slate-500">User ID</p>
-                            <p id="app-user-id" class="mt-2 break-all text-sm font-semibold text-slate-200">--</p>
+            <div class="md3-main">
+                <header class="md3-topbar">
+                    <div class="md3-topbar-header">
+                        <div class="md3-topbar-copy">
+                            <small><span class="material-symbols-rounded">dashboard</span>Workspace AiScaler</small>
+                            <h1>Panel de control</h1>
                         </div>
                     </div>
 
-                    <form id="change-password-form" class="mt-8 space-y-4">
+                    <div class="md3-search" role="search" aria-label="Vista del módulo activo">
+                        <span class="material-symbols-rounded">search</span>
                         <div>
-                            <label for="app-new-password" class="mb-2 block text-sm font-semibold text-slate-200">Cambiar contrasena</label>
-                            <input
-                                id="app-new-password"
-                                name="password"
-                                type="password"
-                                minlength="8"
-                                required
-                                class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
-                                placeholder="Minimo 8 caracteres"
-                            >
+                            <strong id="app-search-copy">Cargando módulo...</strong>
+                            <span id="app-search-subcopy">Estamos preparando la navegación según tu rol.</span>
                         </div>
+                    </div>
 
-                        <div>
-                            <label for="app-confirm-password" class="mb-2 block text-sm font-semibold text-slate-200">Confirmar contrasena</label>
-                            <input
-                                id="app-confirm-password"
-                                name="password_confirm"
-                                type="password"
-                                minlength="8"
-                                required
-                                class="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition duration-300 placeholder:text-slate-500 focus:border-sky-400 focus:bg-white/10"
-                                placeholder="Repite la contrasena"
-                            >
-                        </div>
-
-                        <button type="submit" class="btn-font w-full rounded-2xl bg-brand-blue px-6 py-3.5 text-sm font-bold text-white transition duration-300 hover:bg-blue-700">
-                            Actualizar contrasena
+                    <div class="md3-top-actions">
+                        <button type="button" class="md3-chip-button" aria-label="Diseño adaptado a Material 3">
+                            <span class="material-symbols-rounded">palette</span>
+                            <span>M3 Ready</span>
                         </button>
-                    </form>
-                </aside>
 
-                <div class="platform-grid min-h-[520px] rounded-3xl border border-white/10 p-6 sm:p-8">
-                    <div class="flex h-full flex-col rounded-[1.75rem] border border-dashed border-sky-400/25 bg-slate-950/50 p-6 sm:p-10">
-                        <div class="max-w-3xl">
-                            <span class="inline-flex rounded-full border border-sky-400/30 bg-sky-400/10 px-4 py-1 text-sm font-semibold text-sky-200">
-                                Panel inicial
-                            </span>
-                            <h2 class="mt-6 text-4xl font-extrabold text-white sm:text-5xl">Ya entraste como debe ser.</h2>
-                            <p class="mt-4 text-base leading-8 text-slate-300">
-                                El acceso ahora corre con Supabase Auth real: registro, confirmacion por correo, login con contrasena, magic link, recuperacion de acceso y sesion persistente.
+                        <button id="logout-button" type="button" class="md3-icon-button" aria-label="Cerrar sesión">
+                            <span class="material-symbols-rounded">logout</span>
+                            <span>Salir</span>
+                        </button>
+
+                        <div class="md3-avatar" aria-hidden="true">
+                            <img src="img/logoAiScalerCenter.png" alt="">
+                        </div>
+                    </div>
+                </header>
+
+                <main class="md3-content">
+                    <div id="app-notice" class="md3-notice hidden mb-5 px-4 py-3 text-sm font-semibold"></div>
+
+                    <div id="app-loading" class="md3-loading">
+                        <div>
+                            <div class="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--md-primary-container)] text-[var(--md-primary-strong)]">
+                                <span class="material-symbols-rounded text-3xl animate-spin">progress_activity</span>
+                            </div>
+                            <h2 class="text-3xl font-bold tracking-tight text-[var(--md-text)]">Preparando tu espacio de trabajo</h2>
+                            <p class="mt-3 max-w-xl text-sm leading-7 text-[var(--md-text-muted)]">
+                                Estamos validando tu sesión con Supabase y cargando la experiencia que corresponde a tu rol.
                             </p>
                         </div>
-
-                        <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                            <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                                <p class="text-sm font-semibold text-sky-200">Acceso persistente</p>
-                                <p class="mt-3 text-sm leading-7 text-slate-300">
-                                    Si la sesion sigue activa, el sistema te devuelve al panel sin pedirte pasos extra.
-                                </p>
-                            </div>
-                            <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                                <p class="text-sm font-semibold text-sky-200">Autogestion de cuenta</p>
-                                <p class="mt-3 text-sm leading-7 text-slate-300">
-                                    Desde aqui puedes cambiar tu contrasena y ver el estado real de tu correo y tu ultimo acceso.
-                                </p>
-                            </div>
-                            <div class="rounded-3xl border border-white/10 bg-white/5 p-5">
-                                <p class="text-sm font-semibold text-sky-200">Base lista para crecer</p>
-                                <p class="mt-3 text-sm leading-7 text-slate-300">
-                                    El siguiente paso natural ya es conectar tablas, permisos y herramientas de IA al usuario autenticado.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div class="mt-auto pt-12">
-                            <div class="rounded-3xl border border-white/10 bg-slate-950/40 p-6">
-                                <p class="text-xs uppercase tracking-[0.3em] text-slate-500">Proxima iteracion</p>
-                                <h3 class="mt-3 text-2xl font-extrabold text-white">Tus modulos de IA iran aqui.</h3>
-                                <p class="mt-3 text-sm leading-7 text-slate-300">
-                                    Dejamos el panel despejado y con la base de autenticacion terminada para que ahora podamos conectar herramientas, historial, creditos, billing y roles sin rehacer el acceso.
-                                </p>
-                            </div>
-                        </div>
                     </div>
-                </div>
-            </section>
-        </main>
+
+                    <section id="app-shell" class="md3-shell-grid hidden">
+                        <section class="md3-card md3-hero-card">
+                            <div class="md3-hero-layout">
+                                <div class="md3-hero-copy">
+                                    <span id="app-section-kicker" class="md3-chip md3-chip--primary">Menú activo</span>
+                                    <h2 id="app-section-title">Cargando panel...</h2>
+                                    <p id="app-section-description">
+                                        Estamos organizando el área de trabajo según el rol del usuario autenticado.
+                                    </p>
+                                </div>
+
+                                <div class="md3-card p-5 sm:p-6">
+                                    <span class="md3-card-label"><span class="material-symbols-rounded">person</span>Perfil activo</span>
+                                    <h3 id="app-user-name" class="mt-3 text-2xl font-bold tracking-tight text-[var(--md-text)]">Tu espacio</h3>
+                                    <p id="app-user-email" class="mt-2 text-sm leading-7 text-[var(--md-text-muted)]">Validando sesión...</p>
+
+                                    <div class="md3-chip-row">
+                                        <span id="app-role-badge" class="md3-chip md3-chip--primary">Usuario</span>
+                                        <span id="app-status-badge" class="md3-chip">Pendiente</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="app-meta-chips" class="md3-chip-row"></div>
+                        </section>
+
+                        <div class="md3-main-grid">
+                            <section class="md3-card md3-module-card">
+                                <div class="md3-section-header">
+                                    <div id="app-module-icon" class="md3-section-icon">
+                                        <span class="material-symbols-rounded">dashboard</span>
+                                    </div>
+                                    <div>
+                                        <span class="md3-section-label"><span class="material-symbols-rounded">deployed_code</span>Vista estructural</span>
+                                        <h3 id="app-module-empty-title" class="mt-2">Aquí irá el primer módulo.</h3>
+                                        <p id="app-module-empty-copy" class="mt-2">
+                                            Esta vista se irá llenando con herramientas reales según el menú seleccionado.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div id="app-feature-grid" class="md3-feature-grid"></div>
+                            </section>
+
+                            <div class="md3-side-stack">
+                                <section class="md3-card md3-side-card">
+                                    <span class="md3-card-label"><span class="material-symbols-rounded">manage_accounts</span>Cuenta</span>
+                                    <p id="app-verification-copy" class="mt-4 text-sm leading-7 text-[var(--md-text-muted)]">
+                                        Cargando información de la cuenta...
+                                    </p>
+
+                                    <div class="md3-info-grid">
+                                        <div class="md3-info-item">
+                                            <small>Método</small>
+                                            <strong id="app-provider">email</strong>
+                                        </div>
+                                        <div class="md3-info-item">
+                                            <small>Último acceso</small>
+                                            <strong id="app-last-sign-in">--</strong>
+                                        </div>
+                                        <div class="md3-info-item">
+                                            <small>User ID</small>
+                                            <strong id="app-user-id">--</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="md3-highlight-card">
+                                        <p class="text-sm font-semibold text-[var(--md-text)]">Alcance del rol</p>
+                                        <p id="app-role-copy" class="mt-3 text-sm leading-7 text-[var(--md-text-muted)]">
+                                            Estamos preparando el alcance de este usuario.
+                                        </p>
+                                    </div>
+                                </section>
+
+                                <section class="md3-card md3-side-card">
+                                    <span class="md3-card-label"><span class="material-symbols-rounded">shield_person</span>Permisos</span>
+                                    <h3 id="app-menu-scope" class="mt-3 text-2xl font-bold tracking-tight text-[var(--md-text)]">Cargando menú</h3>
+                                    <p id="app-role-helper" class="mt-4 text-sm leading-7 text-[var(--md-text-muted)]">
+                                        Estamos preparando la lógica base para distinguir usuarios regulares y administradores.
+                                    </p>
+
+                                    <div class="md3-highlight-card">
+                                        <p class="text-sm font-semibold text-[var(--md-text)]">Nota de administración</p>
+                                        <p id="app-admin-note" class="mt-3 text-sm leading-7 text-[var(--md-text-muted)]">
+                                            El primer admin servirá como punto de arranque para habilitar áreas exclusivas y después poder promover más administradores.
+                                        </p>
+                                    </div>
+                                </section>
+
+                                <section class="md3-card md3-side-card">
+                                    <span class="md3-card-label"><span class="material-symbols-rounded">lock</span>Seguridad</span>
+                                    <h3 class="mt-3 text-2xl font-bold tracking-tight text-[var(--md-text)]">Actualiza tu contraseña</h3>
+                                    <p class="mt-3 text-sm leading-7 text-[var(--md-text-muted)]">
+                                        Este panel deja listo el acceso para móvil y escritorio sin sacar al usuario de su flujo principal.
+                                    </p>
+
+                                    <form id="change-password-form" class="mt-8 space-y-4">
+                                        <div>
+                                            <label for="app-new-password" class="mb-2 block text-sm font-semibold text-[var(--md-text)]">Nueva contraseña</label>
+                                            <input
+                                                id="app-new-password"
+                                                name="password"
+                                                type="password"
+                                                minlength="8"
+                                                required
+                                                class="w-full rounded-[1.4rem] border border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-4 py-3 text-[var(--md-text)] outline-none transition duration-300 placeholder:text-[var(--md-text-subtle)] focus:border-[var(--md-primary)]"
+                                                placeholder="Mínimo 8 caracteres"
+                                            >
+                                        </div>
+
+                                        <div>
+                                            <label for="app-confirm-password" class="mb-2 block text-sm font-semibold text-[var(--md-text)]">Confirmar contraseña</label>
+                                            <input
+                                                id="app-confirm-password"
+                                                name="password_confirm"
+                                                type="password"
+                                                minlength="8"
+                                                required
+                                                class="w-full rounded-[1.4rem] border border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-4 py-3 text-[var(--md-text)] outline-none transition duration-300 placeholder:text-[var(--md-text-subtle)] focus:border-[var(--md-primary)]"
+                                                placeholder="Repite la contraseña"
+                                            >
+                                        </div>
+
+                                        <button type="submit" class="btn-font w-full rounded-[1.4rem] bg-[var(--md-primary)] px-6 py-3.5 text-sm font-bold text-white transition duration-300 hover:bg-[var(--md-primary-strong)]">
+                                            Actualizar contraseña
+                                        </button>
+                                    </form>
+                                </section>
+                            </div>
+                        </div>
+                    </section>
+                </main>
+            </div>
+        </div>
+
+        <nav id="app-bottom-nav" class="md3-bottom-nav" aria-label="Menú móvil"></nav>
+
+        <button id="app-fab" type="button" class="md3-fab" aria-label="Acción principal del módulo">
+            <span id="app-fab-icon" class="material-symbols-rounded">add</span>
+            <span id="app-fab-label" class="md3-fab-label">Nueva acción</span>
+        </button>
     </div>
 </body>
 <?php elseif ($showLoginView): ?>

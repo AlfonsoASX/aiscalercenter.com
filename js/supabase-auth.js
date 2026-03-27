@@ -1,9 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const authConfig = window.AISCALER_AUTH_CONFIG ?? null;
+const panelConfig = authConfig?.panel ?? {
+    bootstrap_admins: [],
+    roles: {},
+    menus: {},
+};
 const view = document.body.dataset.view ?? '';
 const state = {
     recoveryMode: window.location.hash.includes('type=recovery'),
+    role: 'regular',
+    activeMenuId: null,
+    isBootstrapAdmin: false,
+    activeMenuItem: null,
+    userContext: null,
 };
 const absoluteUrls = {
     landing: new URL(authConfig?.landingUrl ?? '/', window.location.origin).toString(),
@@ -69,6 +79,14 @@ function handleGlobalClick(event) {
         return;
     }
 
+    const menuTrigger = event.target.closest('[data-menu-id]');
+
+    if (menuTrigger) {
+        event.preventDefault();
+        selectMenu(menuTrigger.dataset.menuId);
+        return;
+    }
+
     const oauthTrigger = event.target.closest('[data-oauth-provider]');
 
     if (oauthTrigger) {
@@ -92,6 +110,7 @@ function bindAppView() {
     bindForm('change-password-form', handleChangePassword);
 
     const logoutButton = document.getElementById('logout-button');
+    const appFab = document.getElementById('app-fab');
 
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
@@ -108,6 +127,18 @@ function bindAppView() {
 
             setFlash('Has salido correctamente.');
             window.location.href = authConfig.landingUrl;
+        });
+    }
+
+    if (appFab) {
+        appFab.addEventListener('click', () => {
+            if (!state.activeMenuItem) {
+                showNotice('info', 'Elige primero un módulo del menú para continuar.');
+                return;
+            }
+
+            const fabLabel = state.activeMenuItem.fab_label ?? 'Nueva acción';
+            showNotice('info', `La acción "${fabLabel}" se conectará aquí dentro de ${state.activeMenuItem.label}.`);
         });
     }
 }
@@ -537,6 +568,11 @@ function renderAppSession(session) {
     const userName = document.getElementById('app-user-name');
     const verificationCopy = document.getElementById('app-verification-copy');
     const statusBadge = document.getElementById('app-status-badge');
+    const roleBadge = document.getElementById('app-role-badge');
+    const roleCopy = document.getElementById('app-role-copy');
+    const roleHelper = document.getElementById('app-role-helper');
+    const adminNote = document.getElementById('app-admin-note');
+    const menuScope = document.getElementById('app-menu-scope');
     const provider = document.getElementById('app-provider');
     const lastSignIn = document.getElementById('app-last-sign-in');
     const userId = document.getElementById('app-user-id');
@@ -546,13 +582,25 @@ function renderAppSession(session) {
     const fullName = user.user_metadata?.full_name?.trim();
     const providers = user.app_metadata?.providers ?? ['email'];
     const isVerified = Boolean(user.email_confirmed_at);
+    const role = resolveUserRole(user);
+    const roleMeta = getRoleMeta(role);
+    const email = user.email ?? 'Cuenta activa';
+
+    state.role = role;
+    state.userContext = {
+        email,
+        providers: providers.join(', '),
+        isVerified,
+        roleLabel: roleMeta.label ?? 'Usuario',
+        roleMenuLabel: roleMeta.menu_label ?? 'Menú',
+    };
 
     if (userEmail) {
-        userEmail.textContent = user.email ?? 'Cuenta activa';
+        userEmail.textContent = email;
     }
 
     if (userName) {
-        userName.textContent = fullName || user.email || 'Tu espacio';
+        userName.textContent = fullName || email || 'Tu espacio';
     }
 
     if (verificationCopy) {
@@ -563,6 +611,36 @@ function renderAppSession(session) {
 
     if (statusBadge) {
         statusBadge.textContent = isVerified ? 'Correo verificado' : 'Correo pendiente';
+        statusBadge.className = isVerified
+            ? 'md3-chip md3-chip--accent-green'
+            : 'md3-chip md3-chip--accent-yellow';
+    }
+
+    if (roleBadge) {
+        roleBadge.textContent = roleMeta.label ?? 'Usuario';
+        roleBadge.className = role === 'admin'
+            ? 'md3-chip md3-chip--accent-red'
+            : 'md3-chip md3-chip--primary';
+    }
+
+    if (roleCopy) {
+        roleCopy.textContent = roleMeta.role_copy ?? '';
+    }
+
+    if (roleHelper) {
+        roleHelper.textContent = roleMeta.helper_copy ?? '';
+    }
+
+    if (adminNote) {
+        adminNote.textContent = state.isBootstrapAdmin
+            ? 'Este usuario coincide con el admin bootstrap inicial. Desde aqui podremos preparar el flujo para promover nuevos administradores.'
+            : role === 'admin'
+                ? 'Este admin ya puede ver catalogos internos. El siguiente paso es construir el flujo seguro para nombrar mas admins.'
+                : 'El usuario regular solo ve el menu operativo. Los catalogos internos y contenido de administracion quedan ocultos.';
+    }
+
+    if (menuScope) {
+        menuScope.textContent = roleMeta.menu_label ?? 'Menú';
     }
 
     if (provider) {
@@ -584,6 +662,279 @@ function renderAppSession(session) {
     if (appShell) {
         appShell.classList.remove('hidden');
     }
+
+    renderMenuForRole(role);
+    updateRailFootnote(roleMeta);
+}
+
+function resolveUserRole(user) {
+    const email = normalizeEmail(user.email);
+    const bootstrapAdmins = (panelConfig.bootstrap_admins ?? []).map(normalizeEmail);
+    const appMetadataRole = user.app_metadata?.role;
+    const appMetadataRoles = user.app_metadata?.roles;
+
+    state.isBootstrapAdmin = bootstrapAdmins.includes(email);
+
+    if (state.isBootstrapAdmin) {
+        return 'admin';
+    }
+
+    if (appMetadataRole === 'admin') {
+        return 'admin';
+    }
+
+    if (Array.isArray(appMetadataRoles) && appMetadataRoles.includes('admin')) {
+        return 'admin';
+    }
+
+    return 'regular';
+}
+
+function renderMenuForRole(role) {
+    const railMenu = document.getElementById('app-rail-nav');
+    const bottomMenu = document.getElementById('app-bottom-nav');
+    const items = getMenuItems(role);
+
+    if (!railMenu || !bottomMenu) {
+        return;
+    }
+
+    railMenu.innerHTML = '';
+    bottomMenu.innerHTML = '';
+    bottomMenu.style.gridTemplateColumns = `repeat(${Math.max(items.length, 1)}, minmax(0, 1fr))`;
+
+    items.forEach((item) => {
+        railMenu.appendChild(createMenuButton(item, 'rail'));
+        bottomMenu.appendChild(createMenuButton(item, 'bottom'));
+    });
+
+    const defaultItem = items.find((item) => item.id === state.activeMenuId) ?? items[0] ?? null;
+
+    if (defaultItem) {
+        selectMenu(defaultItem.id);
+    }
+}
+
+function selectMenu(menuId) {
+    const items = getMenuItems(state.role);
+    const selectedItem = items.find((item) => item.id === menuId);
+
+    if (!selectedItem) {
+        return;
+    }
+
+    state.activeMenuId = menuId;
+    state.activeMenuItem = selectedItem;
+
+    document.querySelectorAll('[data-menu-id]').forEach((button) => {
+        const isActive = button.dataset.menuId === menuId;
+        button.classList.toggle('is-active', isActive);
+        button.setAttribute('aria-current', isActive ? 'page' : 'false');
+    });
+
+    const sectionKicker = document.getElementById('app-section-kicker');
+    const sectionTitle = document.getElementById('app-section-title');
+    const sectionDescription = document.getElementById('app-section-description');
+    const moduleEmptyTitle = document.getElementById('app-module-empty-title');
+    const moduleEmptyCopy = document.getElementById('app-module-empty-copy');
+    const featureGrid = document.getElementById('app-feature-grid');
+    const moduleIcon = document.getElementById('app-module-icon');
+    const metaChips = document.getElementById('app-meta-chips');
+    const searchCopy = document.getElementById('app-search-copy');
+    const searchSubcopy = document.getElementById('app-search-subcopy');
+    const fabIcon = document.getElementById('app-fab-icon');
+    const fabLabel = document.getElementById('app-fab-label');
+
+    if (sectionKicker) {
+        sectionKicker.textContent = selectedItem.kicker;
+        sectionKicker.className = `md3-chip ${accentChipClass(selectedItem.accent)}`;
+    }
+
+    if (sectionTitle) {
+        sectionTitle.textContent = selectedItem.label;
+    }
+
+    if (sectionDescription) {
+        sectionDescription.textContent = selectedItem.description;
+    }
+
+    if (moduleEmptyTitle) {
+        moduleEmptyTitle.textContent = selectedItem.placeholder_title;
+    }
+
+    if (moduleEmptyCopy) {
+        moduleEmptyCopy.textContent = selectedItem.placeholder_copy;
+    }
+
+    if (searchCopy) {
+        searchCopy.textContent = selectedItem.label;
+    }
+
+    if (searchSubcopy) {
+        searchSubcopy.textContent = selectedItem.description;
+    }
+
+    if (fabIcon) {
+        fabIcon.textContent = selectedItem.icon ?? 'add';
+    }
+
+    if (fabLabel) {
+        fabLabel.textContent = selectedItem.fab_label ?? 'Nueva acción';
+    }
+
+    if (moduleIcon) {
+        const accent = getAccentPalette(selectedItem.accent);
+        moduleIcon.innerHTML = `<span class="material-symbols-rounded">${selectedItem.icon ?? 'dashboard'}</span>`;
+        moduleIcon.style.background = accent.surface;
+        moduleIcon.style.color = accent.text;
+        moduleIcon.style.border = `1px solid ${accent.border}`;
+    }
+
+    if (featureGrid) {
+        featureGrid.innerHTML = '';
+
+        (selectedItem.feature_highlights ?? []).forEach((feature) => {
+            const card = document.createElement('div');
+
+            card.className = 'md3-feature-card';
+            card.innerHTML = `
+                <strong>${feature.title}</strong>
+                <p>${feature.copy}</p>
+            `;
+
+            featureGrid.appendChild(card);
+        });
+    }
+
+    if (metaChips) {
+        metaChips.innerHTML = '';
+
+        [
+            {
+                label: state.userContext?.roleLabel ?? 'Usuario',
+                icon: state.role === 'admin' ? 'shield_person' : 'person',
+                tone: state.role === 'admin' ? 'red' : 'primary',
+            },
+            {
+                label: state.userContext?.isVerified ? 'Correo verificado' : 'Correo pendiente',
+                icon: state.userContext?.isVerified ? 'verified' : 'mark_email_unread',
+                tone: state.userContext?.isVerified ? 'green' : 'yellow',
+            },
+            {
+                label: state.userContext?.providers ?? 'email',
+                icon: 'alternate_email',
+                tone: 'default',
+            },
+            {
+                label: selectedItem.fab_label ?? 'Nueva acción',
+                icon: selectedItem.icon ?? 'add',
+                tone: selectedItem.accent ?? 'default',
+            },
+        ].forEach((chip) => {
+            metaChips.appendChild(createMetaChip(chip));
+        });
+    }
+}
+
+function createMenuButton(item, mode) {
+    const button = document.createElement('button');
+    const label = item.short_label ?? item.label;
+
+    button.type = 'button';
+    button.dataset.menuId = item.id;
+    button.className = mode === 'bottom'
+        ? 'md3-nav-button md3-bottom-button'
+        : 'md3-nav-button md3-rail-button';
+    button.setAttribute('aria-label', item.label);
+    button.innerHTML = `
+        <span class="material-symbols-rounded">${item.icon ?? 'dashboard'}</span>
+        <span class="md3-nav-label">${label}</span>
+    `;
+
+    return button;
+}
+
+function createMetaChip(chip) {
+    const element = document.createElement('span');
+
+    element.className = `md3-chip ${chipToneClass(chip.tone)}`;
+    element.innerHTML = `
+        <span class="material-symbols-rounded">${chip.icon}</span>
+        <span>${chip.label}</span>
+    `;
+
+    return element;
+}
+
+function getRoleMeta(role) {
+    return panelConfig.roles?.[role] ?? panelConfig.roles?.regular ?? {};
+}
+
+function getMenuItems(role) {
+    return panelConfig.menus?.[role] ?? panelConfig.menus?.regular ?? [];
+}
+
+function updateRailFootnote(roleMeta) {
+    const footnote = document.getElementById('app-rail-footnote');
+
+    if (!footnote) {
+        return;
+    }
+
+    footnote.textContent = roleMeta.helper_copy ?? 'Navegación lista para crecer.';
+}
+
+function accentChipClass(accent) {
+    return chipToneClass(accent === 'blue' ? 'primary' : accent);
+}
+
+function chipToneClass(tone) {
+    const map = {
+        primary: 'md3-chip--primary',
+        blue: 'md3-chip--primary',
+        red: 'md3-chip--accent-red',
+        yellow: 'md3-chip--accent-yellow',
+        green: 'md3-chip--accent-green',
+        default: '',
+    };
+
+    return map[tone] ?? '';
+}
+
+function getAccentPalette(accent) {
+    const map = {
+        blue: {
+            surface: 'rgba(47, 124, 239, 0.12)',
+            text: 'var(--md-primary-strong)',
+            border: 'rgba(47, 124, 239, 0.16)',
+        },
+        red: {
+            surface: 'rgba(234, 67, 53, 0.12)',
+            text: '#b3261e',
+            border: 'rgba(234, 67, 53, 0.16)',
+        },
+        yellow: {
+            surface: 'rgba(251, 188, 4, 0.16)',
+            text: '#835b00',
+            border: 'rgba(251, 188, 4, 0.2)',
+        },
+        green: {
+            surface: 'rgba(52, 168, 83, 0.14)',
+            text: '#0c6a33',
+            border: 'rgba(52, 168, 83, 0.18)',
+        },
+        default: {
+            surface: 'var(--md-surface-container-high)',
+            text: 'var(--md-primary-strong)',
+            border: 'var(--md-outline)',
+        },
+    };
+
+    return map[accent] ?? map.default;
+}
+
+function normalizeEmail(value) {
+    return String(value ?? '').trim().toLowerCase();
 }
 
 function formatDate(dateString) {
@@ -633,13 +984,17 @@ function showNotice(type, message) {
         return;
     }
 
-    notice.className = 'mb-6 rounded-2xl px-4 py-3 text-sm font-semibold';
-
-    const palettes = {
+    const appPalettes = {
+        success: 'md3-notice mb-5 border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-900 dark:text-emerald-100',
+        error: 'md3-notice mb-5 border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-900 dark:text-red-100',
+        info: 'md3-notice mb-5 border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-900 dark:text-sky-100',
+    };
+    const authPalettes = {
         success: 'mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100',
         error: 'mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-100',
         info: 'mb-6 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100',
     };
+    const palettes = view === 'app' ? appPalettes : authPalettes;
 
     notice.className = palettes[type] ?? palettes.info;
     notice.textContent = message;
