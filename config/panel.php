@@ -69,9 +69,9 @@ return [
         ],
     ],
     'dashboard' => [
-        'id' => 'dashboard',
-        'label' => 'Dashboard',
-        'section_title' => 'Dashboard',
+        'id' => 'inicio',
+        'label' => 'Inicio',
+        'section_title' => 'Inicio',
     ],
     'account_section' => [
         'id' => 'configuracion',

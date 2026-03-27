@@ -44,6 +44,8 @@ $authClientConfig = [
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
+    <link rel="stylesheet" href="css/modules/blog-entries.css">
+    <link rel="stylesheet" href="css/modules/courses.css">
 
     <style>
         :root {
@@ -967,6 +969,7 @@ $authClientConfig = [
             align-items: center;
             gap: 0.9rem;
             min-width: 0;
+            flex-shrink: 0;
         }
 
         .workspace-logo-button {
@@ -995,20 +998,37 @@ $authClientConfig = [
             min-width: 0;
         }
 
-        .workspace-header-eyebrow {
-            font-size: 0.75rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
+        .workspace-search-shell {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            min-height: 3rem;
+            padding: 0 1rem;
+            border: 1px solid rgba(19, 42, 74, 0.08);
+            border-radius: 999px;
+            background: #f8fafc;
             color: #6b7280;
         }
 
-        .workspace-header h1 {
-            margin-top: 0.18rem;
-            font-size: clamp(1.45rem, 3vw, 2rem);
-            font-weight: 500;
+        .workspace-search-shell .material-symbols-rounded {
+            flex-shrink: 0;
+        }
+
+        .workspace-search-input {
+            width: 100%;
+            border: 0;
+            background: transparent;
             color: #202124;
-            letter-spacing: -0.03em;
+        }
+
+        .workspace-search-input:focus {
+            outline: none;
+        }
+
+        .workspace-search-input::placeholder {
+            color: #9ca3af;
         }
 
         .workspace-mobile-toggle {
@@ -1107,6 +1127,7 @@ $authClientConfig = [
             background: transparent;
             color: #374151;
             text-align: left;
+            text-decoration: none;
             transition: background-color 160ms ease, color 160ms ease;
         }
 
@@ -1389,6 +1410,7 @@ $authClientConfig = [
 
             .workspace-header {
                 padding: 0.85rem 1rem;
+                flex-wrap: wrap;
             }
 
             .workspace-section-card,
@@ -1405,6 +1427,11 @@ $authClientConfig = [
             .workspace-user-name {
                 max-width: 8rem;
             }
+
+            .workspace-search-shell {
+                order: 3;
+                flex: 0 0 100%;
+            }
         }
 
         html { scroll-behavior: smooth; }
@@ -1414,7 +1441,7 @@ $authClientConfig = [
         <script>
             window.AISCALER_AUTH_CONFIG = <?= json_encode($authClientConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         </script>
-        <script type="module" src="js/supabase-auth.js"></script>
+        <script type="module" src="js/app.js"></script>
     <?php endif; ?>
 </head>
 <?php if ($showAppView): ?>
@@ -1426,8 +1453,8 @@ $authClientConfig = [
                     <span class="material-symbols-rounded">menu</span>
                 </button>
 
-                <button id="dashboard-link" type="button" class="workspace-icon-button" data-menu-id="dashboard" aria-label="Ir al dashboard" title="Dashboard">
-                    <span class="material-symbols-rounded">space_dashboard</span>
+                <button id="dashboard-link" type="button" class="workspace-icon-button" data-menu-id="inicio" aria-label="Ir a inicio" title="Inicio">
+                    <span class="material-symbols-rounded">home</span>
                 </button>
             </div>
 
@@ -1443,16 +1470,51 @@ $authClientConfig = [
                         <span class="material-symbols-rounded">menu</span>
                     </button>
 
-                    <div>
-                        <p class="workspace-header-eyebrow">Panel</p>
-                        <h1 id="app-current-title">Cargando sección...</h1>
-                    </div>
+                    <button type="button" class="workspace-logo-button" data-menu-id="inicio" aria-label="Ir a inicio">
+                        <img class="workspace-header-logo" src="img/logoAiScalerCenter.png" alt="AiScaler Center Logo">
+                    </button>
                 </div>
 
-                <button id="logout-button" type="button" class="workspace-logout-button" aria-label="Cerrar sesión">
-                    <span class="material-symbols-rounded">logout</span>
-                    <span>Salir</span>
-                </button>
+                <div class="workspace-search-shell" role="search" aria-label="Buscar en el panel">
+                    <span class="material-symbols-rounded">search</span>
+                    <input class="workspace-search-input" type="search" placeholder="Buscar en AiScaler" aria-label="Buscar en AiScaler">
+                </div>
+
+                <div class="workspace-user-menu">
+                    <button id="user-menu-toggle" type="button" class="workspace-user-button" aria-haspopup="menu" aria-expanded="false">
+                        <span id="app-user-name" class="workspace-user-name">Usuario</span>
+                        <span class="material-symbols-rounded">expand_more</span>
+                    </button>
+
+                    <div id="user-menu-panel" class="workspace-user-panel hidden" role="menu">
+                        <div class="workspace-user-panel-head">
+                            <strong id="app-user-panel-name">Usuario</strong>
+                            <span id="app-user-email">correo@empresa.com</span>
+                        </div>
+
+                        <div class="workspace-user-links">
+                            <button type="button" class="workspace-user-link" data-menu-id="configuracion">
+                                <span class="material-symbols-rounded">settings</span>
+                                <span>Configuracion</span>
+                            </button>
+
+                            <button id="logout-button" type="button" class="workspace-user-link workspace-user-link--danger" aria-label="Cerrar sesion">
+                                <span class="material-symbols-rounded">logout</span>
+                                <span>Cerrar sesion</span>
+                            </button>
+
+                            <a href="terminos-y-condiciones.php" class="workspace-user-link">
+                                <span class="material-symbols-rounded">gavel</span>
+                                <span>Terminos y condiciones</span>
+                            </a>
+
+                            <a href="aviso-de-privacidad.php" class="workspace-user-link">
+                                <span class="material-symbols-rounded">policy</span>
+                                <span>Aviso de privacidad</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </header>
 
             <main class="workspace-content">
