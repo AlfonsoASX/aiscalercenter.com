@@ -3,32 +3,36 @@ declare(strict_types=1);
 
 $regularMenu = [
     [
-        'id' => 'validar-mercado',
-        'label' => 'Validar Mercado',
+        'id' => 'Idear',
+        'label' => 'Idear',
         'hover_label' => 'Idear',
         'icon_path' => 'img/ico/1.svg',
-        'section_title' => 'Validar Mercado',
+        'color' => '#1A3C6E',
+        'section_title' => 'Idear',
     ],
     [
-        'id' => 'crear-oferta',
-        'label' => 'Crear Oferta',
+        'id' => 'Diseñar',
+        'label' => 'Diseñar',
         'hover_label' => 'Diseñar',
         'icon_path' => 'img/ico/2.svg',
-        'section_title' => 'Crear Oferta',
+        'color' => '#D93025',
+        'section_title' => 'Diseñar',
     ],
     [
-        'id' => 'acelerar-ventas',
-        'label' => 'Acelerar Ventas',
+        'id' => 'Ejecutar',
+        'label' => 'Ejecutar',
         'hover_label' => 'Ejecutar',
         'icon_path' => 'img/ico/3.svg',
-        'section_title' => 'Acelerar Ventas',
+        'color' => '#DF9C0A',
+        'section_title' => 'Ejecutar',
     ],
     [
-        'id' => 'academia-ia',
-        'label' => 'Academia IA',
+        'id' => 'Aprender',
+        'label' => 'Aprender',
         'hover_label' => 'Aprender',
         'icon_path' => 'img/ico/4.svg',
-        'section_title' => 'Academia IA',
+        'color' => '#188038',
+        'section_title' => 'Aprender',
     ],
 ];
 
@@ -38,6 +42,7 @@ $adminMenu = [
         'label' => 'Paginas del sitio',
         'hover_label' => 'Paginas del sitio',
         'icon_path' => 'img/ico/6.svg',
+        'color' => '#000000',
         'section_title' => 'Paginas del sitio',
     ],
     [
@@ -45,6 +50,7 @@ $adminMenu = [
         'label' => 'Entradas del blog',
         'hover_label' => 'Entradas del blog',
         'icon_path' => 'img/ico/7.svg',
+        'color' => '#000000',
         'section_title' => 'Entradas del blog',
     ],
     [
@@ -52,7 +58,16 @@ $adminMenu = [
         'label' => 'Cursos',
         'hover_label' => 'Cursos',
         'icon_path' => 'img/ico/8.svg',
+        'color' => '#000000',
         'section_title' => 'Cursos',
+    ],
+    [
+        'id' => 'herramientas',
+        'label' => 'Herramientas',
+        'hover_label' => 'Herramientas',
+        'icon_path' => 'img/ico/5.svg',
+        'color' => '#000000',
+        'section_title' => 'Herramientas',
     ],
 ];
 
@@ -71,11 +86,13 @@ return [
     'dashboard' => [
         'id' => 'inicio',
         'label' => 'Inicio',
+        'color' => '#2F7CEF',
         'section_title' => 'Inicio',
     ],
     'account_section' => [
         'id' => 'configuracion',
         'label' => 'Configuracion',
+        'color' => '#202124',
         'section_title' => 'Configuracion',
     ],
     'menus' => [

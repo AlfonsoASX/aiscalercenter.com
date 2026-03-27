@@ -68,6 +68,8 @@ $authClientConfig = [
             --md-text-muted: #5f6368;
             --md-text-subtle: #738093;
             --md-inverse: #101418;
+            --workspace-accent: #2f7cef;
+            --workspace-accent-rgb: 47, 124, 239;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -948,6 +950,10 @@ $authClientConfig = [
             flex: 1;
             display: flex;
             flex-direction: column;
+            background:
+                radial-gradient(circle at top right, rgba(var(--workspace-accent-rgb), 0.18), transparent 28rem),
+                linear-gradient(180deg, rgba(var(--workspace-accent-rgb), 0.11), rgba(var(--workspace-accent-rgb), 0.03) 24%, #f8fafc 100%);
+            transition: background 220ms ease;
         }
 
         .workspace-header {
@@ -1144,6 +1150,7 @@ $authClientConfig = [
         .workspace-content {
             flex: 1;
             padding: 1.5rem;
+            background: transparent;
         }
 
         .workspace-notice {

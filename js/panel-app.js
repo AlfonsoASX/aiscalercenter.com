@@ -386,6 +386,7 @@ function selectMenu(menuId) {
 
     state.activeMenuId = menuId;
     state.activeMenuItem = selectedItem;
+    applyWorkspaceAccent(selectedItem);
 
     document.querySelectorAll('[data-menu-id]').forEach((button) => {
         const isActive = button.dataset.menuId === menuId;
@@ -625,6 +626,58 @@ function renderSettingsSection(item) {
 
 function getRequestedMenuId() {
     return window.location.hash.replace('#', '').trim();
+}
+
+function applyWorkspaceAccent(item) {
+    const layout = document.getElementById('app-layout');
+
+    if (!layout) {
+        return;
+    }
+
+    const accent = resolveMenuAccent(item?.color);
+
+    layout.style.setProperty('--workspace-accent', accent.hex);
+    layout.style.setProperty('--workspace-accent-rgb', accent.rgb);
+}
+
+function resolveMenuAccent(color) {
+    const fallbackHex = '#2F7CEF';
+    const normalizedHex = normalizeHexColor(color) ?? fallbackHex;
+
+    return {
+        hex: normalizedHex,
+        rgb: hexToRgbTriplet(normalizedHex),
+    };
+}
+
+function normalizeHexColor(value) {
+    const raw = String(value ?? '').trim();
+
+    if (!raw) {
+        return null;
+    }
+
+    const normalized = raw.startsWith('#') ? raw.slice(1) : raw;
+
+    if (!/^[0-9a-f]{3}([0-9a-f]{3})?$/i.test(normalized)) {
+        return null;
+    }
+
+    if (normalized.length === 3) {
+        return `#${normalized.split('').map((character) => `${character}${character}`).join('').toUpperCase()}`;
+    }
+
+    return `#${normalized.toUpperCase()}`;
+}
+
+function hexToRgbTriplet(hex) {
+    const sanitized = hex.replace('#', '');
+    const red = Number.parseInt(sanitized.slice(0, 2), 16);
+    const green = Number.parseInt(sanitized.slice(2, 4), 16);
+    const blue = Number.parseInt(sanitized.slice(4, 6), 16);
+
+    return `${red}, ${green}, ${blue}`;
 }
 
 function applySidebarState() {
