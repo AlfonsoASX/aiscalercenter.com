@@ -5,6 +5,8 @@ create table if not exists public.courses (
     title text not null,
     slug text not null unique,
     description text not null default '',
+    cover_image_url text not null default '',
+    cover_storage_path text not null default '',
     status text not null default 'draft' check (status in ('draft', 'published')),
     sections jsonb not null default '[]'::jsonb,
     loose_items jsonb not null default '[]'::jsonb,
@@ -16,6 +18,12 @@ create table if not exists public.courses (
 
 create index if not exists courses_status_idx on public.courses (status);
 create index if not exists courses_updated_at_idx on public.courses (updated_at desc);
+
+alter table public.courses
+    add column if not exists cover_image_url text not null default '';
+
+alter table public.courses
+    add column if not exists cover_storage_path text not null default '';
 
 create or replace function public.set_courses_updated_at()
 returns trigger
@@ -35,6 +43,13 @@ for each row
 execute function public.set_courses_updated_at();
 
 alter table public.courses enable row level security;
+
+drop policy if exists "Authenticated users can view published courses" on public.courses;
+create policy "Authenticated users can view published courses"
+on public.courses
+for select
+to authenticated
+using (status = 'published');
 
 drop policy if exists "Admins can manage courses" on public.courses;
 create policy "Admins can manage courses"

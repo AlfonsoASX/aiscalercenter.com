@@ -14,7 +14,13 @@ values (
         'audio/x-wav',
         'audio/webm',
         'audio/ogg',
-        'application/pdf'
+        'application/pdf',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/gif',
+        'image/svg+xml',
+        'image/avif'
     ]
 )
 on conflict (id) do update
@@ -24,17 +30,12 @@ set public = excluded.public,
 
 drop policy if exists "Public can view course assets" on storage.objects;
 drop policy if exists "Admins can view course assets" on storage.objects;
-create policy "Admins can view course assets"
+drop policy if exists "Authenticated users can view course assets" on storage.objects;
+create policy "Authenticated users can view course assets"
 on storage.objects
 for select
 to authenticated
-using (
-    bucket_id = 'course-assets'
-    and (
-        coalesce(auth.jwt() ->> 'email', '') = 'a@asx.mx'
-        or coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '') = 'admin'
-    )
-);
+using (bucket_id = 'course-assets');
 
 drop policy if exists "Admins can upload course assets" on storage.objects;
 create policy "Admins can upload course assets"

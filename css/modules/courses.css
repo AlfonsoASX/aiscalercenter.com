@@ -365,6 +365,10 @@
     background: #ffffff;
 }
 
+.course-file-dropzone--cover {
+    background: #f8fafc;
+}
+
 .course-file-dropzone input[type="file"] {
     display: none;
 }
@@ -373,6 +377,19 @@
     margin: 0;
     color: #5f6368;
     line-height: 1.6;
+}
+
+.course-cover-preview {
+    width: 100%;
+    max-height: 240px;
+    object-fit: cover;
+    border-radius: 1rem;
+    background: #e5e7eb;
+}
+
+.course-file-dropzone.is-over {
+    background: #eef5ff;
+    border-color: rgba(47, 124, 239, 0.56);
 }
 
 .course-editor-footer {

@@ -37,6 +37,9 @@ export function createCoursesModule({
         sections: [],
         looseItems: [],
         editingId: null,
+        coverImageUrl: '',
+        coverStoragePath: '',
+        coverImageFile: null,
         loading: false,
         tableReady: null,
         autoSlug: true,
@@ -138,6 +141,25 @@ export function createCoursesModule({
                                     <label for="course-description" class="course-editor-label">Descripcion</label>
                                     <textarea id="course-description" name="description" class="course-editor-textarea" placeholder="Describe brevemente el curso"></textarea>
                                 </div>
+
+                                <div class="course-editor-field course-editor-field--full">
+                                    <label class="course-editor-label">Imagen de portada</label>
+                                    <div id="course-cover-dropzone" class="course-file-dropzone course-file-dropzone--cover" data-course-cover-dropzone="true" tabindex="-1">
+                                        <input id="course-cover-input" type="file" accept="image/*">
+                                        <img id="course-cover-preview" class="course-cover-preview hidden" alt="">
+                                        <p>Sube una imagen que represente el curso. Esta portada se mostrara en Aprender.</p>
+                                        <div class="course-actions">
+                                            <button id="course-cover-select" type="button" class="course-action-button">
+                                                <span class="material-symbols-rounded">image</span>
+                                                <span>Seleccionar imagen</span>
+                                            </button>
+                                            <button id="course-cover-clear" type="button" class="course-action-button course-action-button--danger">
+                                                <span class="material-symbols-rounded">delete</span>
+                                                <span>Quitar portada</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div id="course-builder-shell" class="course-builder-shell">
@@ -200,6 +222,10 @@ export function createCoursesModule({
         const slugInput = document.getElementById('course-slug');
         const builderShell = document.getElementById('course-builder-shell');
         const body = document.getElementById('courses-body');
+        const coverInput = document.getElementById('course-cover-input');
+        const coverDropzone = document.getElementById('course-cover-dropzone');
+        const coverSelect = document.getElementById('course-cover-select');
+        const coverClear = document.getElementById('course-cover-clear');
 
         if (createButton) {
             createButton.addEventListener('click', () => {
@@ -284,6 +310,59 @@ export function createCoursesModule({
             builderShell.addEventListener('drop', handleBuilderDrop);
         }
 
+        if (coverSelect && coverInput) {
+            coverSelect.addEventListener('click', () => {
+                coverInput.click();
+            });
+        }
+
+        if (coverClear) {
+            coverClear.addEventListener('click', () => {
+                clearEditorError();
+                clearCoverDraft(coverInput);
+            });
+        }
+
+        if (coverInput) {
+            coverInput.addEventListener('change', () => {
+                const file = coverInput.files?.[0];
+
+                if (!file) {
+                    return;
+                }
+
+                clearEditorError();
+                setCoverDraftFile(file);
+                renderCoverPreview();
+            });
+        }
+
+        if (coverDropzone) {
+            coverDropzone.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                coverDropzone.classList.add('is-over');
+            });
+
+            coverDropzone.addEventListener('dragleave', () => {
+                coverDropzone.classList.remove('is-over');
+            });
+
+            coverDropzone.addEventListener('drop', (event) => {
+                event.preventDefault();
+                coverDropzone.classList.remove('is-over');
+                const file = event.dataTransfer?.files?.[0];
+
+                if (!file) {
+                    return;
+                }
+
+                clearEditorError();
+                setCoverDraftFile(file);
+                renderCoverPreview();
+            });
+        }
+
+        renderCoverPreview();
         renderBuilder();
         void loadCourses();
     }
@@ -300,7 +379,7 @@ export function createCoursesModule({
 
         const { data, error } = await supabase
             .from('courses')
-            .select('id, title, slug, description, status, sections, loose_items, updated_at')
+            .select('id, title, slug, description, cover_image_url, cover_storage_path, status, sections, loose_items, updated_at')
             .order('updated_at', { ascending: false });
 
         state.loading = false;
@@ -409,6 +488,75 @@ export function createCoursesModule({
         `;
     }
 
+    function renderCoverPreview() {
+        const preview = document.getElementById('course-cover-preview');
+        const dropzone = document.getElementById('course-cover-dropzone');
+
+        if (!(preview instanceof HTMLImageElement) || !dropzone) {
+            return;
+        }
+
+        if (state.coverImageUrl) {
+            preview.src = state.coverImageUrl;
+            preview.classList.remove('hidden');
+        } else {
+            preview.src = '';
+            preview.classList.add('hidden');
+        }
+    }
+
+    async function hydrateCoverPreview() {
+        if (!state.coverStoragePath || state.coverImageFile instanceof File) {
+            return;
+        }
+
+        try {
+            state.coverImageUrl = await createCoverPreviewUrl(state.coverStoragePath, state.coverImageUrl);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            renderCoverPreview();
+        }
+    }
+
+    async function createCoverPreviewUrl(storagePath, fallbackUrl = '') {
+        const normalizedPath = String(storagePath ?? '').trim() || extractManagedStoragePath(fallbackUrl);
+
+        if (!normalizedPath) {
+            return String(fallbackUrl ?? '').trim();
+        }
+
+        const { data, error } = await supabase.storage
+            .from(COURSE_STORAGE_BUCKET)
+            .createSignedUrl(normalizedPath, 3600);
+
+        if (error) {
+            throw error;
+        }
+
+        return normalizeSignedUrl(data?.signedUrl ?? fallbackUrl);
+    }
+
+    function clearCoverDraft(coverInput = null) {
+        releaseObjectUrl(state.coverImageUrl, state.coverImageFile);
+        state.coverImageUrl = '';
+        state.coverStoragePath = '';
+        state.coverImageFile = null;
+
+        if (coverInput) {
+            coverInput.value = '';
+        }
+
+        renderCoverPreview();
+    }
+
+    function setCoverDraftFile(file) {
+        releaseObjectUrl(state.coverImageUrl, state.coverImageFile);
+        state.coverImageUrl = URL.createObjectURL(file);
+        state.coverStoragePath = '';
+        state.coverImageFile = file;
+    }
+
     function openEditor(courseId = null) {
         const shell = document.getElementById('course-editor-shell');
         const heading = document.getElementById('course-editor-heading');
@@ -418,6 +566,7 @@ export function createCoursesModule({
         const descriptionInput = document.getElementById('course-description');
         const statusInput = document.getElementById('course-status');
         const idInput = document.getElementById('course-id');
+        const coverInput = document.getElementById('course-cover-input');
 
         if (!shell || !form || !titleInput || !slugInput || !descriptionInput || !statusInput || !idInput) {
             return;
@@ -425,8 +574,12 @@ export function createCoursesModule({
 
         const course = courseId ? state.items.find((item) => item.id === courseId) ?? null : null;
 
+        releaseObjectUrl(state.coverImageUrl, state.coverImageFile);
         state.editingId = course?.id ?? null;
         state.autoSlug = !course;
+        state.coverStoragePath = String(course?.cover_storage_path ?? '').trim() || extractManagedStoragePath(course?.cover_image_url);
+        state.coverImageUrl = String(course?.cover_image_url ?? '').trim();
+        state.coverImageFile = null;
         state.sections = normalizeSections(course?.sections);
         state.looseItems = normalizeItems(course?.loose_items);
         state.dragSectionIndex = null;
@@ -440,6 +593,12 @@ export function createCoursesModule({
         descriptionInput.value = course?.description ?? '';
         statusInput.value = course?.status ?? 'draft';
 
+        if (coverInput instanceof HTMLInputElement) {
+            coverInput.value = '';
+        }
+
+        void hydrateCoverPreview();
+        renderCoverPreview();
         renderBuilder();
         clearEditorError();
         shell.classList.remove('hidden');
@@ -457,6 +616,7 @@ export function createCoursesModule({
             form.reset();
         }
 
+        clearCoverDraft();
         state.editingId = null;
         state.sections = [];
         state.looseItems = [];
@@ -509,6 +669,10 @@ export function createCoursesModule({
         setButtonBusy(submitButton, true, 'Guardando...');
 
         try {
+            const cover = await resolveCoverImage({
+                slug,
+                currentUserId: currentUser?.id ?? 'guest',
+            });
             const looseItems = await Promise.all(state.looseItems.map((item, index) => {
                 return resolveItemForSave(item, {
                     slug,
@@ -529,6 +693,8 @@ export function createCoursesModule({
                 title,
                 slug,
                 description,
+                cover_image_url: cover.url,
+                cover_storage_path: cover.storagePath,
                 status,
                 sections,
                 loose_items: looseItems,
@@ -1182,6 +1348,29 @@ export function createCoursesModule({
         return filePath;
     }
 
+    async function resolveCoverImage({ slug, currentUserId }) {
+        if (state.coverImageFile instanceof File) {
+            const storagePath = await uploadAsset(state.coverImageFile, {
+                slug,
+                currentUserId,
+                scope: 'cover',
+                type: 'cover',
+            });
+
+            return {
+                storagePath,
+                url: '',
+            };
+        }
+
+        const storagePath = String(state.coverStoragePath ?? '').trim() || extractManagedStoragePath(state.coverImageUrl);
+
+        return {
+            storagePath,
+            url: storagePath ? '' : String(state.coverImageUrl ?? '').trim(),
+        };
+    }
+
     async function removeStorageObjects(paths) {
         if (paths.length === 0) {
             return;
@@ -1200,6 +1389,13 @@ export function createCoursesModule({
         }
 
         const paths = [];
+
+        if (course.cover_storage_path) {
+            paths.push(course.cover_storage_path);
+        } else if (course.cover_image_url) {
+            paths.push(course.cover_image_url);
+        }
+
         const appendFromItems = (items) => {
             if (!Array.isArray(items)) {
                 return;
@@ -1457,6 +1653,14 @@ export function createCoursesModule({
         return `${projectUrl}/storage/v1/${signedUrl.replace(/^\/+/, '')}`;
     }
 
+    function releaseObjectUrl(url, file) {
+        if (!(file instanceof File) || !String(url ?? '').startsWith('blob:')) {
+            return;
+        }
+
+        URL.revokeObjectURL(url);
+    }
+
     function getFileExtension(fileName, mimeType = '') {
         const explicitExtension = String(fileName ?? '').split('.').pop()?.toLowerCase();
 
@@ -1475,6 +1679,12 @@ export function createCoursesModule({
             'audio/webm': 'webm',
             'audio/ogg': 'ogg',
             'application/pdf': 'pdf',
+            'image/jpeg': 'jpg',
+            'image/png': 'png',
+            'image/webp': 'webp',
+            'image/gif': 'gif',
+            'image/svg+xml': 'svg',
+            'image/avif': 'avif',
         };
 
         return mimeMap[mimeType] ?? 'bin';

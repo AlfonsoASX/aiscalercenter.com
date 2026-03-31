@@ -3,12 +3,12 @@ declare(strict_types=1);
 
 $regularMenu = [
     [
-        'id' => 'Idear',
-        'label' => 'Idear',
-        'hover_label' => 'Idear',
+        'id' => 'Investigar',
+        'label' => 'Investigar',
+        'hover_label' => 'Genera ideas',
         'icon_path' => 'img/ico/1.svg',
         'color' => '#1A3C6E',
-        'section_title' => 'Idear',
+        'section_title' => 'Investigar',
     ],
     [
         'id' => 'Diseñar',
@@ -21,19 +21,34 @@ $regularMenu = [
     [
         'id' => 'Ejecutar',
         'label' => 'Ejecutar',
-        'hover_label' => 'Ejecutar',
+        'hover_label' => 'Programa contenido',
         'icon_path' => 'img/ico/3.svg',
         'color' => '#DF9C0A',
         'section_title' => 'Ejecutar',
     ],
     [
+        'id' => 'Analizar',
+        'label' => 'Analizar',
+        'hover_label' => 'Analizar',
+        'icon_path' => 'img/ico/4.svg',
+        'color' => '#188038',
+        'section_title' => 'Analizar',
+    ],    [
         'id' => 'Aprender',
         'label' => 'Aprender',
         'hover_label' => 'Aprender',
-        'icon_path' => 'img/ico/4.svg',
+        'icon_path' => 'img/ico/8.svg',
         'color' => '#188038',
         'section_title' => 'Aprender',
     ],
+    [
+        'id' => 'Conecta',
+        'label' => 'Conecta',
+        'hover_label' => 'Redes sociales',
+        'icon_path' => 'img/ico/5.svg',
+        'color' => '#000000',
+        'section_title' => 'Conecta',
+    ],    
 ];
 
 $adminMenu = [
