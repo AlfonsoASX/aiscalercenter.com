@@ -45,6 +45,7 @@ $authClientConfig = [
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
     <link rel="stylesheet" href="css/modules/blog-entries.css">
+    <link rel="stylesheet" href="css/modules/connect.css">
     <link rel="stylesheet" href="css/modules/courses.css">
     <link rel="stylesheet" href="css/modules/learn.css">
     <link rel="stylesheet" href="css/modules/research.css">

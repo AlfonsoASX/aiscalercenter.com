@@ -1,4 +1,5 @@
 import { BLOG_ENTRIES_SECTION_ID, createBlogEntriesModule } from './modules/blog-entries/index.js';
+import { CONNECT_SECTION_ID, createConnectModule } from './modules/connect/index.js';
 import { COURSES_SECTION_ID, createCoursesModule } from './modules/courses/index.js';
 import { LEARN_SECTION_ID, createLearnModule } from './modules/learn/index.js';
 import { RESEARCH_SECTION_ID, createResearchModule } from './modules/research/index.js';
@@ -61,6 +62,13 @@ const learnModule = createLearnModule({
 });
 
 const researchModule = createResearchModule({
+    getAccessToken: async () => {
+        const session = await getCurrentSession();
+        return session?.access_token ?? '';
+    },
+});
+
+const connectModule = createConnectModule({
     getAccessToken: async () => {
         const session = await getCurrentSession();
         return session?.access_token ?? '';
@@ -377,6 +385,7 @@ function renderMenuForRole(role) {
     coursesModule.bind();
     learnModule.bind();
     researchModule.bind();
+    connectModule.bind();
 
     items.forEach((item) => {
         railMenu.appendChild(createMenuButton(item));
@@ -506,6 +515,8 @@ function renderSections(items) {
             ? learnModule.renderSection(item)
             : item.id === RESEARCH_SECTION_ID
             ? researchModule.renderSection(item)
+            : item.id === CONNECT_SECTION_ID
+            ? connectModule.renderSection(item)
             : item.id === getDashboardItem().id
             ? renderDashboardSection(item)
             : item.id === getAccountSectionItem().id
