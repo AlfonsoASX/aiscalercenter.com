@@ -26,6 +26,7 @@ try {
     $payload = readJsonPayload();
     $idea = trim((string) ($payload['idea'] ?? ''));
     $limit = max(4, min(12, (int) ($payload['limit'] ?? 10)));
+    $providerKey = normalizeResearchProviderKey((string) ($payload['provider_key'] ?? ''));
 
     $config = require __DIR__ . '/../config/research.php';
 
@@ -36,14 +37,31 @@ try {
     $providerConfig = is_array($config['providers'] ?? null) ? $config['providers'] : [];
     $httpClient = new HttpClient((int) ($config['http_timeout'] ?? 12));
     $textAnalyzer = new TextAnalyzer();
-    $service = new ResearchService([
+    $providers = [
         new GoogleProvider((array) ($providerConfig['google'] ?? []), $httpClient, $textAnalyzer),
         new YouTubeProvider((array) ($providerConfig['youtube'] ?? []), $httpClient, $textAnalyzer),
         new MercadoLibreProvider((array) ($providerConfig['mercado_libre'] ?? []), $httpClient, $textAnalyzer),
         new AmazonProvider((array) ($providerConfig['amazon'] ?? []), $httpClient, $textAnalyzer),
-    ], (int) ($config['default_limit'] ?? 10));
+    ];
+    $providerMap = [
+        'google' => 0,
+        'youtube' => 1,
+        'mercado_libre' => 2,
+        'amazon' => 3,
+    ];
+
+    if ($providerKey !== '') {
+        if (!array_key_exists($providerKey, $providerMap)) {
+            throw new InvalidArgumentException('Selecciona un proveedor valido para investigar.');
+        }
+
+        $providers = [$providers[$providerMap[$providerKey]]];
+    }
+
+    $service = new ResearchService($providers, (int) ($config['default_limit'] ?? 10));
 
     $result = $service->analyze($idea, $limit);
+    $result['provider_key'] = $providerKey;
 
     sendJson([
         'success' => true,
@@ -138,4 +156,12 @@ function sendJson(array $payload, int $status = 200): never
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+function normalizeResearchProviderKey(string $value): string
+{
+    $normalized = strtolower(trim($value));
+    $normalized = str_replace('-', '_', $normalized);
+
+    return $normalized;
 }

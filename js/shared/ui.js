@@ -52,19 +52,22 @@ export function showNotice(view, type, message) {
     notice.classList.remove('hidden');
 }
 
-export function setFlash(message) {
+export function setFlash(message, type = 'success') {
     sessionStorage.setItem('aiscaler_flash', message);
+    sessionStorage.setItem('aiscaler_flash_type', type);
 }
 
 export function consumeFlash(view) {
     const flash = sessionStorage.getItem('aiscaler_flash');
+    const type = sessionStorage.getItem('aiscaler_flash_type') ?? 'success';
 
     if (!flash) {
         return;
     }
 
     sessionStorage.removeItem('aiscaler_flash');
-    showNotice(view, 'success', flash);
+    sessionStorage.removeItem('aiscaler_flash_type');
+    showNotice(view, type, flash);
 }
 
 export function cleanupAuthHash() {

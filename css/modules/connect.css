@@ -126,6 +126,17 @@
     width: fit-content;
 }
 
+.connect-provider-button[disabled] {
+    opacity: 0.58;
+    cursor: not-allowed;
+}
+
+.connect-provider-helper {
+    margin: -0.15rem 0 0;
+    color: var(--md-text-subtle);
+    line-height: 1.55;
+}
+
 .connect-table-wrap {
     overflow-x: auto;
     border: 1px solid rgba(19, 42, 74, 0.08);

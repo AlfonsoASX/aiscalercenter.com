@@ -1,8 +1,9 @@
 import { BLOG_ENTRIES_SECTION_ID, createBlogEntriesModule } from './modules/blog-entries/index.js';
+import { ADMIN_TOOLS_SECTION_ID, createAdminToolsModule } from './modules/admin-tools/index.js';
 import { CONNECT_SECTION_ID, createConnectModule } from './modules/connect/index.js';
 import { COURSES_SECTION_ID, createCoursesModule } from './modules/courses/index.js';
 import { LEARN_SECTION_ID, createLearnModule } from './modules/learn/index.js';
-import { RESEARCH_SECTION_ID, createResearchModule } from './modules/research/index.js';
+import { createToolsCatalogModule } from './modules/tools-catalog/index.js';
 import {
     authConfig,
     panelConfig,
@@ -37,6 +38,8 @@ const state = {
     sidebarOpen: false,
     userMenuOpen: false,
     intentionalLogout: false,
+    renderedSections: new Set(),
+    boundSections: new Set(),
 };
 
 const blogEntriesModule = createBlogEntriesModule({
@@ -61,18 +64,20 @@ const learnModule = createLearnModule({
     humanizeError: (message) => humanizeCourseError(message),
 });
 
-const researchModule = createResearchModule({
-    getAccessToken: async () => {
-        const session = await getCurrentSession();
-        return session?.access_token ?? '';
-    },
+const toolsCatalogModule = createToolsCatalogModule({
+    getAccessToken,
+    supabase,
+    getCurrentUser: () => state.currentUser,
+    humanizeError: (message) => humanizeToolsError(message),
 });
 
 const connectModule = createConnectModule({
-    getAccessToken: async () => {
-        const session = await getCurrentSession();
-        return session?.access_token ?? '';
-    },
+    getAccessToken,
+});
+
+const adminToolsModule = createAdminToolsModule({
+    getAccessToken,
+    humanizeError: (message) => humanizeToolsError(message),
 });
 
 if (view === 'app') {
@@ -90,15 +95,52 @@ function notify(type, message) {
     showNotice(view, type, message);
 }
 
+async function getAccessToken() {
+    const session = await getCurrentSession();
+    return session?.access_token ?? '';
+}
+
+async function syncToolsPhpSession(accessToken) {
+    const token = String(accessToken ?? '').trim();
+
+    if (!token) {
+        return;
+    }
+
+    try {
+        await fetch('api/tools-session.php', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function clearToolsPhpSession() {
+    try {
+        await fetch('api/tools-session.php', {
+            method: 'DELETE',
+        });
+    } catch (error) {
+        console.error(error);
+    }
+}
+
 function observePanelAuthState() {
     observeSupabaseAuth((event, session) => {
         if ((event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') && session) {
             cleanupAuthHash();
-            renderAppSession(session);
+            void syncToolsPhpSession(session.access_token).finally(() => {
+                renderAppSession(session);
+            });
             return;
         }
 
         if (event === 'SIGNED_OUT' && !state.intentionalLogout) {
+            void clearToolsPhpSession();
             setFlash('Inicia sesion para entrar al panel.');
             window.location.href = authConfig.loginUrl;
         }
@@ -117,6 +159,7 @@ async function bootPanelApp() {
         return;
     }
 
+    await syncToolsPhpSession(session.access_token);
     renderAppSession(session);
 }
 
@@ -166,6 +209,7 @@ function bindAppView() {
             state.intentionalLogout = true;
 
             const { error } = await signOutUser();
+            await clearToolsPhpSession();
 
             setButtonBusy(logoutButton, false);
 
@@ -378,14 +422,9 @@ function renderMenuForRole(role) {
     }
 
     railMenu.innerHTML = '';
+    state.renderedSections = new Set();
+    state.boundSections = new Set();
     renderSections(panelItems);
-    bindForm('settings-profile-form', handleProfileUpdate);
-    bindForm('settings-password-form', handleChangePassword);
-    blogEntriesModule.bind();
-    coursesModule.bind();
-    learnModule.bind();
-    researchModule.bind();
-    connectModule.bind();
 
     items.forEach((item) => {
         railMenu.appendChild(createMenuButton(item));
@@ -410,8 +449,14 @@ function selectMenu(menuId) {
         return;
     }
 
+    if (state.activeMenuId === menuId && selectedItem.tool_category_key) {
+        toolsCatalogModule.resetView(menuId);
+    }
+
     state.activeMenuId = menuId;
     state.activeMenuItem = selectedItem;
+    ensureSectionRendered(selectedItem);
+    ensureSectionBound(selectedItem);
     applyWorkspaceAccent(selectedItem);
 
     document.querySelectorAll('[data-menu-id]').forEach((button) => {
@@ -430,12 +475,60 @@ function selectMenu(menuId) {
         currentTitle.textContent = selectedItem.label;
     }
 
+    if (selectedItem.tool_category_key) {
+        void toolsCatalogModule.ensureLoaded(menuId);
+    }
+
+    if (selectedItem.id === ADMIN_TOOLS_SECTION_ID) {
+        void adminToolsModule.ensureLoaded();
+    }
+
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}#${menuId}`);
 
     if (window.innerWidth < 1024) {
         state.sidebarOpen = false;
         applySidebarState();
     }
+}
+
+function ensureSectionRendered(item) {
+    if (state.renderedSections.has(item.id)) {
+        return;
+    }
+
+    const section = document.querySelector(`[data-panel-section="${escapePanelSelector(item.id)}"]`);
+
+    if (!(section instanceof HTMLElement)) {
+        return;
+    }
+
+    section.innerHTML = renderSectionContent(item);
+    state.renderedSections.add(item.id);
+}
+
+function ensureSectionBound(item) {
+    if (state.boundSections.has(item.id)) {
+        return;
+    }
+
+    if (item.id === BLOG_ENTRIES_SECTION_ID) {
+        blogEntriesModule.bind();
+    } else if (item.id === COURSES_SECTION_ID) {
+        coursesModule.bind();
+    } else if (item.id === LEARN_SECTION_ID) {
+        learnModule.bind();
+    } else if (item.id === CONNECT_SECTION_ID) {
+        connectModule.bind();
+    } else if (item.id === ADMIN_TOOLS_SECTION_ID) {
+        adminToolsModule.bind();
+    } else if (item.tool_category_key) {
+        toolsCatalogModule.bind();
+    } else if (item.id === getAccountSectionItem().id) {
+        bindForm('settings-profile-form', handleProfileUpdate);
+        bindForm('settings-password-form', handleChangePassword);
+    }
+
+    state.boundSections.add(item.id);
 }
 
 function createMenuButton(item) {
@@ -507,28 +600,33 @@ function renderSections(items) {
         section.id = `section-${item.id}`;
         section.dataset.panelSection = item.id;
         section.className = 'workspace-section';
-        section.innerHTML = item.id === BLOG_ENTRIES_SECTION_ID
-            ? blogEntriesModule.renderSection(item)
-            : item.id === COURSES_SECTION_ID
-            ? coursesModule.renderSection(item)
-            : item.id === LEARN_SECTION_ID
-            ? learnModule.renderSection(item)
-            : item.id === RESEARCH_SECTION_ID
-            ? researchModule.renderSection(item)
-            : item.id === CONNECT_SECTION_ID
-            ? connectModule.renderSection(item)
-            : item.id === getDashboardItem().id
-            ? renderDashboardSection(item)
-            : item.id === getAccountSectionItem().id
-            ? renderSettingsSection(item)
-            : `
-                <div class="workspace-section-card">
-                    <h2>${item.section_title ?? item.label}</h2>
-                </div>
-            `;
 
         sections.appendChild(section);
     });
+}
+
+function renderSectionContent(item) {
+    return item.id === BLOG_ENTRIES_SECTION_ID
+        ? blogEntriesModule.renderSection(item)
+        : item.id === COURSES_SECTION_ID
+        ? coursesModule.renderSection(item)
+        : item.id === LEARN_SECTION_ID
+        ? learnModule.renderSection(item)
+        : item.id === CONNECT_SECTION_ID
+        ? connectModule.renderSection(item)
+        : item.id === ADMIN_TOOLS_SECTION_ID
+        ? adminToolsModule.renderSection(item)
+        : item.tool_category_key
+        ? toolsCatalogModule.renderSection(item)
+        : item.id === getDashboardItem().id
+        ? renderDashboardSection(item)
+        : item.id === getAccountSectionItem().id
+        ? renderSettingsSection(item)
+        : `
+            <div class="workspace-section-card">
+                <h2>${item.section_title ?? item.label}</h2>
+            </div>
+        `;
 }
 
 function renderDashboardSection(item) {
@@ -660,6 +758,16 @@ function getRequestedMenuId() {
     return window.location.hash.replace('#', '').trim();
 }
 
+function escapePanelSelector(value) {
+    const raw = String(value ?? '');
+
+    if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(raw);
+    }
+
+    return raw.replaceAll('"', '\\"');
+}
+
 function applyWorkspaceAccent(item) {
     const layout = document.getElementById('app-layout');
 
@@ -787,6 +895,38 @@ function humanizeCourseError(message) {
 
     if (normalized.includes('row-level security') || normalized.includes('storage.objects')) {
         return 'Supabase Storage aun no tiene las politicas correctas para cursos. Ejecuta el archivo supabase/course_storage_setup.sql.';
+    }
+
+    return humanizeAuthError(message);
+}
+
+function humanizeExecuteError(message) {
+    const normalized = String(message ?? '').toLowerCase();
+
+    if ((normalized.includes('pgrst205') || normalized.includes('could not find the table')) && (normalized.includes('scheduled_posts') || normalized.includes('scheduled_post_targets'))) {
+        return 'Faltan las tablas de Ejecutar en Supabase. Ejecuta supabase/scheduled_posts_schema.sql.';
+    }
+
+    if (normalized.includes('bucket not found') || normalized.includes('scheduled-post-assets')) {
+        return 'Falta configurar el bucket scheduled-post-assets en Supabase Storage. Ejecuta supabase/scheduled_posts_storage_setup.sql.';
+    }
+
+    if (normalized.includes('row-level security') || normalized.includes('storage.objects')) {
+        return 'Supabase Storage aun no tiene las politicas correctas para Ejecutar. Ejecuta supabase/scheduled_posts_storage_setup.sql.';
+    }
+
+    return humanizeAuthError(message);
+}
+
+function humanizeToolsError(message) {
+    const normalized = String(message ?? '').toLowerCase();
+
+    if ((normalized.includes('pgrst205') || normalized.includes('could not find the table')) && (normalized.includes('tools') || normalized.includes('tool_categories'))) {
+        return 'La base de herramientas aun no existe en Supabase. Ejecuta el archivo supabase/tools_schema.sql.';
+    }
+
+    if (normalized.includes('duplicate key value') || normalized.includes('tools_slug_key')) {
+        return 'Ya existe una herramienta con ese slug. Usa uno diferente.';
     }
 
     return humanizeAuthError(message);

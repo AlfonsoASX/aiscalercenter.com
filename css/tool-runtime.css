@@ -1,0 +1,268 @@
+:root {
+    --md-primary: #2f7cef;
+    --md-primary-strong: #1f5fd6;
+    --md-primary-container: #dce8ff;
+    --md-text: #202124;
+    --md-text-muted: #5f6368;
+    --md-text-subtle: #738093;
+    --workspace-accent: #2f7cef;
+    --workspace-accent-rgb: 47, 124, 239;
+}
+
+.material-symbols-rounded {
+    font-variation-settings:
+        'FILL' 0,
+        'wght' 500,
+        'GRAD' 0,
+        'opsz' 24;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.tool-runtime-body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top left, rgba(47, 124, 239, 0.12), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(15, 157, 88, 0.08), transparent 24%),
+        #f5f7fb;
+    color: #202124;
+    font-family: 'Roboto', sans-serif;
+}
+
+.tool-runtime-body--embed {
+    min-height: auto;
+    background: transparent;
+}
+
+.tool-runtime-shell {
+    min-height: 100vh;
+    padding: 1rem;
+}
+
+.tool-runtime-body--embed .tool-runtime-shell {
+    min-height: auto;
+    padding: 0;
+}
+
+.tool-runtime-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 0 auto 1rem;
+    max-width: 1440px;
+    padding: 1rem 1.25rem;
+    border: 1px solid rgba(32, 33, 36, 0.08);
+    border-radius: 1.5rem;
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 20px 48px rgba(24, 39, 75, 0.08);
+}
+
+.tool-runtime-header-copy {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.tool-runtime-header-copy h1 {
+    margin: 0.2rem 0 0;
+    font-size: clamp(1.8rem, 2vw, 2.5rem);
+    line-height: 1.08;
+}
+
+.tool-runtime-header-copy p {
+    margin: 0.35rem 0 0;
+    max-width: 56rem;
+    color: #5f6368;
+}
+
+.tool-runtime-eyebrow {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #1a73e8;
+}
+
+.tool-runtime-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.tool-runtime-back,
+.tool-runtime-tutorial {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid rgba(32, 33, 36, 0.12);
+    border-radius: 999px;
+    background: #ffffff;
+    color: #202124;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.tool-runtime-user {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    background: rgba(26, 115, 232, 0.08);
+    color: #174ea6;
+    font-weight: 600;
+}
+
+.tool-runtime-notice {
+    margin: 0 auto 1rem;
+    max-width: 1440px;
+    padding: 0.95rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid transparent;
+    font-weight: 600;
+}
+
+.tool-runtime-notice.hidden {
+    display: none;
+}
+
+.tool-runtime-notice--success {
+    background: rgba(15, 157, 88, 0.1);
+    border-color: rgba(15, 157, 88, 0.18);
+    color: #0b8043;
+}
+
+.tool-runtime-notice--error {
+    background: rgba(217, 48, 37, 0.1);
+    border-color: rgba(217, 48, 37, 0.16);
+    color: #b3261e;
+}
+
+.tool-runtime-notice--info {
+    background: rgba(26, 115, 232, 0.1);
+    border-color: rgba(26, 115, 232, 0.16);
+    color: #174ea6;
+}
+
+.tool-runtime-mount {
+    max-width: 1440px;
+    margin: 0 auto;
+}
+
+.tool-runtime-body--embed .tool-runtime-notice,
+.tool-runtime-body--embed .tool-runtime-mount {
+    max-width: none;
+}
+
+.tool-runtime-loader {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    min-height: 50vh;
+    align-content: center;
+    color: var(--md-text-muted);
+}
+
+.tool-runtime-loader .material-symbols-rounded {
+    font-size: 2rem;
+    animation: tool-runtime-spin 1s linear infinite;
+}
+
+.workspace-section-card {
+    min-height: calc(100vh - 11rem);
+    padding: 1.5rem;
+    border-radius: 1.5rem;
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(14px);
+    border: 1px solid rgba(32, 33, 36, 0.08);
+    box-shadow: 0 24px 60px rgba(24, 39, 75, 0.08);
+}
+
+.workspace-section-subtitle {
+    margin: 0.4rem 0 0;
+    color: var(--md-text-muted);
+    line-height: 1.7;
+}
+
+.workspace-primary-button,
+.workspace-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    border: 0;
+    cursor: pointer;
+    transition: transform 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.workspace-primary-button {
+    min-height: 3rem;
+    padding: 0.7rem 1.1rem;
+    border-radius: 999px;
+    background: var(--workspace-accent);
+    color: #ffffff;
+    font-weight: 700;
+    box-shadow: 0 16px 28px rgba(var(--workspace-accent-rgb), 0.22);
+}
+
+.workspace-primary-button:hover,
+.workspace-icon-button:hover {
+    transform: translateY(-1px);
+}
+
+.workspace-icon-button {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--md-text);
+    border: 1px solid rgba(32, 33, 36, 0.08);
+}
+
+.tool-runtime-mount .workspace-section-card {
+    min-height: calc(100vh - 11rem);
+}
+
+.tool-runtime-body--embed .tool-runtime-mount .workspace-section-card {
+    min-height: auto;
+    border-radius: 0;
+    box-shadow: none;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
+    padding: 0;
+}
+
+@media (max-width: 767px) {
+    .tool-runtime-shell {
+        padding: 0.75rem;
+    }
+
+    .tool-runtime-header {
+        padding: 1rem;
+        border-radius: 1.2rem;
+    }
+
+    .tool-runtime-header-actions {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .tool-runtime-back,
+    .tool-runtime-tutorial,
+    .tool-runtime-user {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@keyframes tool-runtime-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

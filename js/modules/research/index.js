@@ -2,6 +2,8 @@ export const RESEARCH_SECTION_ID = 'Investigar';
 
 export function createResearchModule({
     getAccessToken,
+    providerKey = '',
+    providerLabel = '',
 }) {
     const state = {
         loading: false,
@@ -9,15 +11,16 @@ export function createResearchModule({
         lastIdea: '',
         response: null,
     };
+    const providerMeta = resolveProviderMeta(providerKey, providerLabel);
 
     function renderSection(item) {
         return `
             <div id="research-module" class="workspace-section-card research-module">
                 <div class="research-module-head">
                     <div>
-                        <h2>${escapeHtml(item.section_title ?? item.label ?? 'Investigar')}</h2>
+                        <h2>${escapeHtml(item.section_title ?? item.label ?? providerMeta.title)}</h2>
                         <p class="workspace-section-subtitle">
-                            Escribe una idea y consulta senales relacionadas en Google, YouTube, Mercado Libre y Amazon usando integraciones aisladas en PHP.
+                            ${escapeHtml(providerMeta.subtitle)}
                         </p>
                     </div>
                 </div>
@@ -29,13 +32,13 @@ export function createResearchModule({
                             id="research-idea"
                             name="idea"
                             class="research-textarea"
-                            placeholder="Ejemplo: curso de inteligencia artificial para ventas"
+                            placeholder="${escapeHtml(providerMeta.placeholder)}"
                             rows="3"
                         >${escapeHtml(state.lastIdea)}</textarea>
 
                         <button id="research-submit" type="submit" class="workspace-primary-button research-submit-button">
                             <span class="material-symbols-rounded">travel_explore</span>
-                            <span>Investigar</span>
+                            <span>${escapeHtml(providerMeta.submitLabel)}</span>
                         </button>
                     </div>
                 </form>
@@ -101,6 +104,7 @@ export function createResearchModule({
                 body: JSON.stringify({
                     idea,
                     limit: 10,
+                    provider_key: providerMeta.key,
                 }),
             });
 
@@ -158,7 +162,7 @@ export function createResearchModule({
                 <div class="research-empty-state">
                     <span class="material-symbols-rounded">manage_search</span>
                     <h3>Empieza con una idea</h3>
-                    <p>Cuando envias una idea, esta se consulta desde PHP y cada proveedor responde por separado para que las integraciones queden aisladas y sean faciles de mantener.</p>
+                    <p>${escapeHtml(providerMeta.emptyCopy)}</p>
                 </div>
             `;
         }
@@ -331,4 +335,53 @@ export function createResearchModule({
         renderSection,
         bind,
     };
+}
+
+function resolveProviderMeta(providerKey, providerLabel) {
+    const key = String(providerKey ?? '').trim();
+    const label = String(providerLabel ?? '').trim();
+    const catalog = {
+        google: {
+            key: 'google',
+            title: label || 'Google',
+            subtitle: 'Escribe una idea y consulta senales relacionadas desde Google usando la integracion PHP aislada.',
+            placeholder: 'Ejemplo: curso de inteligencia artificial para ventas',
+            submitLabel: 'Investigar en Google',
+            emptyCopy: 'Cuando envias una idea, esta se consulta desde PHP solo en Google para mantener la integracion aislada y facil de evolucionar.',
+        },
+        youtube: {
+            key: 'youtube',
+            title: label || 'YouTube',
+            subtitle: 'Escribe una idea y consulta senales relacionadas desde YouTube usando la integracion PHP aislada.',
+            placeholder: 'Ejemplo: ideas de videos sobre inteligencia artificial para ventas',
+            submitLabel: 'Investigar en YouTube',
+            emptyCopy: 'Cuando envias una idea, esta se consulta desde PHP solo en YouTube para mantener la integracion aislada y facil de evolucionar.',
+        },
+        mercado_libre: {
+            key: 'mercado_libre',
+            title: label || 'Mercado Libre',
+            subtitle: 'Escribe una idea y consulta senales relacionadas desde Mercado Libre usando la integracion PHP aislada.',
+            placeholder: 'Ejemplo: cursos o productos de inteligencia artificial para ventas',
+            submitLabel: 'Investigar en Mercado Libre',
+            emptyCopy: 'Cuando envias una idea, esta se consulta desde PHP solo en Mercado Libre para mantener la integracion aislada y facil de evolucionar.',
+        },
+        amazon: {
+            key: 'amazon',
+            title: label || 'Amazon',
+            subtitle: 'Escribe una idea y consulta senales relacionadas desde Amazon usando la integracion PHP aislada.',
+            placeholder: 'Ejemplo: libros o cursos de inteligencia artificial para ventas',
+            submitLabel: 'Investigar en Amazon',
+            emptyCopy: 'Cuando envias una idea, esta se consulta desde PHP solo en Amazon para mantener la integracion aislada y facil de evolucionar.',
+        },
+        all: {
+            key: '',
+            title: label || 'Investigar',
+            subtitle: 'Escribe una idea y consulta senales relacionadas en Google, YouTube, Mercado Libre y Amazon usando integraciones aisladas en PHP.',
+            placeholder: 'Ejemplo: curso de inteligencia artificial para ventas',
+            submitLabel: 'Investigar',
+            emptyCopy: 'Cuando envias una idea, esta se consulta desde PHP y cada proveedor responde por separado para que las integraciones queden aisladas y sean faciles de mantener.',
+        },
+    };
+
+    return catalog[key] ?? catalog.all;
 }

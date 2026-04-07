@@ -5,14 +5,11 @@ export function createConnectModule({
 }) {
     const state = {
         loading: false,
-        saving: false,
         setupRequired: false,
         notice: null,
         catalog: [],
         connections: [],
-        editorOpen: false,
-        editingId: '',
-        activeProviderKey: '',
+        connectingProviderKey: '',
     };
 
     function renderSection(item) {
@@ -33,7 +30,6 @@ export function createConnectModule({
         }
 
         root.addEventListener('click', handleRootClick);
-        root.addEventListener('submit', handleRootSubmit);
         renderModule();
         void loadBootstrap();
     }
@@ -49,70 +45,13 @@ export function createConnectModule({
             state.setupRequired = false;
             state.notice = null;
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'No fue posible cargar Conecta.';
             state.setupRequired = Boolean(error?.setupRequired);
             state.notice = {
                 type: 'error',
-                message,
+                message: error instanceof Error ? error.message : 'No fue posible cargar Conecta.',
             };
         } finally {
             state.loading = false;
-            renderModule();
-        }
-    }
-
-    async function handleRootSubmit(event) {
-        const form = event.target;
-
-        if (!(form instanceof HTMLFormElement) || form.id !== 'connect-form') {
-            return;
-        }
-
-        event.preventDefault();
-
-        const payload = {
-            id: form.id_value.value.trim(),
-            provider_key: form.provider_key.value.trim(),
-            display_name: form.display_name.value.trim(),
-            handle: form.handle.value.trim(),
-            external_id: form.external_id.value.trim(),
-            asset_url: form.asset_url.value.trim(),
-            notes: form.notes.value.trim(),
-        };
-
-        if (!payload.provider_key) {
-            setNotice('error', 'Selecciona una red social antes de guardar.');
-            syncNotice();
-            return;
-        }
-
-        if (!payload.display_name) {
-            setNotice('error', 'Escribe un nombre claro para este activo digital.');
-            syncNotice();
-            form.display_name.focus();
-            return;
-        }
-
-        if (!payload.handle && !payload.external_id && !payload.asset_url) {
-            setNotice('error', 'Agrega al menos un handle, identificador o URL.');
-            syncNotice();
-            form.handle.focus();
-            return;
-        }
-
-        const submitButton = form.querySelector('button[type="submit"]');
-        state.saving = true;
-        setButtonBusy(submitButton, true, 'Guardando...');
-
-        try {
-            const response = await request('save', 'POST', payload);
-            upsertConnection(response.data);
-            closeEditor();
-            setNotice('success', 'Activo digital guardado correctamente.');
-        } catch (error) {
-            setNotice('error', error instanceof Error ? error.message : 'No fue posible guardar la conexion.');
-        } finally {
-            state.saving = false;
             renderModule();
         }
     }
@@ -124,56 +63,69 @@ export function createConnectModule({
             return;
         }
 
-        const openButton = target.closest('[data-connect-open-provider]');
+        const connectButton = target.closest('[data-connect-provider]');
 
-        if (openButton) {
-            const providerKey = openButton.dataset.connectOpenProvider;
+        if (connectButton) {
+            const providerKey = connectButton.dataset.connectProvider;
 
             if (providerKey) {
-                openEditor(providerKey);
+                void startOauth(providerKey, connectButton);
             }
 
             return;
         }
 
-        const editButton = target.closest('[data-connect-edit]');
+        const disconnectButton = target.closest('[data-connect-delete]');
 
-        if (editButton) {
-            const id = editButton.dataset.connectEdit;
-            const record = state.connections.find((connection) => connection.id === id);
-
-            if (record) {
-                openEditor(record.provider_key, record);
-            }
-
-            return;
-        }
-
-        const deleteButton = target.closest('[data-connect-delete]');
-
-        if (deleteButton) {
-            const id = deleteButton.dataset.connectDelete;
+        if (disconnectButton) {
+            const id = disconnectButton.dataset.connectDelete;
 
             if (id) {
-                void handleDelete(id);
+                void disconnect(id);
             }
-
-            return;
-        }
-
-        if (target.closest('[data-connect-close-editor]')) {
-            closeEditor();
         }
     }
 
-    async function handleDelete(id) {
+    async function startOauth(providerKey, button) {
+        const provider = state.catalog.find((entry) => entry.key === providerKey);
+
+        if (!provider) {
+            return;
+        }
+
+        if (!provider.oauth_ready) {
+            setNotice('error', 'Completa las credenciales OAuth de esta red social antes de conectarla.');
+            renderModule();
+            return;
+        }
+
+        state.connectingProviderKey = providerKey;
+        setButtonBusy(button, true, 'Abriendo...');
+
+        try {
+            const response = await request('start_oauth', 'POST', { provider_key: providerKey });
+            const authorizationUrl = String(response.data?.authorization_url ?? '').trim();
+
+            if (!authorizationUrl) {
+                throw new Error('No fue posible construir la URL de autorizacion.');
+            }
+
+            window.location.assign(authorizationUrl);
+        } catch (error) {
+            state.connectingProviderKey = '';
+            setNotice('error', error instanceof Error ? error.message : 'No fue posible iniciar la conexion.');
+            renderModule();
+        }
+    }
+
+    async function disconnect(id) {
         const record = state.connections.find((connection) => connection.id === id);
 
         if (!record) {
             return;
         }
 
-        const confirmed = window.confirm(`Vas a eliminar "${record.display_name}". Esta accion no se puede deshacer.`);
+        const confirmed = window.confirm(`Vas a desconectar "${record.display_name}". Esta accion no se puede deshacer.`);
 
         if (!confirmed) {
             return;
@@ -182,45 +134,12 @@ export function createConnectModule({
         try {
             await request('delete', 'POST', { id });
             state.connections = state.connections.filter((connection) => connection.id !== id);
-            setNotice('success', 'Activo digital eliminado correctamente.');
-            renderModule();
+            setNotice('success', 'Conexion eliminada correctamente.');
         } catch (error) {
-            setNotice('error', error instanceof Error ? error.message : 'No fue posible eliminar la conexion.');
+            setNotice('error', error instanceof Error ? error.message : 'No fue posible desconectar este activo.');
+        } finally {
             renderModule();
         }
-    }
-
-    function openEditor(providerKey, record = null) {
-        state.editorOpen = true;
-        state.activeProviderKey = providerKey;
-        state.editingId = record?.id ?? '';
-        renderModule();
-    }
-
-    function closeEditor() {
-        state.editorOpen = false;
-        state.activeProviderKey = '';
-        state.editingId = '';
-        renderModule();
-    }
-
-    function upsertConnection(record) {
-        const nextRecord = record ?? null;
-
-        if (!nextRecord || !nextRecord.id) {
-            return;
-        }
-
-        const index = state.connections.findIndex((connection) => connection.id === nextRecord.id);
-
-        if (index === -1) {
-            state.connections = [nextRecord, ...state.connections];
-            return;
-        }
-
-        state.connections = state.connections.map((connection) => {
-            return connection.id === nextRecord.id ? nextRecord : connection;
-        });
     }
 
     function renderModule() {
@@ -235,16 +154,14 @@ export function createConnectModule({
                 <div>
                     <h2>Conecta</h2>
                     <p class="workspace-section-subtitle">
-                        Registra y organiza perfiles, paginas, canales y fichas de negocio por usuario para que cada persona concentre sus activos digitales en un solo lugar.
+                        Haz clic en una red social, acepta permisos y vuelve al panel. Cada usuario administra sus propios activos digitales por separado.
                     </p>
                 </div>
             </div>
 
             ${renderNotice()}
 
-            ${state.setupRequired
-                ? renderSetupState()
-                : ''}
+            ${state.setupRequired ? renderSetupState() : ''}
 
             ${state.loading
                 ? renderLoadingGrid()
@@ -252,15 +169,17 @@ export function createConnectModule({
                     ${renderCatalog()}
                     ${renderConnections()}
                 `}
-
-            ${renderEditor()}
         `;
     }
 
     function renderNotice() {
+        if (!state.notice) {
+            return '';
+        }
+
         return `
-            <div id="connect-inline-notice" class="connect-inline-notice ${state.notice ? `connect-inline-notice--${state.notice.type}` : 'hidden'}">
-                ${escapeHtml(state.notice?.message ?? '')}
+            <div class="connect-inline-notice connect-inline-notice--${escapeHtml(state.notice.type)}">
+                ${escapeHtml(state.notice.message)}
             </div>
         `;
     }
@@ -283,8 +202,8 @@ export function createConnectModule({
             <section class="connect-catalog">
                 <div class="connect-section-head">
                     <div>
-                        <h3>Agregar nuevo activo</h3>
-                        <p>Elige el tipo de red social que quieres registrar.</p>
+                        <h3>Conectar una red social</h3>
+                        <p>El flujo es directo: autorizas, regresas y la conexion queda registrada.</p>
                     </div>
                 </div>
 
@@ -297,6 +216,8 @@ export function createConnectModule({
 
     function renderProviderCard(provider) {
         const count = state.connections.filter((connection) => connection.provider_key === provider.key).length;
+        const isBusy = state.connectingProviderKey === provider.key;
+        const buttonLabel = count > 0 ? 'Conectar otra' : 'Conectar';
 
         return `
             <article class="connect-provider-card">
@@ -312,7 +233,7 @@ export function createConnectModule({
 
                 <div class="connect-provider-meta">
                     <span>${count} activos</span>
-                    <span>${provider.oauth_ready ? 'OAuth listo' : 'OAuth pendiente'}</span>
+                    <span>${provider.oauth_ready ? 'OAuth listo' : 'Falta configurar OAuth'}</span>
                 </div>
 
                 <div class="connect-feature-row">
@@ -321,10 +242,21 @@ export function createConnectModule({
                     }).join('')}
                 </div>
 
-                <button type="button" class="workspace-primary-button connect-provider-button" data-connect-open-provider="${provider.key}">
-                    <span class="material-symbols-rounded">add_link</span>
-                    <span>Conectar</span>
+                <button
+                    type="button"
+                    class="workspace-primary-button connect-provider-button"
+                    data-connect-provider="${escapeHtml(provider.key)}"
+                    ${provider.oauth_ready ? '' : 'disabled'}
+                >
+                    <span class="material-symbols-rounded">${isBusy ? 'progress_activity' : 'add_link'}</span>
+                    <span>${buttonLabel}</span>
                 </button>
+
+                <p class="connect-provider-helper">
+                    ${provider.oauth_ready
+                        ? 'Se abrira la autorizacion oficial de la plataforma.'
+                        : 'Completa client ID, client secret y redirect URI para habilitar este boton.'}
+                </p>
             </article>
         `;
     }
@@ -334,8 +266,8 @@ export function createConnectModule({
             <section class="connect-assets">
                 <div class="connect-section-head">
                     <div>
-                        <h3>Activos digitales registrados</h3>
-                        <p>Cada usuario ve y administra solo sus propias conexiones.</p>
+                        <h3>Conexiones activas</h3>
+                        <p>Este listado es independiente por usuario y puede crecer sin limite fijo.</p>
                     </div>
                 </div>
 
@@ -343,7 +275,7 @@ export function createConnectModule({
                     ? `
                         <div class="connect-empty-state">
                             <span class="material-symbols-rounded">share</span>
-                            <p>Aun no has registrado perfiles, paginas o canales.</p>
+                            <p>Aun no hay redes sociales conectadas en esta cuenta.</p>
                         </div>
                     `
                     : `
@@ -353,8 +285,8 @@ export function createConnectModule({
                                     <tr>
                                         <th>Activo</th>
                                         <th>Red</th>
-                                        <th>Identificador</th>
                                         <th>Estado</th>
+                                        <th>Fecha</th>
                                         <th>Herramientas</th>
                                     </tr>
                                 </thead>
@@ -373,131 +305,23 @@ export function createConnectModule({
             <tr>
                 <td>
                     <strong>${escapeHtml(connection.display_name ?? '')}</strong>
-                    <small>${escapeHtml(connection.asset_url ?? connection.notes ?? '')}</small>
+                    <small>${escapeHtml(connection.notes ?? '')}</small>
                 </td>
                 <td>${escapeHtml(connection.connection_label ?? connection.provider_key ?? '')}</td>
-                <td>${escapeHtml(connection.external_id || connection.handle || 'Sin dato')}</td>
                 <td>
                     <span class="connect-status-badge connect-status-badge--${escapeHtml(connection.connection_status ?? 'pending_auth')}">
                         ${escapeHtml(humanizeStatus(connection.connection_status))}
                     </span>
                 </td>
+                <td>${escapeHtml(formatDate(connection.created_at))}</td>
                 <td>
                     <div class="connect-table-actions">
-                        <button type="button" class="connect-table-button" data-connect-edit="${connection.id}">
-                            Editar
-                        </button>
-                        <button type="button" class="connect-table-button connect-table-button--danger" data-connect-delete="${connection.id}">
-                            Borrar
+                        <button type="button" class="connect-table-button connect-table-button--danger" data-connect-delete="${escapeHtml(connection.id)}">
+                            Desconectar
                         </button>
                     </div>
                 </td>
             </tr>
-        `;
-    }
-
-    function renderEditor() {
-        if (!state.editorOpen) {
-            return '';
-        }
-
-        const provider = getActiveProvider();
-        const record = state.connections.find((connection) => connection.id === state.editingId) ?? null;
-
-        if (!provider) {
-            return '';
-        }
-
-        return `
-            <div class="connect-editor-shell">
-                <div class="connect-editor-backdrop" data-connect-close-editor="true"></div>
-                <div class="connect-editor-panel">
-                    <div class="connect-editor-head">
-                        <div>
-                            <h3>${record ? 'Editar activo digital' : `Conectar ${escapeHtml(provider.label)}`}</h3>
-                            <p>${escapeHtml(provider.helper ?? provider.description ?? '')}</p>
-                        </div>
-
-                        <button type="button" class="workspace-icon-button" data-connect-close-editor="true" aria-label="Cerrar">
-                            <span class="material-symbols-rounded">close</span>
-                        </button>
-                    </div>
-
-                    <form id="connect-form" class="connect-editor-form">
-                        <input type="hidden" name="id_value" value="${escapeHtml(record?.id ?? '')}">
-                        <input type="hidden" name="provider_key" value="${escapeHtml(provider.key)}">
-
-                        <div class="connect-editor-grid">
-                            <div class="connect-editor-field connect-editor-field--full">
-                                <label class="connect-editor-label" for="connect-display-name">Nombre del activo</label>
-                                <input
-                                    id="connect-display-name"
-                                    name="display_name"
-                                    type="text"
-                                    class="connect-editor-input"
-                                    placeholder="Ejemplo: Canal principal de ventas"
-                                    value="${escapeHtml(record?.display_name ?? '')}"
-                                    required
-                                >
-                            </div>
-
-                            <div class="connect-editor-field">
-                                <label class="connect-editor-label" for="connect-handle">${escapeHtml(provider.handle_label)}</label>
-                                <input
-                                    id="connect-handle"
-                                    name="handle"
-                                    type="text"
-                                    class="connect-editor-input"
-                                    placeholder="@usuario o etiqueta interna"
-                                    value="${escapeHtml(record?.handle ?? '')}"
-                                >
-                            </div>
-
-                            <div class="connect-editor-field">
-                                <label class="connect-editor-label" for="connect-external-id">${escapeHtml(provider.external_id_label)}</label>
-                                <input
-                                    id="connect-external-id"
-                                    name="external_id"
-                                    type="text"
-                                    class="connect-editor-input"
-                                    placeholder="ID, identificador o referencia"
-                                    value="${escapeHtml(record?.external_id ?? '')}"
-                                >
-                            </div>
-
-                            <div class="connect-editor-field connect-editor-field--full">
-                                <label class="connect-editor-label" for="connect-asset-url">${escapeHtml(provider.url_label)}</label>
-                                <input
-                                    id="connect-asset-url"
-                                    name="asset_url"
-                                    type="url"
-                                    class="connect-editor-input"
-                                    placeholder="https://..."
-                                    value="${escapeHtml(record?.asset_url ?? '')}"
-                                >
-                            </div>
-
-                            <div class="connect-editor-field connect-editor-field--full">
-                                <label class="connect-editor-label" for="connect-notes">Notas</label>
-                                <textarea
-                                    id="connect-notes"
-                                    name="notes"
-                                    class="connect-editor-textarea"
-                                    placeholder="Notas internas para recordar como se usa este activo"
-                                >${escapeHtml(record?.notes ?? '')}</textarea>
-                            </div>
-                        </div>
-
-                        <div class="connect-editor-footer">
-                            <button type="button" class="connect-secondary-button" data-connect-close-editor="true">Cancelar</button>
-                            <button type="submit" class="workspace-primary-button">
-                                <span class="material-symbols-rounded">save</span>
-                                <span>${record ? 'Guardar cambios' : 'Guardar activo'}</span>
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
         `;
     }
 
@@ -531,10 +355,6 @@ export function createConnectModule({
         `;
     }
 
-    function getActiveProvider() {
-        return state.catalog.find((provider) => provider.key === state.activeProviderKey) ?? null;
-    }
-
     async function request(action, method = 'GET', payload = null) {
         const token = await getAccessToken();
 
@@ -547,9 +367,10 @@ export function createConnectModule({
 
         const response = await fetch(requestUrl.toString(), {
             method,
+            credentials: 'same-origin',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`,
+                Authorization: `Bearer ${token}`,
             },
             body: method === 'GET' ? null : JSON.stringify(payload ?? {}),
         });
@@ -583,25 +404,25 @@ export function createConnectModule({
         }
     }
 
-    function setNotice(type, message) {
-        state.notice = { type, message };
+    function formatDate(value) {
+        if (!value) {
+            return 'Sin fecha';
+        }
+
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return 'Sin fecha';
+        }
+
+        return new Intl.DateTimeFormat('es-MX', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+        }).format(date);
     }
 
-    function syncNotice() {
-        const notice = document.getElementById('connect-inline-notice');
-
-        if (!notice) {
-            return;
-        }
-
-        if (!state.notice) {
-            notice.className = 'connect-inline-notice hidden';
-            notice.textContent = '';
-            return;
-        }
-
-        notice.className = `connect-inline-notice connect-inline-notice--${state.notice.type}`;
-        notice.textContent = state.notice.message;
+    function setNotice(type, message) {
+        state.notice = { type, message };
     }
 
     function setButtonBusy(button, isBusy, busyText = 'Procesando...') {

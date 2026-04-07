@@ -9,6 +9,7 @@ $regularMenu = [
         'icon_path' => 'img/ico/1.svg',
         'color' => '#1A3C6E',
         'section_title' => 'Investigar',
+        'tool_category_key' => 'investigar',
     ],
     [
         'id' => 'Diseñar',
@@ -17,6 +18,7 @@ $regularMenu = [
         'icon_path' => 'img/ico/2.svg',
         'color' => '#D93025',
         'section_title' => 'Diseñar',
+        'tool_category_key' => 'disenar',
     ],
     [
         'id' => 'Ejecutar',
@@ -25,6 +27,7 @@ $regularMenu = [
         'icon_path' => 'img/ico/3.svg',
         'color' => '#DF9C0A',
         'section_title' => 'Ejecutar',
+        'tool_category_key' => 'ejecutar',
     ],
     [
         'id' => 'Analizar',
@@ -33,7 +36,9 @@ $regularMenu = [
         'icon_path' => 'img/ico/4.svg',
         'color' => '#188038',
         'section_title' => 'Analizar',
-    ],    [
+        'tool_category_key' => 'analizar',
+    ],
+    [
         'id' => 'Aprender',
         'label' => 'Aprender',
         'hover_label' => 'Aprender',
@@ -48,7 +53,7 @@ $regularMenu = [
         'icon_path' => 'img/ico/5.svg',
         'color' => '#000000',
         'section_title' => 'Conecta',
-    ],    
+    ],
 ];
 
 $adminMenu = [
