@@ -1,0 +1,794 @@
+.form-builder-page {
+    display: grid;
+    gap: 1rem;
+}
+
+.form-builder-hero,
+.form-builder-card,
+.form-builder-business-chip,
+.form-builder-share,
+.form-builder-field-card,
+.form-builder-empty {
+    border: 1px solid rgba(19, 42, 74, 0.08);
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 16px 34px rgba(16, 24, 40, 0.06);
+}
+
+.form-builder-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    border-radius: 1.5rem;
+    padding: 1.5rem;
+}
+
+.form-builder-hero h1,
+.form-builder-card h2,
+.form-builder-empty h3,
+.form-builder-field-card strong {
+    margin: 0;
+    color: #202124;
+}
+
+.form-builder-hero h1 {
+    font-size: clamp(2rem, 4vw, 3.4rem);
+    line-height: 0.95;
+    letter-spacing: -0.055em;
+    font-weight: 500;
+}
+
+.form-builder-hero p,
+.form-builder-card p,
+.form-builder-empty p,
+.form-builder-table small,
+.form-builder-muted,
+.form-builder-field small {
+    color: #6b7280;
+    line-height: 1.65;
+}
+
+.form-builder-eyebrow {
+    margin: 0 0 0.5rem;
+    color: #1f5fd6;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.form-builder-card {
+    border-radius: 1.5rem;
+    padding: 1.25rem;
+}
+
+.form-builder-business-chip,
+.form-builder-share {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    border-radius: 1.1rem;
+    padding: 0.9rem 1rem;
+}
+
+.form-builder-share {
+    background: rgba(47, 124, 239, 0.08);
+}
+
+.form-builder-share a {
+    display: block;
+    margin-top: 0.2rem;
+    word-break: break-all;
+    color: #1f5fd6;
+    font-weight: 600;
+}
+
+.form-builder-notice {
+    border-radius: 1rem;
+    padding: 0.9rem 1rem;
+    font-weight: 700;
+}
+
+.form-builder-notice--error {
+    color: #b3261e;
+    background: rgba(217, 48, 37, 0.09);
+    border: 1px solid rgba(217, 48, 37, 0.18);
+}
+
+.form-builder-notice--success {
+    color: #0b8043;
+    background: rgba(15, 157, 88, 0.1);
+    border: 1px solid rgba(15, 157, 88, 0.18);
+}
+
+.form-builder-section-head,
+.form-builder-field-card-head,
+.form-builder-footer-actions,
+.form-builder-actions,
+.form-builder-add-field,
+.form-builder-field-tools {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.form-builder-section-head {
+    margin-bottom: 1rem;
+}
+
+.form-builder-primary,
+.form-builder-secondary,
+.form-builder-danger,
+.form-builder-icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 2.75rem;
+    border-radius: 999px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.form-builder-primary {
+    border: 0;
+    padding: 0 1rem;
+    background: #1f5fd6;
+    color: #ffffff;
+}
+
+.form-builder-secondary,
+.form-builder-danger {
+    border: 1px solid rgba(19, 42, 74, 0.12);
+    padding: 0 0.9rem;
+    background: #ffffff;
+    color: #202124;
+}
+
+.form-builder-danger,
+.form-builder-icon-button--danger {
+    color: #b3261e;
+}
+
+.form-builder-icon-button {
+    width: 2.5rem;
+    border: 1px solid rgba(19, 42, 74, 0.1);
+    background: #ffffff;
+    color: #3c4043;
+}
+
+.form-builder-primary:hover,
+.form-builder-secondary:hover,
+.form-builder-danger:hover,
+.form-builder-icon-button:hover {
+    transform: translateY(-1px);
+}
+
+.form-builder-empty {
+    display: grid;
+    justify-items: center;
+    gap: 0.6rem;
+    border-radius: 1.25rem;
+    padding: 2rem;
+    text-align: center;
+}
+
+.form-builder-empty .material-symbols-rounded {
+    font-size: 2.5rem;
+    color: #1f5fd6;
+}
+
+.form-builder-empty--compact {
+    box-shadow: none;
+    border-style: dashed;
+    background: #f8fafc;
+}
+
+.form-builder-table-wrap {
+    overflow-x: auto;
+}
+
+.form-builder-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.form-builder-table th,
+.form-builder-table td {
+    padding: 0.9rem 0.75rem;
+    border-bottom: 1px solid rgba(19, 42, 74, 0.08);
+    text-align: left;
+    vertical-align: top;
+}
+
+.form-builder-table strong,
+.form-builder-table small {
+    display: block;
+}
+
+.form-builder-table a {
+    color: #1f5fd6;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.form-builder-status {
+    display: inline-flex;
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    background: rgba(47, 124, 239, 0.1);
+    color: #1f5fd6;
+    font-weight: 800;
+    font-size: 0.8rem;
+}
+
+.form-builder-editor {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.form-builder-editor-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-builder-field {
+    display: grid;
+    gap: 0.4rem;
+    font-weight: 700;
+    color: #374151;
+}
+
+.form-builder-field--wide {
+    grid-column: 1 / -1;
+}
+
+.form-builder-field input,
+.form-builder-field textarea,
+.form-builder-field select,
+.form-builder-add-field select {
+    width: 100%;
+    min-height: 3rem;
+    border: 1px solid rgba(19, 42, 74, 0.14);
+    border-radius: 0.95rem;
+    background: #ffffff;
+    padding: 0.75rem 0.9rem;
+    color: #111827;
+    font: inherit;
+}
+
+.form-builder-field textarea {
+    resize: vertical;
+}
+
+.form-builder-check {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 3rem;
+    margin-top: 1.55rem;
+    color: #374151;
+    font-weight: 700;
+}
+
+.form-builder-fields {
+    display: grid;
+    gap: 1rem;
+}
+
+.form-builder-field-card {
+    border-radius: 1.25rem;
+    padding: 1rem;
+    background: #f8fafc;
+    box-shadow: none;
+}
+
+.form-builder-field-card-head {
+    margin-bottom: 1rem;
+}
+
+.form-builder-footer-actions {
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+}
+
+@media (max-width: 780px) {
+    .form-builder-hero,
+    .form-builder-section-head,
+    .form-builder-footer-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .form-builder-primary,
+    .form-builder-secondary,
+    .form-builder-danger {
+        width: 100%;
+    }
+
+    .form-builder-editor-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-builder-check {
+        margin-top: 0;
+    }
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.form-builder-card--canvas {
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    background: #f1ecfb;
+    box-shadow: none;
+}
+
+.form-builder-card--canvas .form-builder-editor {
+    gap: 0;
+}
+
+.form-google-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid rgba(103, 58, 183, 0.12);
+    border-radius: 1.35rem 1.35rem 0 0;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(14px);
+}
+
+.form-google-doc,
+.form-google-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.form-google-doc > .material-symbols-rounded {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.8rem;
+    height: 2.8rem;
+    border-radius: 0.85rem;
+    background: #673ab7;
+    color: #ffffff;
+}
+
+.form-google-doc strong,
+.form-google-doc small {
+    display: block;
+}
+
+.form-google-doc strong {
+    color: #202124;
+    font-size: 1.15rem;
+    line-height: 1.25;
+}
+
+.form-google-doc small {
+    margin-top: 0.15rem;
+    color: #6b7280;
+}
+
+.form-google-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.form-google-icon-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    min-height: 2.75rem;
+    border-radius: 999px;
+    color: #5f6368;
+    text-decoration: none;
+}
+
+.form-google-icon-action:hover {
+    background: rgba(103, 58, 183, 0.08);
+    color: #512da8;
+}
+
+.form-google-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 1.25rem;
+    padding: 0.65rem 1rem 0;
+    border-inline: 1px solid rgba(103, 58, 183, 0.12);
+    background: rgba(255, 255, 255, 0.92);
+}
+
+.form-google-tabs button {
+    position: relative;
+    border: 0;
+    background: transparent;
+    color: #3c4043;
+    padding: 0.75rem 0.2rem 0.85rem;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.form-google-tabs button::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0.22rem;
+    border-radius: 999px 999px 0 0;
+    background: #673ab7;
+    opacity: 0;
+    transform: scaleX(0.65);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.form-google-tabs button.is-active {
+    color: #512da8;
+}
+
+.form-google-tabs button.is-active::after {
+    opacity: 1;
+    transform: scaleX(1);
+}
+
+.form-google-stage {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    padding: 1rem 1rem 2rem;
+    border: 1px solid rgba(103, 58, 183, 0.12);
+    border-top: 0;
+    border-radius: 0 0 1.35rem 1.35rem;
+    background: #f1ecfb;
+}
+
+.form-google-canvas {
+    width: min(100%, 860px);
+    margin-inline: auto;
+    display: grid;
+    gap: 0.85rem;
+}
+
+.form-google-panel {
+    display: none;
+    gap: 0.85rem;
+}
+
+.form-google-panel.is-active {
+    display: grid;
+}
+
+.form-google-cover,
+.form-google-settings,
+.form-google-empty-panel {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(32, 33, 36, 0.12);
+    border-radius: 0.65rem;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(60, 64, 67, 0.18);
+}
+
+.form-google-cover {
+    padding: 2.1rem 1.75rem 1.5rem;
+}
+
+.form-google-cover-bar {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 0.7rem;
+    background: #673ab7;
+}
+
+.form-google-cover input,
+.form-google-cover textarea {
+    width: 100%;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    background: transparent;
+    color: #202124;
+    font: inherit;
+    resize: none;
+}
+
+.form-google-cover input {
+    font-size: clamp(2rem, 4vw, 2.8rem);
+    line-height: 1.1;
+    letter-spacing: -0.045em;
+    font-weight: 500;
+}
+
+.form-google-cover textarea {
+    margin-top: 1.15rem;
+    color: #5f6368;
+    line-height: 1.55;
+}
+
+.form-google-cover input:focus,
+.form-google-cover textarea:focus {
+    outline: none;
+    border-color: #673ab7;
+}
+
+.form-google-side-tools {
+    position: sticky;
+    top: 7rem;
+    align-self: start;
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.45rem;
+    border: 1px solid rgba(32, 33, 36, 0.12);
+    border-radius: 1rem;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(60, 64, 67, 0.18);
+}
+
+.form-google-side-tools select {
+    width: 3rem;
+    min-height: 2.8rem;
+    border: 0;
+    border-radius: 0.75rem;
+    color: transparent;
+    background:
+        linear-gradient(45deg, transparent 50%, #5f6368 50%) calc(100% - 14px) 50% / 7px 7px no-repeat,
+        linear-gradient(135deg, #5f6368 50%, transparent 50%) calc(100% - 9px) 50% / 7px 7px no-repeat,
+        #f8fafc;
+    cursor: pointer;
+}
+
+.form-google-tool-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    min-height: 2.8rem;
+    border: 0;
+    border-radius: 0.75rem;
+    background: transparent;
+    color: #5f6368;
+    cursor: pointer;
+}
+
+.form-google-tool-button:hover {
+    background: rgba(103, 58, 183, 0.08);
+    color: #512da8;
+}
+
+.form-google-settings,
+.form-google-empty-panel {
+    display: grid;
+    gap: 1rem;
+    padding: 1.5rem;
+}
+
+.form-google-empty-panel {
+    justify-items: center;
+    text-align: center;
+    color: #5f6368;
+}
+
+.form-google-empty-panel .material-symbols-rounded {
+    font-size: 3rem;
+    color: #673ab7;
+}
+
+.form-builder-card--canvas .form-builder-fields {
+    gap: 0.85rem;
+}
+
+.form-builder-card--canvas .form-builder-field-card {
+    position: relative;
+    border: 1px solid rgba(32, 33, 36, 0.12);
+    border-radius: 0.65rem;
+    padding: 1rem 1.25rem 0.85rem;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(60, 64, 67, 0.18);
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.form-builder-card--canvas .form-builder-field-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0.35rem;
+    border-radius: 0.65rem 0 0 0.65rem;
+    background: #4285f4;
+    opacity: 0;
+}
+
+.form-builder-card--canvas .form-builder-field-card.is-active {
+    border-color: rgba(66, 133, 244, 0.4);
+    box-shadow: 0 2px 9px rgba(60, 64, 67, 0.22);
+}
+
+.form-builder-card--canvas .form-builder-field-card.is-active::before {
+    opacity: 1;
+}
+
+.form-builder-card--canvas .form-builder-field-card-head {
+    align-items: center;
+    margin-bottom: 0.9rem;
+}
+
+.form-builder-drag-handle {
+    color: #b8b8b8;
+    cursor: grab;
+}
+
+.form-builder-card--canvas .form-builder-editor-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.55fr);
+    gap: 0.9rem;
+}
+
+.form-builder-card--canvas .form-builder-question-label {
+    grid-column: 1 / 2;
+    grid-row: 1;
+}
+
+.form-builder-card--canvas .form-builder-type-field {
+    grid-column: 2 / 3;
+    grid-row: 1;
+}
+
+.form-builder-card--canvas .form-builder-question-label input {
+    min-height: 3.4rem;
+    border-radius: 0;
+    border-color: transparent;
+    border-bottom-color: rgba(32, 33, 36, 0.18);
+    background: #f8f9fa;
+    font-size: 1.05rem;
+}
+
+.form-builder-card--canvas .form-builder-question-label input:focus,
+.form-builder-card--canvas .form-builder-field input:focus,
+.form-builder-card--canvas .form-builder-field textarea:focus,
+.form-builder-card--canvas .form-builder-field select:focus {
+    outline: none;
+    border-color: #673ab7;
+    box-shadow: 0 2px 0 #673ab7;
+}
+
+.form-builder-card--canvas .form-builder-field select {
+    background-color: #ffffff;
+}
+
+.form-builder-card--canvas .form-builder-options-field {
+    grid-column: 1 / -1;
+}
+
+.form-builder-options-field.is-hidden {
+    display: none;
+}
+
+.form-builder-card-footer {
+    margin-top: 0.85rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid rgba(32, 33, 36, 0.1);
+    display: flex;
+    justify-content: flex-end;
+}
+
+.form-builder-check--switch {
+    min-height: 2.25rem;
+    margin: 0;
+    flex-direction: row;
+}
+
+.form-builder-check--switch input {
+    appearance: none;
+    width: 2.6rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    background: #dadce0;
+    position: relative;
+    transition: background 160ms ease;
+}
+
+.form-builder-check--switch input::after {
+    content: "";
+    position: absolute;
+    top: 0.18rem;
+    left: 0.18rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 999px;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(60, 64, 67, 0.25);
+    transition: transform 160ms ease;
+}
+
+.form-builder-check--switch input:checked {
+    background: #673ab7;
+}
+
+.form-builder-check--switch input:checked::after {
+    transform: translateX(1.25rem);
+}
+
+.form-builder-card--canvas .form-builder-footer-actions {
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(103, 58, 183, 0.12);
+    border-top: 0;
+    border-radius: 0 0 1.35rem 1.35rem;
+}
+
+@media (max-width: 980px) {
+    .form-google-stage {
+        grid-template-columns: 1fr;
+    }
+
+    .form-google-side-tools {
+        position: static;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        width: min(100%, 22rem);
+        margin-inline: auto;
+        order: -1;
+    }
+
+    .form-google-side-tools select,
+    .form-google-tool-button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 780px) {
+    .form-google-toolbar {
+        position: static;
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .form-google-tabs {
+        justify-content: flex-start;
+        overflow-x: auto;
+    }
+
+    .form-google-stage {
+        padding: 0.75rem 0.5rem 1rem;
+    }
+
+    .form-google-cover {
+        padding: 1.65rem 1rem 1rem;
+    }
+
+    .form-builder-card--canvas .form-builder-editor-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-builder-card--canvas .form-builder-question-label {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+
+    .form-builder-card--canvas .form-builder-type-field {
+        grid-column: 1 / -1;
+        grid-row: auto;
+    }
+}

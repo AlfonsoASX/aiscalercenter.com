@@ -356,6 +356,17 @@ function builtinToolDefinitions(): array
             'is_active' => true,
             'admin_only' => false,
         ],
+        [
+            'id' => '',
+            'slug' => 'generador-formularios',
+            'category_key' => 'disenar',
+            'title' => 'Generador de formularios',
+            'description' => 'Crea formularios publicos, compartelos sin login y guarda sus respuestas como JSON.',
+            'tutorial_youtube_url' => '',
+            'sort_order' => 10,
+            'is_active' => true,
+            'admin_only' => false,
+        ],
     ];
 }
 

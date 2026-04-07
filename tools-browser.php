@@ -68,6 +68,7 @@ if ($accessToken === '' || $userId === '') {
                     buildToolsPanelUrl($sectionId)
                 ),
                 'user_id' => $userId,
+                'access_token' => $accessToken,
                 'user' => [
                     'email' => (string) ($serverAuth['email'] ?? ''),
                     'display_name' => (string) ($serverAuth['email'] ?? 'Usuario'),

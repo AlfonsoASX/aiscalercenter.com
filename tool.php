@@ -62,6 +62,9 @@ if ($launchMode === 'php_folder') {
         'tutorial_youtube_url' => (string) ($tool['tutorial_youtube_url'] ?? ''),
         'return_url' => (string) ($tool['return_url'] ?? buildToolsPanelUrl()),
         'embed_mode' => $isEmbedMode,
+        'access_token' => (string) ($launchPayload['access_token'] ?? ''),
+        'user_id' => (string) ($launchPayload['user_id'] ?? ''),
+        'user_email' => (string) (($launchPayload['user']['email'] ?? null) ?: ''),
     ];
     $panelConfig = require __DIR__ . '/config/panel.php';
     $role = (string) ($launchUser['role'] ?? 'regular') === 'admin' ? 'admin' : 'regular';

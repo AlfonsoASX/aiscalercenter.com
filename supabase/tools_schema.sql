@@ -146,6 +146,16 @@ values
         false
     ),
     (
+        'generador-formularios',
+        'disenar',
+        'Generador de formularios',
+        'Crea formularios publicos, compartelos sin login y guarda sus respuestas como JSON.',
+        '',
+        10,
+        true,
+        false
+    ),
+    (
         'planificar-publicaciones',
         'ejecutar',
         'Planificar publicaciones',

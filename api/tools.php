@@ -161,6 +161,7 @@ try {
         rememberToolLaunch($launchToken, [
             'tool' => sanitizeToolForLaunch(mergeToolWithPrivateConfig($tool, $privateConfig), $returnUrl),
             'user_id' => (string) ($user['id'] ?? ''),
+            'access_token' => $token,
             'user' => [
                 'email' => (string) ($user['email'] ?? ''),
                 'display_name' => trim((string) ($user['user_metadata']['full_name'] ?? '')) ?: (string) ($user['email'] ?? 'Usuario'),
