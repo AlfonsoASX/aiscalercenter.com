@@ -1,6 +1,14 @@
+import {
+    STORAGE_SCOPES,
+    USER_FILES_STORAGE_BUCKET,
+    extractStoragePathFromUrl,
+    getStorageBucketForScopedPath,
+} from '../../shared/storage.js';
+
 export const LEARN_SECTION_ID = 'Aprender';
 
-const COURSE_STORAGE_BUCKET = 'course-assets';
+const COURSE_STORAGE_BUCKET = USER_FILES_STORAGE_BUCKET;
+const COURSE_LEGACY_STORAGE_BUCKET = 'course-assets';
 const ASSET_TYPES = new Set(['video', 'audio', 'pdf']);
 const CONTENT_META = {
     video: {
@@ -346,7 +354,7 @@ export function createLearnModule({
             return `
                 <div class="learn-setup">
                     <strong>Falta terminar la configuracion de cursos.</strong>
-                    <p>Vuelve a ejecutar <code>supabase/courses_schema.sql</code> y <code>supabase/course_storage_setup.sql</code> en Supabase para habilitar la lectura de cursos publicados y sus archivos.</p>
+                    <p>Vuelve a ejecutar <code>supabase/courses_schema.sql</code> y <code>supabase/user_files_storage_setup.sql</code> en Supabase para habilitar la lectura de cursos publicados y sus archivos.</p>
                 </div>
             `;
         }
@@ -821,7 +829,7 @@ export function createLearnModule({
         }
 
         const { data, error } = await supabase.storage
-            .from(COURSE_STORAGE_BUCKET)
+            .from(getCourseStorageBucketForPath(normalizedPath))
             .createSignedUrl(normalizedPath, ttlSeconds);
 
         if (error) {
@@ -841,24 +849,18 @@ export function createLearnModule({
         }
 
         try {
-            const parsed = new URL(url, window.location.origin);
-            const prefixes = [
-                `/storage/v1/object/public/${COURSE_STORAGE_BUCKET}/`,
-                `/storage/v1/object/sign/${COURSE_STORAGE_BUCKET}/`,
-            ];
+            const extracted = extractStoragePathFromUrl(url, [COURSE_STORAGE_BUCKET, COURSE_LEGACY_STORAGE_BUCKET]);
 
-            for (const prefix of prefixes) {
-                const index = parsed.pathname.indexOf(prefix);
-
-                if (index !== -1) {
-                    return decodeURIComponent(parsed.pathname.slice(index + prefix.length));
-                }
-            }
+            return extracted?.path ?? null;
         } catch (error) {
             return null;
         }
 
         return null;
+    }
+
+    function getCourseStorageBucketForPath(path) {
+        return getStorageBucketForScopedPath(path, STORAGE_SCOPES.courses, COURSE_LEGACY_STORAGE_BUCKET);
     }
 
     function normalizeSignedUrl(value) {

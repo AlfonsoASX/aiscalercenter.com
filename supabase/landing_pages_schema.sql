@@ -1,6 +1,6 @@
 create extension if not exists pgcrypto;
 
--- Ejecuta supabase/projects_schema.sql antes de este archivo para habilitar formularios por proyecto.
+-- Ejecuta supabase/projects_schema.sql antes de este archivo para habilitar landing pages por proyecto.
 
 create or replace function public.is_admin_user()
 returns boolean
@@ -38,7 +38,7 @@ create table if not exists public.business_members (
     primary key (business_id, user_id)
 );
 
-create table if not exists public.forms (
+create table if not exists public.landing_pages (
     id uuid primary key default gen_random_uuid(),
     business_id uuid not null references public.businesses (id) on delete cascade,
     project_id uuid,
@@ -48,49 +48,30 @@ create table if not exists public.forms (
     title text not null,
     description text not null default '',
     status text not null default 'draft' check (status in ('draft', 'published', 'archived')),
-    fields jsonb not null default '[]'::jsonb check (jsonb_typeof(fields) = 'array'),
+    blocks jsonb not null default '[]'::jsonb check (jsonb_typeof(blocks) = 'array'),
     settings jsonb not null default '{}'::jsonb check (jsonb_typeof(settings) = 'object'),
     metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
-    response_count integer not null default 0,
+    view_count integer not null default 0,
     version integer not null default 1,
     published_at timestamptz,
     archived_at timestamptz,
     created_at timestamptz not null default timezone('utc', now()),
     updated_at timestamptz not null default timezone('utc', now()),
     deleted_at timestamptz,
-    constraint forms_business_slug_unique unique (business_id, slug)
+    constraint landing_pages_business_slug_unique unique (business_id, slug)
 );
 
-create table if not exists public.form_responses (
-    id uuid primary key default gen_random_uuid(),
-    form_id uuid not null references public.forms (id) on delete cascade,
-    business_id uuid not null references public.businesses (id) on delete cascade,
-    project_id uuid,
-    owner_user_id uuid not null references auth.users (id) on delete cascade,
-    answers jsonb not null default '{}'::jsonb check (jsonb_typeof(answers) = 'object'),
-    field_snapshot jsonb not null default '[]'::jsonb check (jsonb_typeof(field_snapshot) = 'array'),
-    metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
-    source text not null default 'public_form',
-    submitted_at timestamptz not null default timezone('utc', now()),
-    created_at timestamptz not null default timezone('utc', now())
-);
-
-alter table public.forms
+alter table public.landing_pages
 add column if not exists project_id uuid;
 
-alter table public.form_responses
-add column if not exists project_id uuid;
-
+create index if not exists landing_pages_business_status_idx on public.landing_pages (business_id, status, updated_at desc);
+create index if not exists landing_pages_project_status_idx on public.landing_pages (project_id, status, updated_at desc);
+create index if not exists landing_pages_public_id_idx on public.landing_pages (public_id);
+create index if not exists landing_pages_slug_idx on public.landing_pages (slug);
 create index if not exists businesses_owner_idx on public.businesses (owner_user_id);
 create index if not exists business_members_user_idx on public.business_members (user_id, status);
-create index if not exists forms_business_status_idx on public.forms (business_id, status, updated_at desc);
-create index if not exists forms_project_status_idx on public.forms (project_id, status, updated_at desc);
-create index if not exists forms_public_id_idx on public.forms (public_id);
-create index if not exists form_responses_form_idx on public.form_responses (form_id, submitted_at desc);
-create index if not exists form_responses_project_idx on public.form_responses (project_id, submitted_at desc);
-create index if not exists form_responses_business_idx on public.form_responses (business_id, submitted_at desc);
 
-create or replace function public.set_forms_updated_at()
+create or replace function public.set_landing_pages_updated_at()
 returns trigger
 language plpgsql
 as $$
@@ -100,23 +81,23 @@ begin
 end;
 $$;
 
-drop trigger if exists trg_businesses_updated_at on public.businesses;
-create trigger trg_businesses_updated_at
+drop trigger if exists trg_landing_pages_updated_at on public.landing_pages;
+create trigger trg_landing_pages_updated_at
+before update on public.landing_pages
+for each row
+execute function public.set_landing_pages_updated_at();
+
+drop trigger if exists trg_landing_businesses_updated_at on public.businesses;
+create trigger trg_landing_businesses_updated_at
 before update on public.businesses
 for each row
-execute function public.set_forms_updated_at();
+execute function public.set_landing_pages_updated_at();
 
-drop trigger if exists trg_business_members_updated_at on public.business_members;
-create trigger trg_business_members_updated_at
+drop trigger if exists trg_landing_business_members_updated_at on public.business_members;
+create trigger trg_landing_business_members_updated_at
 before update on public.business_members
 for each row
-execute function public.set_forms_updated_at();
-
-drop trigger if exists trg_forms_updated_at on public.forms;
-create trigger trg_forms_updated_at
-before update on public.forms
-for each row
-execute function public.set_forms_updated_at();
+execute function public.set_landing_pages_updated_at();
 
 create or replace function public.ensure_business_owner_member()
 returns trigger
@@ -141,28 +122,6 @@ create trigger trg_business_owner_member
 after insert on public.businesses
 for each row
 execute function public.ensure_business_owner_member();
-
-create or replace function public.increment_form_response_count()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-    update public.forms
-    set response_count = response_count + 1,
-        updated_at = timezone('utc', now())
-    where id = new.form_id;
-
-    return new;
-end;
-$$;
-
-drop trigger if exists trg_form_response_count on public.form_responses;
-create trigger trg_form_response_count
-after insert on public.form_responses
-for each row
-execute function public.increment_form_response_count();
 
 create or replace function public.can_access_business(p_business_id uuid)
 returns boolean
@@ -215,14 +174,15 @@ as $$
         );
 $$;
 
-create or replace function public.get_public_form_definition(p_identifier text)
+create or replace function public.get_public_landing_page_definition(p_identifier text)
 returns table (
     public_id text,
     slug text,
     title text,
     description text,
-    fields jsonb,
-    settings jsonb
+    blocks jsonb,
+    settings jsonb,
+    metadata jsonb
 )
 language sql
 stable
@@ -230,84 +190,24 @@ security definer
 set search_path = public
 as $$
     select
-        f.public_id,
-        f.slug,
-        f.title,
-        f.description,
-        f.fields,
-        f.settings
-    from public.forms f
-    where f.deleted_at is null
-      and f.status = 'published'
-      and (f.public_id = trim(p_identifier) or f.slug = trim(p_identifier))
-    order by f.published_at desc nulls last, f.updated_at desc
+        lp.public_id,
+        lp.slug,
+        lp.title,
+        lp.description,
+        lp.blocks,
+        lp.settings,
+        lp.metadata
+    from public.landing_pages lp
+    where lp.deleted_at is null
+      and lp.status = 'published'
+      and (lp.public_id = trim(p_identifier) or lp.slug = trim(p_identifier))
+    order by lp.published_at desc nulls last, lp.updated_at desc
     limit 1;
-$$;
-
-create or replace function public.submit_public_form_response(
-    p_public_id text,
-    p_answers jsonb,
-    p_metadata jsonb default '{}'::jsonb
-)
-returns table (
-    response_id uuid,
-    submitted_at timestamptz
-)
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-    v_form public.forms%rowtype;
-    v_response public.form_responses%rowtype;
-begin
-    select *
-    into v_form
-    from public.forms
-    where public_id = trim(p_public_id)
-      and status = 'published'
-      and deleted_at is null
-    limit 1;
-
-    if not found then
-        raise exception 'El formulario no esta disponible.';
-    end if;
-
-    if jsonb_typeof(coalesce(p_answers, '{}'::jsonb)) <> 'object' then
-        raise exception 'Las respuestas deben enviarse como JSON object.';
-    end if;
-
-    insert into public.form_responses (
-        form_id,
-        business_id,
-        project_id,
-        owner_user_id,
-        answers,
-        field_snapshot,
-        metadata
-    )
-    values (
-        v_form.id,
-        v_form.business_id,
-        v_form.project_id,
-        v_form.owner_user_id,
-        coalesce(p_answers, '{}'::jsonb),
-        v_form.fields,
-        coalesce(p_metadata, '{}'::jsonb)
-    )
-    returning *
-    into v_response;
-
-    response_id := v_response.id;
-    submitted_at := v_response.submitted_at;
-    return next;
-end;
 $$;
 
 alter table public.businesses enable row level security;
 alter table public.business_members enable row level security;
-alter table public.forms enable row level security;
-alter table public.form_responses enable row level security;
+alter table public.landing_pages enable row level security;
 
 drop policy if exists "Business members can view businesses" on public.businesses;
 create policy "Business members can view businesses"
@@ -346,15 +246,16 @@ to authenticated
 using (public.can_manage_business(business_id))
 with check (public.can_manage_business(business_id));
 
-drop policy if exists "Business members can view forms" on public.forms;
-create policy "Business members can view forms"
-on public.forms
+drop policy if exists "Business members can view landing pages" on public.landing_pages;
+create policy "Business members can view landing pages"
+on public.landing_pages
 for select
 to authenticated
 using (deleted_at is null and public.can_access_business(business_id));
-drop policy if exists "Project members can view forms" on public.forms;
-create policy "Project members can view forms"
-on public.forms
+
+drop policy if exists "Project members can view landing pages" on public.landing_pages;
+create policy "Project members can view landing pages"
+on public.landing_pages
 for select
 to authenticated
 using (
@@ -363,9 +264,9 @@ using (
     and public.can_access_project(project_id)
 );
 
-drop policy if exists "Business members can create forms" on public.forms;
-create policy "Business members can create forms"
-on public.forms
+drop policy if exists "Business members can create landing pages" on public.landing_pages;
+create policy "Business members can create landing pages"
+on public.landing_pages
 for insert
 to authenticated
 with check (
@@ -380,9 +281,9 @@ with check (
     )
 );
 
-drop policy if exists "Business members can update forms" on public.forms;
-create policy "Business members can update forms"
-on public.forms
+drop policy if exists "Business members can update landing pages" on public.landing_pages;
+create policy "Business members can update landing pages"
+on public.landing_pages
 for update
 to authenticated
 using (deleted_at is null and public.can_access_business(business_id))
@@ -394,9 +295,9 @@ with check (
     )
 );
 
-drop policy if exists "Project members can update forms" on public.forms;
-create policy "Project members can update forms"
-on public.forms
+drop policy if exists "Project members can update landing pages" on public.landing_pages;
+create policy "Project members can update landing pages"
+on public.landing_pages
 for update
 to authenticated
 using (
@@ -409,26 +310,7 @@ with check (
     and public.can_access_project(project_id)
 );
 
-drop policy if exists "Business members can view form responses" on public.form_responses;
-create policy "Business members can view form responses"
-on public.form_responses
-for select
-to authenticated
-using (public.can_access_business(business_id));
-
-drop policy if exists "Project members can view form responses" on public.form_responses;
-create policy "Project members can view form responses"
-on public.form_responses
-for select
-to authenticated
-using (
-    project_id is not null
-    and public.can_access_project(project_id)
-);
-
 grant select, insert, update on public.businesses to authenticated;
 grant select, insert, update on public.business_members to authenticated;
-grant select, insert, update on public.forms to authenticated;
-grant select on public.form_responses to authenticated;
-grant execute on function public.get_public_form_definition(text) to anon, authenticated;
-grant execute on function public.submit_public_form_response(text, jsonb, jsonb) to anon, authenticated;
+grant select, insert, update on public.landing_pages to authenticated;
+grant execute on function public.get_public_landing_page_definition(text) to anon, authenticated;

@@ -1,0 +1,351 @@
+.projects-module {
+    display: grid;
+    gap: 1rem;
+}
+
+.projects-module-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.projects-module-head h2,
+.projects-module-head p,
+.project-card h3,
+.project-card p,
+.project-modal-head h3 {
+    margin: 0;
+}
+
+.projects-eyebrow {
+    color: #2f7cef;
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.projects-module-head h2 {
+    margin-top: 0.15rem;
+    color: #202124;
+    font-size: clamp(1.6rem, 3vw, 2.6rem);
+    letter-spacing: -0.055em;
+}
+
+.projects-module-head p:not(.projects-eyebrow) {
+    margin-top: 0.35rem;
+    color: #5f6368;
+    line-height: 1.6;
+}
+
+.projects-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.55rem;
+}
+
+.projects-filter,
+.projects-icon-button,
+.projects-create-button,
+.projects-danger-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: 2.8rem;
+    border-radius: 999px;
+    font-weight: 900;
+    cursor: pointer;
+}
+
+.projects-filter,
+.projects-icon-button {
+    border: 1px solid rgba(32, 33, 36, 0.12);
+    background: #ffffff;
+    color: #202124;
+    padding: 0 1rem;
+}
+
+.projects-filter.is-active {
+    background: #eef3ff;
+    color: #1f5fd6;
+}
+
+.projects-icon-button {
+    width: 2.8rem;
+    padding: 0;
+}
+
+.projects-create-button {
+    border: 0;
+    background: #101418;
+    color: #ffffff;
+    padding: 0 1.05rem;
+}
+
+.projects-danger-button {
+    border: 1px solid rgba(217, 48, 37, 0.18);
+    background: rgba(217, 48, 37, 0.08);
+    color: #b3261e;
+    padding: 0 1rem;
+}
+
+.projects-notice {
+    padding: 0.9rem 1rem;
+    border-radius: 1rem;
+    background: #eef3ff;
+    color: #1f5fd6;
+    font-weight: 800;
+}
+
+.projects-notice--error {
+    background: rgba(217, 48, 37, 0.08);
+    color: #b3261e;
+}
+
+.projects-notice--success {
+    background: rgba(15, 157, 88, 0.1);
+    color: #0b8043;
+}
+
+.projects-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+}
+
+.project-card {
+    position: relative;
+    min-height: 14rem;
+    overflow: hidden;
+    border: 1px solid rgba(32, 33, 36, 0.1);
+    border-radius: 1.35rem;
+    background: #eef6f2;
+    box-shadow: 0 16px 34px rgba(24, 39, 75, 0.06);
+}
+
+.project-card:nth-child(3n) {
+    background: #eef7fb;
+}
+
+.project-card:nth-child(4n) {
+    background: #f8efed;
+}
+
+.project-card.is-active {
+    outline: 3px solid rgba(47, 124, 239, 0.32);
+    outline-offset: 3px;
+}
+
+.project-card--create {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 0.9rem;
+    background: #ffffff;
+    color: #202124;
+    font: inherit;
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+
+.project-create-mark {
+    display: grid;
+    place-items: center;
+    width: 4.4rem;
+    height: 4.4rem;
+    border-radius: 999px;
+    background: #eef3ff;
+    color: #2f7cef;
+}
+
+.project-card-body {
+    display: grid;
+    align-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    min-height: 14rem;
+    border: 0;
+    background: transparent;
+    padding: 1.25rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.project-logo,
+.project-logo-preview {
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 1rem;
+    background: #ffffff;
+    color: #2f7cef;
+    font-weight: 900;
+}
+
+.project-logo {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    padding: 0.75rem;
+    box-shadow: inset 0 0 0 1px rgba(32, 33, 36, 0.08);
+}
+
+.project-logo-preview {
+    width: 3.6rem;
+    height: 3.6rem;
+}
+
+.project-logo img,
+.project-logo-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.project-card-copy {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.project-card h3 {
+    color: #202124;
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    line-height: 1.08;
+    letter-spacing: -0.055em;
+}
+
+.project-card p,
+.project-card-meta {
+    color: #5f6368;
+    line-height: 1.55;
+}
+
+.project-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.project-card-menu {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    display: grid;
+    place-items: center;
+    width: 2.3rem;
+    height: 2.3rem;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.65);
+    color: #5f6368;
+    cursor: pointer;
+}
+
+.projects-loading {
+    display: grid;
+    place-items: center;
+    gap: 0.7rem;
+    min-height: 12rem;
+    color: #5f6368;
+}
+
+.projects-spin {
+    animation: projects-spin 900ms linear infinite;
+}
+
+.project-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+}
+
+.project-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.42);
+    backdrop-filter: blur(10px);
+}
+
+.project-modal-card {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 1rem;
+    width: min(720px, 100%);
+    max-height: min(86vh, 880px);
+    overflow: auto;
+    border-radius: 1.5rem;
+    background: #ffffff;
+    padding: 1.2rem;
+    box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+}
+
+.project-modal-head,
+.project-modal-footer,
+.project-logo-uploader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.project-form-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.project-textarea {
+    min-height: 7rem;
+    resize: vertical;
+}
+
+.project-logo-uploader {
+    justify-content: flex-start;
+}
+
+.project-logo-preview {
+    flex: 0 0 auto;
+    width: 5.5rem;
+    height: 5.5rem;
+}
+
+.project-logo-uploader input {
+    width: 100%;
+}
+
+.project-logo-uploader p,
+.project-helper {
+    margin: 0.35rem 0 0;
+    color: #5f6368;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+@keyframes projects-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 760px) {
+    .projects-module-head,
+    .projects-actions,
+    .project-modal-head,
+    .project-modal-footer,
+    .project-logo-uploader {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .project-form-grid {
+        grid-template-columns: 1fr;
+    }
+}

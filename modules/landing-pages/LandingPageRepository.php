@@ -1,11 +1,11 @@
 <?php
 declare(strict_types=1);
 
-namespace AiScaler\Forms;
+namespace AiScaler\LandingPages;
 
 use RuntimeException;
 
-final class FormRepository
+final class LandingPageRepository
 {
     public function ensureDefaultBusiness(string $accessToken, string $userId, string $email = ''): array
     {
@@ -35,7 +35,7 @@ final class FormRepository
         $data = $response['data'] ?? null;
 
         if (!is_array($data) || $data === []) {
-            throw new RuntimeException('No fue posible preparar la cuenta de empresa para tus formularios.');
+            throw new RuntimeException('No fue posible preparar la cuenta de empresa para tus landing pages.');
         }
 
         return is_array($data[0] ?? null) ? $data[0] : $data;
@@ -77,9 +77,9 @@ final class FormRepository
         return is_array($data[0] ?? null) ? $data[0] : null;
     }
 
-    public function listForms(string $accessToken, string $businessId, string $projectId = ''): array
+    public function listPages(string $accessToken, string $businessId, string $projectId = ''): array
     {
-        $query = 'forms?select=*&business_id=eq.' . rawurlencode($businessId) . '&deleted_at=is.null';
+        $query = 'landing_pages?select=*&business_id=eq.' . rawurlencode($businessId) . '&deleted_at=is.null';
 
         if (trim($projectId) !== '') {
             $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
@@ -97,9 +97,9 @@ final class FormRepository
         return is_array($response['data'] ?? null) ? $response['data'] : [];
     }
 
-    public function findForm(string $accessToken, string $formId, string $projectId = ''): ?array
+    public function findPage(string $accessToken, string $pageId, string $projectId = ''): ?array
     {
-        $query = 'forms?select=*&id=eq.' . rawurlencode($formId) . '&deleted_at=is.null';
+        $query = 'landing_pages?select=*&id=eq.' . rawurlencode($pageId) . '&deleted_at=is.null';
 
         if (trim($projectId) !== '') {
             $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
@@ -123,7 +123,7 @@ final class FormRepository
         return is_array($data[0] ?? null) ? $data[0] : null;
     }
 
-    public function saveForm(string $accessToken, array $payload): array
+    public function savePage(string $accessToken, array $payload): array
     {
         $headers = ['Prefer: return=representation'];
 
@@ -133,7 +133,7 @@ final class FormRepository
 
             $response = \supabaseRestRequest(
                 'PATCH',
-                'forms?id=eq.' . rawurlencode($id),
+                'landing_pages?id=eq.' . rawurlencode($id),
                 $payload,
                 $accessToken,
                 $headers
@@ -141,7 +141,7 @@ final class FormRepository
         } else {
             $response = \supabaseRestRequest(
                 'POST',
-                'forms',
+                'landing_pages',
                 $payload,
                 $accessToken,
                 $headers
@@ -151,15 +151,15 @@ final class FormRepository
         $data = $response['data'] ?? null;
 
         if (!is_array($data) || $data === []) {
-            throw new RuntimeException('No fue posible guardar el formulario.');
+            throw new RuntimeException('No fue posible guardar la landing page.');
         }
 
         return is_array($data[0] ?? null) ? $data[0] : $data;
     }
 
-    public function softDeleteForm(string $accessToken, string $formId, string $projectId = ''): void
+    public function softDeletePage(string $accessToken, string $pageId, string $projectId = ''): void
     {
-        $query = 'forms?id=eq.' . rawurlencode($formId);
+        $query = 'landing_pages?id=eq.' . rawurlencode($pageId);
 
         if (trim($projectId) !== '') {
             $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
@@ -174,11 +174,11 @@ final class FormRepository
         );
     }
 
-    public function getPublicForm(string $identifier): ?array
+    public function getPublicPage(string $identifier): ?array
     {
         $response = \supabaseRestRequest(
             'POST',
-            'rpc/get_public_form_definition',
+            'rpc/get_public_landing_page_definition',
             ['p_identifier' => $identifier]
         );
 
@@ -189,26 +189,5 @@ final class FormRepository
         }
 
         return is_array($data[0] ?? null) ? $data[0] : null;
-    }
-
-    public function submitPublicResponse(string $publicId, array $answers, array $metadata): array
-    {
-        $response = \supabaseRestRequest(
-            'POST',
-            'rpc/submit_public_form_response',
-            [
-                'p_public_id' => $publicId,
-                'p_answers' => $answers,
-                'p_metadata' => $metadata,
-            ]
-        );
-
-        $data = $response['data'] ?? null;
-
-        if (!is_array($data) || $data === []) {
-            throw new RuntimeException('No fue posible guardar la respuesta.');
-        }
-
-        return is_array($data[0] ?? null) ? $data[0] : $data;
     }
 }

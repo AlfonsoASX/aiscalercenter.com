@@ -1,0 +1,761 @@
+import {
+    STORAGE_SCOPES,
+    USER_FILES_STORAGE_BUCKET,
+    buildUserStoragePath,
+} from '../../shared/storage.js';
+
+export const PROJECTS_SECTION_ID = 'proyectos';
+
+const PROJECT_LOGO_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/svg+xml,image/avif';
+
+export function createProjectsModule({
+    supabase,
+    getCurrentUser,
+    getActiveProject,
+    onOpenProject,
+    onProjectsLoaded,
+    showNotice,
+    humanizeError,
+}) {
+    const state = {
+        projects: [],
+        business: null,
+        loading: false,
+        saving: false,
+        modalOpen: false,
+        editingProjectId: '',
+        logoFile: null,
+        logoPreviewUrl: '',
+        memberDraft: '',
+        notice: null,
+    };
+
+    function renderSection() {
+        return `
+            <section id="projects-module" class="projects-module" aria-label="Proyectos">
+                <div class="projects-module-head">
+                    <div>
+                        <p class="projects-eyebrow">Proyectos</p>
+                        <h2>Elige el proyecto de trabajo</h2>
+                        <p>Primero selecciona el proyecto. Despues usa Investigar, Diseñar, Ejecutar o Analizar con ese contexto.</p>
+                    </div>
+
+                    <div class="projects-actions">
+                        <button type="button" class="projects-icon-button" data-projects-refresh aria-label="Actualizar proyectos">
+                            <span class="material-symbols-rounded">refresh</span>
+                        </button>
+                        <button type="button" class="projects-create-button" data-project-create>
+                            <span class="material-symbols-rounded">add</span>
+                            <span>Crear nuevo</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="projects-module-notice" class="projects-notice hidden"></div>
+                <div id="projects-module-shell" class="projects-module-shell">
+                    ${renderLoadingState()}
+                </div>
+                ${renderProjectModal()}
+            </section>
+        `;
+    }
+
+    function bind() {
+        const root = document.getElementById('projects-module');
+
+        if (!root || root.dataset.projectsBound === 'true') {
+            return;
+        }
+
+        root.dataset.projectsBound = 'true';
+        root.addEventListener('click', handleClick);
+        root.addEventListener('submit', handleSubmit);
+        root.addEventListener('change', handleChange);
+        void loadProjects();
+    }
+
+    async function loadProjects() {
+        const root = document.getElementById('projects-module');
+        const shell = document.getElementById('projects-module-shell');
+
+        if (!root || !shell) {
+            return;
+        }
+
+        state.loading = true;
+        state.notice = null;
+        renderShell();
+
+        try {
+            state.business = await ensureDefaultBusiness();
+
+            const { data, error } = await supabase
+                .from('projects')
+                .select('id, business_id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at, project_members(id, user_id, invited_email, role, status)')
+                .is('deleted_at', null)
+                .order('updated_at', { ascending: false });
+
+            if (error) {
+                throw error;
+            }
+
+            state.projects = (data ?? []).map(normalizeProject);
+            onProjectsLoaded?.(state.projects);
+        } catch (error) {
+            state.projects = [];
+            state.notice = {
+                type: 'error',
+                message: humanizeProjectError(error),
+            };
+        } finally {
+            state.loading = false;
+            renderShell();
+        }
+    }
+
+    async function ensureDefaultBusiness() {
+        const currentUser = getCurrentUser();
+
+        if (!currentUser?.id) {
+            throw new Error('No encontramos tu usuario activo para cargar proyectos.');
+        }
+
+        const { data, error } = await supabase
+            .from('businesses')
+            .select('id, name, owner_user_id')
+            .order('created_at', { ascending: true })
+            .limit(1);
+
+        if (error) {
+            throw error;
+        }
+
+        if (Array.isArray(data) && data.length > 0) {
+            return data[0];
+        }
+
+        const emailName = String(currentUser.email ?? '').replace(/@.+$/, '').trim();
+        const businessName = emailName ? `Empresa de ${emailName}` : 'Mi empresa';
+        const { data: created, error: createError } = await supabase
+            .from('businesses')
+            .insert({
+                owner_user_id: currentUser.id,
+                name: businessName,
+            })
+            .select('id, name, owner_user_id')
+            .single();
+
+        if (createError) {
+            throw createError;
+        }
+
+        return created;
+    }
+
+    function renderShell() {
+        const shell = document.getElementById('projects-module-shell');
+        const notice = document.getElementById('projects-module-notice');
+
+        if (!shell) {
+            return;
+        }
+
+        if (notice) {
+            notice.className = `projects-notice ${state.notice ? `projects-notice--${state.notice.type}` : 'hidden'}`;
+            notice.textContent = state.notice?.message ?? '';
+        }
+
+        shell.innerHTML = state.loading ? renderLoadingState() : renderProjectsGrid();
+        renderModalIntoDom();
+    }
+
+    function renderProjectsGrid() {
+        const activeProject = getActiveProject?.();
+        const cards = state.projects.map((project) => renderProjectCard(project, activeProject?.id === project.id)).join('');
+
+        return `
+            <div class="projects-grid">
+                <button type="button" class="project-card project-card--create" data-project-create>
+                    <span class="project-create-mark">
+                        <span class="material-symbols-rounded">add</span>
+                    </span>
+                    <strong>Crear proyecto</strong>
+                </button>
+                ${cards}
+            </div>
+        `;
+    }
+
+    function renderProjectCard(project, isActive) {
+        const logo = String(project.logo_url ?? '').trim();
+        const updatedAt = project.updated_at ? formatProjectDate(project.updated_at) : 'Sin fecha';
+        const memberCount = project.members.length;
+
+        return `
+            <article class="project-card ${isActive ? 'is-active' : ''}" data-project-card="${escapeHtml(project.id)}">
+                <button type="button" class="project-card-body" data-project-open="${escapeHtml(project.id)}">
+                    <div class="project-logo ${logo ? '' : 'is-empty'}">
+                        ${logo
+                            ? `<img src="${escapeHtml(logo)}" alt="${escapeHtml(project.name)}">`
+                            : `<span>${escapeHtml(project.name.slice(0, 1).toUpperCase() || 'P')}</span>`}
+                    </div>
+                    <div class="project-card-copy">
+                        <h3>${escapeHtml(project.name)}</h3>
+                        <p>${escapeHtml(project.description || 'Proyecto listo para organizar herramientas y resultados.')}</p>
+                    </div>
+                    <div class="project-card-meta">
+                        <span>${escapeHtml(updatedAt)}</span>
+                        <span>${memberCount} ${memberCount === 1 ? 'usuario' : 'usuarios'}</span>
+                    </div>
+                </button>
+
+                <button type="button" class="project-card-menu" data-project-edit="${escapeHtml(project.id)}" aria-label="Editar proyecto">
+                    <span class="material-symbols-rounded">more_vert</span>
+                </button>
+            </article>
+        `;
+    }
+
+    function renderLoadingState() {
+        return `
+            <div class="projects-loading">
+                <span class="material-symbols-rounded projects-spin">progress_activity</span>
+                <strong>Cargando proyectos...</strong>
+            </div>
+        `;
+    }
+
+    function renderProjectModal() {
+        const project = getEditingProject();
+        const isEditing = Boolean(project?.id);
+        const logoPreview = state.logoPreviewUrl || project?.logo_url || '';
+        const membersText = state.memberDraft || getMembersText(project);
+
+        return `
+            <div id="project-modal" class="project-modal ${state.modalOpen ? '' : 'hidden'}" role="dialog" aria-modal="true" aria-label="${isEditing ? 'Editar proyecto' : 'Crear proyecto'}">
+                <div class="project-modal-backdrop" data-project-modal-close></div>
+                <form id="project-form" class="project-modal-card">
+                    <div class="project-modal-head">
+                        <div>
+                            <p class="projects-eyebrow">${isEditing ? 'Editar' : 'Nuevo'}</p>
+                            <h3>${isEditing ? 'Editar proyecto' : 'Crear proyecto'}</h3>
+                        </div>
+                        <button type="button" class="projects-icon-button" data-project-modal-close aria-label="Cerrar">
+                            <span class="material-symbols-rounded">close</span>
+                        </button>
+                    </div>
+
+                    <input type="hidden" name="project_id" value="${escapeHtml(project?.id ?? '')}">
+
+                    <label class="workspace-field-block">
+                        <span class="workspace-field-label">Nombre</span>
+                        <input name="name" type="text" class="workspace-field" value="${escapeHtml(project?.name ?? '')}" required placeholder="Nombre del proyecto">
+                    </label>
+
+                    <label class="workspace-field-block">
+                        <span class="workspace-field-label">Logo</span>
+                        <div class="project-logo-uploader">
+                            <div class="project-logo-preview ${logoPreview ? '' : 'is-empty'}">
+                                ${logoPreview
+                                    ? `<img src="${escapeHtml(logoPreview)}" alt="">`
+                                    : '<span class="material-symbols-rounded">image</span>'}
+                            </div>
+                            <div>
+                                <input id="project-logo-input" name="logo" type="file" accept="${PROJECT_LOGO_ACCEPT}">
+                                <p>Se guarda en el storage central <code>user-files</code>.</p>
+                            </div>
+                        </div>
+                    </label>
+
+                    <label class="workspace-field-block">
+                        <span class="workspace-field-label">Descripcion</span>
+                        <textarea name="description" class="workspace-field project-textarea" rows="3" placeholder="Que representa este proyecto">${escapeHtml(project?.description ?? '')}</textarea>
+                    </label>
+
+                    <div class="project-form-grid">
+                        <label class="workspace-field-block">
+                            <span class="workspace-field-label">Tipo de empresa</span>
+                            <input name="company_type" type="text" class="workspace-field" value="${escapeHtml(project?.company_type ?? '')}" placeholder="Ej. Restaurante, SaaS, consultoria">
+                        </label>
+                        <label class="workspace-field-block">
+                            <span class="workspace-field-label">Objetivo de la empresa</span>
+                            <input name="company_goal" type="text" class="workspace-field" value="${escapeHtml(project?.company_goal ?? '')}" placeholder="Ej. vender mas, validar mercado">
+                        </label>
+                    </div>
+
+                    <label class="workspace-field-block">
+                        <span class="workspace-field-label">Usuarios con acceso</span>
+                        <textarea name="members" class="workspace-field project-textarea" rows="4" placeholder="correo@empresa.com&#10;otro@empresa.com">${escapeHtml(membersText)}</textarea>
+                        <small class="project-helper">Agrega un correo por linea. Esas personas veran el proyecto cuando entren con ese email.</small>
+                    </label>
+
+                    <div class="project-modal-footer">
+                        ${isEditing ? `
+                            <button type="button" class="projects-danger-button" data-project-delete="${escapeHtml(project.id)}">
+                                <span class="material-symbols-rounded">delete</span>
+                                <span>Eliminar</span>
+                            </button>
+                        ` : '<span></span>'}
+                        <button type="submit" class="projects-create-button" ${state.saving ? 'disabled' : ''}>
+                            <span class="material-symbols-rounded">save</span>
+                            <span>${state.saving ? 'Guardando...' : 'Guardar proyecto'}</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+    }
+
+    function renderModalIntoDom() {
+        const modal = document.getElementById('project-modal');
+
+        if (!modal) {
+            return;
+        }
+
+        modal.outerHTML = renderProjectModal();
+    }
+
+    function handleClick(event) {
+        const target = event.target;
+
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+
+        if (target.closest('[data-project-create]')) {
+            event.preventDefault();
+            openModal();
+            return;
+        }
+
+        const editButton = target.closest('[data-project-edit]');
+
+        if (editButton instanceof HTMLElement) {
+            event.preventDefault();
+            openModal(String(editButton.dataset.projectEdit ?? ''));
+            return;
+        }
+
+        const openButton = target.closest('[data-project-open]');
+
+        if (openButton instanceof HTMLElement) {
+            event.preventDefault();
+            const project = state.projects.find((item) => item.id === String(openButton.dataset.projectOpen ?? ''));
+
+            if (project) {
+                onOpenProject?.(project);
+                renderShell();
+            }
+            return;
+        }
+
+        if (target.closest('[data-project-modal-close]')) {
+            event.preventDefault();
+            closeModal();
+            return;
+        }
+
+        const deleteButton = target.closest('[data-project-delete]');
+
+        if (deleteButton instanceof HTMLElement) {
+            event.preventDefault();
+            void deleteProject(String(deleteButton.dataset.projectDelete ?? ''));
+        }
+
+        if (target.closest('[data-projects-refresh]')) {
+            event.preventDefault();
+            void loadProjects();
+        }
+    }
+
+    function handleChange(event) {
+        const target = event.target;
+
+        if (!(target instanceof HTMLInputElement) || target.id !== 'project-logo-input') {
+            return;
+        }
+
+        const file = target.files?.[0] ?? null;
+
+        if (!(file instanceof File)) {
+            return;
+        }
+
+        if (!file.type.startsWith('image/')) {
+            showModuleNotice('error', 'El logo debe ser una imagen.');
+            target.value = '';
+            return;
+        }
+
+        releaseLogoPreview();
+        state.logoFile = file;
+        state.logoPreviewUrl = URL.createObjectURL(file);
+        updateLogoPreview(state.logoPreviewUrl);
+    }
+
+    async function handleSubmit(event) {
+        const form = event.target;
+
+        if (!(form instanceof HTMLFormElement) || form.id !== 'project-form') {
+            return;
+        }
+
+        event.preventDefault();
+        await saveProject(form);
+    }
+
+    function openModal(projectId = '') {
+        const project = state.projects.find((item) => item.id === projectId) ?? null;
+        state.modalOpen = true;
+        state.editingProjectId = project?.id ?? '';
+        state.memberDraft = getMembersText(project);
+        releaseLogoPreview();
+        renderShell();
+    }
+
+    function closeModal() {
+        state.modalOpen = false;
+        state.editingProjectId = '';
+        state.memberDraft = '';
+        state.logoFile = null;
+        releaseLogoPreview();
+        renderShell();
+    }
+
+    async function saveProject(form) {
+        const currentUser = getCurrentUser();
+
+        if (!currentUser?.id) {
+            showModuleNotice('error', 'No encontramos tu usuario activo.');
+            return;
+        }
+
+        const projectId = String(form.project_id.value ?? '').trim();
+        const currentProject = state.projects.find((item) => item.id === projectId) ?? null;
+        const name = String(form.name.value ?? '').trim();
+        const description = String(form.description.value ?? '').trim();
+        const companyType = String(form.company_type.value ?? '').trim();
+        const companyGoal = String(form.company_goal.value ?? '').trim();
+        const membersText = String(form.members.value ?? '');
+
+        if (!name) {
+            showModuleNotice('error', 'El proyecto necesita un nombre.');
+            return;
+        }
+
+        state.memberDraft = membersText;
+        state.saving = true;
+        renderModalIntoDom();
+
+        try {
+            const logo = state.logoFile instanceof File
+                ? await uploadProjectLogo(currentUser.id, state.logoFile)
+                : {
+                    url: currentProject?.logo_url ?? '',
+                    path: currentProject?.logo_storage_path ?? '',
+                };
+            const payload = {
+                business_id: String(state.business?.id ?? ''),
+                owner_user_id: currentProject?.owner_user_id || currentUser.id,
+                name,
+                logo_url: logo.url,
+                logo_storage_path: logo.path,
+                description,
+                company_type: companyType,
+                company_goal: companyGoal,
+                status: 'active',
+            };
+
+            if (!payload.business_id) {
+                state.business = await ensureDefaultBusiness();
+                payload.business_id = String(state.business?.id ?? '');
+            }
+
+            const savedProject = await upsertProject(projectId, payload);
+            await addProjectMembers(savedProject.id, membersText);
+
+            showModuleNotice('success', 'Proyecto guardado correctamente.');
+            closeModal();
+            await loadProjects();
+
+            if (!getActiveProject?.()) {
+                onProjectsLoaded?.(state.projects);
+            }
+        } catch (error) {
+            showModuleNotice('error', humanizeProjectError(error));
+        } finally {
+            state.saving = false;
+            renderModalIntoDom();
+        }
+    }
+
+    async function upsertProject(projectId, payload) {
+        if (projectId) {
+            const { data, error } = await supabase
+                .from('projects')
+                .update(payload)
+                .eq('id', projectId)
+                .select('id, business_id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at')
+                .single();
+
+            if (error) {
+                throw error;
+            }
+
+            return data;
+        }
+
+        const { data, error } = await supabase
+            .from('projects')
+            .insert(payload)
+            .select('id, business_id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at')
+            .single();
+
+        if (error) {
+            throw error;
+        }
+
+        return data;
+    }
+
+    async function addProjectMembers(projectId, membersText) {
+        const currentUser = getCurrentUser();
+        const emails = parseMemberEmails(membersText)
+            .filter((email) => email !== String(currentUser?.email ?? '').toLowerCase());
+
+        if (emails.length === 0) {
+            return;
+        }
+
+        const existing = getEditingProject()?.members ?? [];
+        const existingEmails = new Set(existing.map((member) => String(member.invited_email ?? '').toLowerCase()).filter(Boolean));
+        const rows = emails
+            .filter((email) => !existingEmails.has(email))
+            .map((email) => {
+                return {
+                    project_id: projectId,
+                    invited_email: email,
+                    role: 'member',
+                    status: 'active',
+                    invited_by: currentUser?.id ?? null,
+                };
+            });
+
+        if (rows.length === 0) {
+            return;
+        }
+
+        const { error } = await supabase
+            .from('project_members')
+            .insert(rows);
+
+        if (error) {
+            throw error;
+        }
+    }
+
+    async function deleteProject(projectId) {
+        if (!projectId || !window.confirm('¿Eliminar este proyecto?')) {
+            return;
+        }
+
+        const { error } = await supabase
+            .from('projects')
+            .update({ deleted_at: new Date().toISOString() })
+            .eq('id', projectId);
+
+        if (error) {
+            showModuleNotice('error', humanizeProjectError(error));
+            return;
+        }
+
+        showModuleNotice('success', 'Proyecto eliminado.');
+        closeModal();
+        await loadProjects();
+    }
+
+    async function uploadProjectLogo(userId, file) {
+        if (!file.type.startsWith('image/')) {
+            throw new Error('El logo debe ser una imagen.');
+        }
+
+        const extension = getFileExtension(file.name, file.type);
+        const filePath = buildUserStoragePath(
+            userId,
+            STORAGE_SCOPES.projects,
+            'logos',
+            `${cryptoRandomId()}.${extension}`
+        );
+        const bucket = supabase.storage.from(USER_FILES_STORAGE_BUCKET);
+        const { error } = await bucket.upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: file.type || undefined,
+        });
+
+        if (error) {
+            throw error;
+        }
+
+        const { data } = bucket.getPublicUrl(filePath);
+
+        return {
+            path: filePath,
+            url: data.publicUrl,
+        };
+    }
+
+    function normalizeProject(project) {
+        return {
+            id: String(project?.id ?? ''),
+            business_id: String(project?.business_id ?? ''),
+            owner_user_id: String(project?.owner_user_id ?? ''),
+            name: String(project?.name ?? 'Proyecto sin nombre'),
+            logo_url: String(project?.logo_url ?? ''),
+            logo_storage_path: String(project?.logo_storage_path ?? ''),
+            description: String(project?.description ?? ''),
+            company_type: String(project?.company_type ?? ''),
+            company_goal: String(project?.company_goal ?? ''),
+            status: String(project?.status ?? 'active'),
+            updated_at: String(project?.updated_at ?? ''),
+            members: Array.isArray(project?.project_members)
+                ? project.project_members.map(normalizeProjectMember)
+                : [],
+        };
+    }
+
+    function normalizeProjectMember(member) {
+        return {
+            id: String(member?.id ?? ''),
+            user_id: String(member?.user_id ?? ''),
+            invited_email: String(member?.invited_email ?? '').toLowerCase(),
+            role: String(member?.role ?? 'member'),
+            status: String(member?.status ?? 'active'),
+        };
+    }
+
+    function getEditingProject() {
+        return state.projects.find((item) => item.id === state.editingProjectId) ?? null;
+    }
+
+    function getMembersText(project) {
+        return (project?.members ?? [])
+            .filter((member) => member.role !== 'owner')
+            .map((member) => member.invited_email)
+            .filter(Boolean)
+            .join('\n');
+    }
+
+    function parseMemberEmails(value) {
+        return [...new Set(
+            String(value ?? '')
+                .split(/\s|,|;/)
+                .map((email) => email.trim().toLowerCase())
+                .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        )];
+    }
+
+    function showModuleNotice(type, message) {
+        state.notice = { type, message };
+        renderShell();
+        showNotice?.(type, message);
+    }
+
+    function humanizeProjectError(error) {
+        const raw = error instanceof Error ? error.message : String(error ?? 'No fue posible cargar proyectos.');
+        const normalized = raw.toLowerCase();
+
+        if (normalized.includes('pgrst205') || normalized.includes('could not find the table') || normalized.includes('projects')) {
+            return 'Falta crear la estructura de proyectos. Ejecuta supabase/projects_schema.sql en Supabase.';
+        }
+
+        if (normalized.includes('bucket') || normalized.includes('storage')) {
+            return 'Falta configurar el almacenamiento central. Ejecuta supabase/user_files_storage_setup.sql en Supabase.';
+        }
+
+        if (normalized.includes('row-level security')) {
+            return 'Supabase bloqueo esta operacion por permisos. Revisa supabase/projects_schema.sql.';
+        }
+
+        return typeof humanizeError === 'function' ? humanizeError(raw) : raw;
+    }
+
+    function releaseLogoPreview() {
+        if (state.logoPreviewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(state.logoPreviewUrl);
+        }
+
+        state.logoPreviewUrl = '';
+    }
+
+    function updateLogoPreview(source) {
+        const preview = document.querySelector('#project-modal .project-logo-preview');
+        const normalizedSource = String(source ?? '').trim();
+
+        if (!(preview instanceof HTMLElement)) {
+            return;
+        }
+
+        preview.classList.toggle('is-empty', normalizedSource === '');
+        preview.innerHTML = normalizedSource
+            ? `<img src="${escapeHtml(normalizedSource)}" alt="">`
+            : '<span class="material-symbols-rounded">image</span>';
+    }
+
+    return {
+        renderSection,
+        bind,
+        loadProjects,
+    };
+}
+
+function getFileExtension(name, mimeType) {
+    const extensionFromName = String(name ?? '').split('.').pop()?.toLowerCase();
+
+    if (extensionFromName && /^[a-z0-9]{2,5}$/.test(extensionFromName)) {
+        return extensionFromName;
+    }
+
+    const fromType = {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/gif': 'gif',
+        'image/svg+xml': 'svg',
+        'image/avif': 'avif',
+    };
+
+    return fromType[mimeType] ?? 'png';
+}
+
+function cryptoRandomId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+
+    return `project_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function formatProjectDate(value) {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return 'Sin fecha';
+    }
+
+    return new Intl.DateTimeFormat('es-MX', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+    }).format(date);
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}

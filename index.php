@@ -50,6 +50,7 @@ $authClientConfig = [
     <link rel="stylesheet" href="css/modules/courses.css">
     <link rel="stylesheet" href="css/modules/execute.css">
     <link rel="stylesheet" href="css/modules/learn.css">
+    <link rel="stylesheet" href="css/modules/projects.css">
     <link rel="stylesheet" href="css/modules/research.css">
     <link rel="stylesheet" href="css/modules/tools-catalog.css">
 
@@ -962,6 +963,18 @@ $authClientConfig = [
             transition: background 220ms ease;
         }
 
+        .workspace-app.is-home-screen .workspace-sidebar {
+            display: none;
+        }
+
+        .workspace-app.is-home-screen .workspace-main {
+            width: 100%;
+        }
+
+        .workspace-app.is-home-screen .workspace-mobile-toggle {
+            display: none;
+        }
+
         .workspace-header {
             position: sticky;
             top: 0;
@@ -1220,6 +1233,16 @@ $authClientConfig = [
             display: grid;
             gap: 1rem;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .workspace-home-layout {
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .workspace-home-layout > .workspace-section-card,
+        .workspace-projects-card {
+            min-height: auto;
         }
 
         .workspace-dashboard-card {

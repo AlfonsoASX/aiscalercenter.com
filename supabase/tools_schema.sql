@@ -34,6 +34,7 @@ create table if not exists public.tools (
     slug text not null unique,
     title text not null,
     description text not null default '',
+    image_url text not null default '',
     tutorial_youtube_url text not null default '',
     sort_order integer not null default 0,
     is_active boolean not null default true,
@@ -46,6 +47,7 @@ alter table public.tools drop column if exists launch_mode;
 alter table public.tools drop column if exists panel_module_key;
 alter table public.tools drop column if exists app_folder;
 alter table public.tools drop column if exists entry_file;
+alter table public.tools add column if not exists image_url text not null default '';
 
 create index if not exists tools_category_order_idx on public.tools (category_key, sort_order, title);
 create index if not exists tools_slug_idx on public.tools (slug);
@@ -99,6 +101,7 @@ insert into public.tools (
     category_key,
     title,
     description,
+    image_url,
     tutorial_youtube_url,
     sort_order,
     is_active,
@@ -111,6 +114,7 @@ values
         'Google',
         'Consulta terminos relacionados y senales de busqueda desde Google.',
         '',
+        '',
         10,
         true,
         false
@@ -120,6 +124,7 @@ values
         'investigar',
         'YouTube',
         'Consulta senales y terminos relacionados desde YouTube.',
+        '',
         '',
         20,
         true,
@@ -131,6 +136,7 @@ values
         'Mercado Libre',
         'Consulta senales de demanda y terminos relacionados desde Mercado Libre.',
         '',
+        '',
         30,
         true,
         false
@@ -140,6 +146,7 @@ values
         'investigar',
         'Amazon',
         'Consulta senales y terminos relacionados desde Amazon.',
+        '',
         '',
         40,
         true,
@@ -151,7 +158,19 @@ values
         'Generador de formularios',
         'Crea formularios publicos, compartelos sin login y guarda sus respuestas como JSON.',
         '',
+        '',
         10,
+        true,
+        false
+    ),
+    (
+        'creador-landing-pages',
+        'disenar',
+        'Creador de landing pages',
+        'Construye landing pages visuales con bloques editables, vista en vivo y publicacion sin login.',
+        '',
+        '',
+        20,
         true,
         false
     ),
@@ -161,6 +180,7 @@ values
         'Planificar publicaciones',
         'Programa contenido por red social, valida campos mínimos y resguarda archivos en Supabase Storage.',
         '',
+        '',
         10,
         true,
         false
@@ -169,6 +189,7 @@ on conflict (slug) do update
 set category_key = excluded.category_key,
     title = excluded.title,
     description = excluded.description,
+    image_url = coalesce(nullif(excluded.image_url, ''), public.tools.image_url),
     tutorial_youtube_url = excluded.tutorial_youtube_url,
     sort_order = excluded.sort_order,
     is_active = excluded.is_active,

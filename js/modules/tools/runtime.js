@@ -2,6 +2,7 @@ export async function resolvePanelToolModule(moduleKey, {
     getAccessToken,
     supabase,
     getCurrentUser,
+    getActiveProject,
     showNotice,
     humanizeError,
 }) {
@@ -26,6 +27,7 @@ export async function resolvePanelToolModule(moduleKey, {
         return createExecuteModule({
             supabase,
             getCurrentUser,
+            getActiveProject,
             showNotice,
             humanizeError,
         });

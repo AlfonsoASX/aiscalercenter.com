@@ -8,14 +8,21 @@ import {
     getVisibleFields,
     validateTargetDraft,
 } from './platforms.js';
+import {
+    STORAGE_SCOPES,
+    buildUserStoragePath,
+    getStorageBucketForScopedPath,
+} from '../../shared/storage.js';
 
 export const EXECUTE_SECTION_ID = 'Ejecutar';
 
+const EXECUTE_LEGACY_STORAGE_BUCKET = 'scheduled-post-assets';
 const SEARCHABLE_POST_FIELDS = ['title', 'body', 'notes'];
 
 export function createExecuteModule({
     supabase,
     getCurrentUser,
+    getActiveProject,
     showNotice,
     humanizeError,
 }) {
@@ -60,6 +67,17 @@ export function createExecuteModule({
     }
 
     async function loadData() {
+        if (!getActiveProjectId()) {
+            state.loading = false;
+            state.posts = [];
+            state.moduleNotice = {
+                type: 'info',
+                message: 'Selecciona un proyecto para ver y programar sus ejecuciones.',
+            };
+            renderModule();
+            return;
+        }
+
         state.loading = true;
         renderModule();
 
@@ -90,12 +108,12 @@ export function createExecuteModule({
             if (isSchedulerSchemaMissing(postsResult.reason)) {
                 state.setupRequired = {
                     type: 'schema',
-                    message: 'Ejecuta supabase/scheduled_posts_schema.sql y supabase/scheduled_posts_storage_setup.sql en Supabase para habilitar Ejecutar.',
+                    message: 'Ejecuta supabase/scheduled_posts_schema.sql y supabase/user_files_storage_setup.sql en Supabase para habilitar Ejecutar.',
                 };
             } else if (isSchedulerStorageMissing(postsResult.reason)) {
                 state.setupRequired = {
                     type: 'storage',
-                    message: 'Ejecuta supabase/scheduled_posts_storage_setup.sql en Supabase para habilitar el bucket de archivos.',
+                    message: 'Ejecuta supabase/user_files_storage_setup.sql en Supabase para habilitar el almacenamiento central de archivos.',
                 };
             } else {
                 state.moduleNotice = {
@@ -135,6 +153,12 @@ export function createExecuteModule({
     }
 
     async function loadPosts() {
+        const projectId = getActiveProjectId();
+
+        if (!projectId) {
+            return [];
+        }
+
         const rangeStart = state.weekStart;
         const rangeEnd = addDays(rangeStart, 7);
 
@@ -142,6 +166,7 @@ export function createExecuteModule({
             .from('scheduled_posts')
             .select(`
                 id,
+                project_id,
                 owner_user_id,
                 title,
                 body,
@@ -164,6 +189,7 @@ export function createExecuteModule({
                     validation_snapshot
                 )
             `)
+            .eq('project_id', projectId)
             .gte('scheduled_at', rangeStart.toISOString())
             .lt('scheduled_at', rangeEnd.toISOString())
             .order('scheduled_at', { ascending: true });
@@ -581,9 +607,19 @@ export function createExecuteModule({
         }
 
         const currentUser = getCurrentUser();
+        const activeProjectId = getActiveProjectId();
 
         if (!currentUser?.id) {
             showNotice('error', 'No encontramos el usuario activo para programar contenido.');
+            return;
+        }
+
+        if (!activeProjectId) {
+            state.moduleNotice = {
+                type: 'error',
+                message: 'Selecciona un proyecto antes de programar contenido.',
+            };
+            renderModule();
             return;
         }
 
@@ -605,6 +641,7 @@ export function createExecuteModule({
         try {
             const uploadedAssets = await ensureUploadedAssets(currentUser.id, state.draft.assets);
             const postPayload = {
+                project_id: activeProjectId,
                 owner_user_id: currentUser.id,
                 title: String(state.draft.title ?? '').trim(),
                 body: String(state.draft.body ?? '').trim(),
@@ -706,7 +743,11 @@ export function createExecuteModule({
     }
 
     async function uploadAsset(userId, file) {
-        const filePath = `${userId}/${Date.now()}-${sanitizeFileName(file.name)}`;
+        const filePath = buildUserStoragePath(
+            userId,
+            STORAGE_SCOPES.execute,
+            `${Date.now()}-${sanitizeFileName(file.name)}`
+        );
         const { error } = await supabase.storage
             .from(EXECUTE_STORAGE_BUCKET)
             .upload(filePath, file, {
@@ -805,7 +846,7 @@ export function createExecuteModule({
         shell.innerHTML = `
             <div class="execute-header">
                 <div>
-                    <h2>Ejecutar</h2>
+                    <h2>${escapeHtml(getActiveProject?.()?.name ? `Ejecutar en ${getActiveProject().name}` : 'Ejecutar')}</h2>
                     <p class="workspace-section-subtitle">
                         Programa contenido con base en tus redes sociales conectadas y valida los campos minimos por plataforma antes de guardar.
                     </p>
@@ -1320,7 +1361,7 @@ export function createExecuteModule({
         }
 
         const { data, error } = await supabase.storage
-            .from(EXECUTE_STORAGE_BUCKET)
+            .from(getExecuteStorageBucketForPath(normalizedPath))
             .createSignedUrl(normalizedPath, ttlSeconds);
 
         if (error) {
@@ -1370,6 +1411,10 @@ export function createExecuteModule({
         return typeof humanizeError === 'function' ? humanizeError(message) : message;
     }
 
+    function getActiveProjectId() {
+        return String(getActiveProject?.()?.id ?? '').trim();
+    }
+
     return {
         sectionId: EXECUTE_SECTION_ID,
         renderSection,
@@ -1380,6 +1425,7 @@ export function createExecuteModule({
 function normalizePost(row) {
     return {
         id: String(row?.id ?? ''),
+        project_id: String(row?.project_id ?? ''),
         title: String(row?.title ?? ''),
         body: String(row?.body ?? ''),
         notes: String(row?.notes ?? ''),
@@ -1423,7 +1469,11 @@ function isSchedulerSchemaMissing(error) {
 
 function isSchedulerStorageMissing(error) {
     const message = String(error?.message ?? '').toLowerCase();
-    return message.includes('bucket') && message.includes(EXECUTE_STORAGE_BUCKET);
+    return message.includes('bucket') && (message.includes(EXECUTE_STORAGE_BUCKET) || message.includes(EXECUTE_LEGACY_STORAGE_BUCKET));
+}
+
+function getExecuteStorageBucketForPath(path) {
+    return getStorageBucketForScopedPath(path, STORAGE_SCOPES.execute, EXECUTE_LEGACY_STORAGE_BUCKET);
 }
 
 function sanitizeFileName(name) {

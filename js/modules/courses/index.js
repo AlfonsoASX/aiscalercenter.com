@@ -1,6 +1,15 @@
+import {
+    STORAGE_SCOPES,
+    USER_FILES_STORAGE_BUCKET,
+    buildUserStoragePath,
+    extractStoragePathFromUrl,
+    getStorageBucketForScopedPath,
+} from '../../shared/storage.js';
+
 export const COURSES_SECTION_ID = 'cursos';
 
-const COURSE_STORAGE_BUCKET = 'course-assets';
+const COURSE_STORAGE_BUCKET = USER_FILES_STORAGE_BUCKET;
+const COURSE_LEGACY_STORAGE_BUCKET = 'course-assets';
 const ASSET_TYPES = new Set(['video', 'pdf', 'audio']);
 const CONTENT_TYPE_META = {
     video: {
@@ -527,7 +536,7 @@ export function createCoursesModule({
         }
 
         const { data, error } = await supabase.storage
-            .from(COURSE_STORAGE_BUCKET)
+            .from(getCourseStorageBucketForPath(normalizedPath))
             .createSignedUrl(normalizedPath, 3600);
 
         if (error) {
@@ -1333,7 +1342,13 @@ export function createCoursesModule({
     async function uploadAsset(file, { slug, currentUserId, scope, type }) {
         const safeSlug = slugify(slug || 'curso');
         const extension = getFileExtension(file.name, file.type);
-        const filePath = `${currentUserId}/${safeSlug}/${scope}/${type}-${crypto.randomUUID()}.${extension}`;
+        const filePath = buildUserStoragePath(
+            currentUserId,
+            STORAGE_SCOPES.courses,
+            safeSlug,
+            scope,
+            `${type}-${crypto.randomUUID()}.${extension}`
+        );
         const bucket = supabase.storage.from(COURSE_STORAGE_BUCKET);
         const { error } = await bucket.upload(filePath, file, {
             cacheControl: '3600',
@@ -1376,10 +1391,14 @@ export function createCoursesModule({
             return;
         }
 
-        const { error } = await supabase.storage.from(COURSE_STORAGE_BUCKET).remove(paths);
+        const groupedPaths = groupStoragePaths(paths);
 
-        if (error) {
-            console.error(error);
+        for (const [bucket, bucketPaths] of groupedPaths.entries()) {
+            const { error } = await supabase.storage.from(bucket).remove(bucketPaths);
+
+            if (error) {
+                console.error(error);
+            }
         }
     }
 
@@ -1438,24 +1457,31 @@ export function createCoursesModule({
         }
 
         try {
-            const parsed = new URL(url, window.location.origin);
-            const prefixes = [
-                `/storage/v1/object/public/${COURSE_STORAGE_BUCKET}/`,
-                `/storage/v1/object/sign/${COURSE_STORAGE_BUCKET}/`,
-            ];
+            const extracted = extractStoragePathFromUrl(url, [COURSE_STORAGE_BUCKET, COURSE_LEGACY_STORAGE_BUCKET]);
 
-            for (const prefix of prefixes) {
-                const index = parsed.pathname.indexOf(prefix);
-
-                if (index !== -1) {
-                    return decodeURIComponent(parsed.pathname.slice(index + prefix.length));
-                }
-            }
+            return extracted?.path ?? null;
         } catch (error) {
             return null;
         }
 
         return null;
+    }
+
+    function getCourseStorageBucketForPath(path) {
+        return getStorageBucketForScopedPath(path, STORAGE_SCOPES.courses, COURSE_LEGACY_STORAGE_BUCKET);
+    }
+
+    function groupStoragePaths(paths) {
+        const grouped = new Map();
+
+        paths.forEach((path) => {
+            const bucket = getCourseStorageBucketForPath(path);
+            const current = grouped.get(bucket) ?? [];
+            current.push(path);
+            grouped.set(bucket, current);
+        });
+
+        return grouped;
     }
 
     function normalizeSections(sections) {
@@ -1616,7 +1642,7 @@ export function createCoursesModule({
 
         if (storagePath) {
             const { data, error } = await supabase.storage
-                .from(COURSE_STORAGE_BUCKET)
+                .from(getCourseStorageBucketForPath(storagePath))
                 .createSignedUrl(storagePath, 120);
 
             if (error) {

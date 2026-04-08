@@ -39,14 +39,6 @@ $regularMenu = [
         'tool_category_key' => 'analizar',
     ],
     [
-        'id' => 'Aprender',
-        'label' => 'Aprender',
-        'hover_label' => 'Aprender',
-        'icon_path' => 'img/ico/8.svg',
-        'color' => '#188038',
-        'section_title' => 'Aprender',
-    ],
-    [
         'id' => 'Conecta',
         'label' => 'Conecta',
         'hover_label' => 'Redes sociales',

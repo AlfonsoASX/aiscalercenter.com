@@ -133,6 +133,7 @@ try {
         $payload = readToolsJsonPayload();
         $slug = trim((string) ($payload['slug'] ?? ''));
         $sectionId = trim((string) ($payload['section_id'] ?? ''));
+        $projectId = trim((string) ($payload['project_id'] ?? ''));
 
         if ($slug === '') {
             throw new InvalidArgumentException('Selecciona una herramienta valida.');
@@ -162,6 +163,9 @@ try {
             'tool' => sanitizeToolForLaunch(mergeToolWithPrivateConfig($tool, $privateConfig), $returnUrl),
             'user_id' => (string) ($user['id'] ?? ''),
             'access_token' => $token,
+            'project' => [
+                'id' => $projectId,
+            ],
             'user' => [
                 'email' => (string) ($user['email'] ?? ''),
                 'display_name' => trim((string) ($user['user_metadata']['full_name'] ?? '')) ?: (string) ($user['email'] ?? 'Usuario'),

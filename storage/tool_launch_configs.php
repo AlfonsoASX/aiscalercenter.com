@@ -38,6 +38,12 @@ return [
         'app_folder' => 'apps/form-generator',
         'entry_file' => 'index.php',
     ],
+    'creador-landing-pages' => [
+        'launch_mode' => 'php_folder',
+        'panel_module_key' => '',
+        'app_folder' => 'apps/landing-builder',
+        'entry_file' => 'index.php',
+    ],
     'planificar-publicaciones' => [
         'launch_mode' => 'panel_module',
         'panel_module_key' => 'social_post_scheduler',

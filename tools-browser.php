@@ -15,6 +15,7 @@ $accessToken = trim((string) ($serverAuth['access_token'] ?? ''));
 $userId = trim((string) ($serverAuth['user_id'] ?? ''));
 $categoryKey = trim((string) ($_GET['category_key'] ?? ''));
 $sectionId = trim((string) ($_GET['section_id'] ?? ''));
+$projectId = trim((string) ($_GET['project_id'] ?? ''));
 $openSlug = trim((string) ($_GET['open'] ?? ''));
 $repository = new ToolRepository();
 $errorMessage = '';
@@ -69,6 +70,9 @@ if ($accessToken === '' || $userId === '') {
                 ),
                 'user_id' => $userId,
                 'access_token' => $accessToken,
+                'project' => [
+                    'id' => $projectId,
+                ],
                 'user' => [
                     'email' => (string) ($serverAuth['email'] ?? ''),
                     'display_name' => (string) ($serverAuth['email'] ?? 'Usuario'),
@@ -156,6 +160,8 @@ function renderToolsCatalogFragment(
             <?php else: ?>
                 <?php foreach ($tools as $tool): ?>
                     <article class="tools-catalog-card">
+                        <?= renderToolsCatalogMedia($tool); ?>
+
                         <div class="tools-catalog-card-copy">
                             <span class="tools-catalog-eyebrow">
                                 <?= htmlspecialchars((string) ($category['label'] ?? 'Herramientas'), ENT_QUOTES, 'UTF-8'); ?>
@@ -178,6 +184,7 @@ function renderToolsCatalogFragment(
                                 <form method="get" action="tools-browser.php">
                                     <input type="hidden" name="category_key" value="<?= htmlspecialchars($categoryKey, ENT_QUOTES, 'UTF-8'); ?>">
                                     <input type="hidden" name="section_id" value="<?= htmlspecialchars($sectionId, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="project_id" value="<?= htmlspecialchars($projectId, ENT_QUOTES, 'UTF-8'); ?>">
                                     <input type="hidden" name="open" value="<?= htmlspecialchars((string) ($tool['slug'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                                     <button type="submit" class="tools-catalog-primary-button">
                                         <span class="material-symbols-rounded">rocket_launch</span>
@@ -208,6 +215,26 @@ function renderToolsCatalogFragment(
     return (string) ob_get_clean();
 }
 
+function renderToolsCatalogMedia(array $tool): string
+{
+    $imageUrl = trim((string) ($tool['image_url'] ?? ''));
+    $title = trim((string) ($tool['title'] ?? 'Herramienta'));
+
+    if ($imageUrl === '') {
+        return '
+            <div class="tools-catalog-card-media tools-catalog-card-media--empty" aria-hidden="true">
+                <span class="material-symbols-rounded">auto_awesome</span>
+            </div>
+        ';
+    }
+
+    return sprintf(
+        '<div class="tools-catalog-card-media"><img src="%s" alt="%s" loading="lazy"></div>',
+        htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'),
+        htmlspecialchars($title, ENT_QUOTES, 'UTF-8')
+    );
+}
+
 function mergeCatalogToolsWithBuiltins(array $tools, string $categoryKey): array
 {
     $builtins = listBuiltinToolsByCategory($categoryKey);
@@ -229,7 +256,11 @@ function mergeCatalogToolsWithBuiltins(array $tools, string $categoryKey): array
     unset($indexed['validar-mercado']);
 
     foreach ($builtins as $builtin) {
-        $indexed[(string) ($builtin['slug'] ?? '')] = sanitizeToolForCatalog($builtin);
+        $slug = (string) ($builtin['slug'] ?? '');
+
+        if ($slug !== '' && !isset($indexed[$slug])) {
+            $indexed[$slug] = sanitizeToolForCatalog($builtin);
+        }
     }
 
     $merged = array_values($indexed);

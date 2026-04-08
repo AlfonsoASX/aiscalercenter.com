@@ -1,6 +1,15 @@
+import {
+    STORAGE_SCOPES,
+    USER_FILES_STORAGE_BUCKET,
+    buildUserStoragePath,
+    extractStoragePathFromUrl,
+    getStorageBucketForScopedPath,
+} from '../../shared/storage.js';
+
 export const BLOG_ENTRIES_SECTION_ID = 'entradas-del-blog';
 
-const BLOG_STORAGE_BUCKET = 'blog-images';
+const BLOG_STORAGE_BUCKET = USER_FILES_STORAGE_BUCKET;
+const BLOG_LEGACY_STORAGE_BUCKET = 'blog-images';
 
 export function createBlogEntriesModule({
     supabase,
@@ -1267,7 +1276,13 @@ export function createBlogEntriesModule({
     async function uploadImageFile(file, { slug, currentUserId, folder }) {
         const safeSlug = slugify(slug || 'articulo');
         const extension = getFileExtension(file.name, file.type);
-        const filePath = `${currentUserId}/${safeSlug}/${folder}/${crypto.randomUUID()}.${extension}`;
+        const filePath = buildUserStoragePath(
+            currentUserId,
+            STORAGE_SCOPES.blog,
+            safeSlug,
+            folder,
+            `${crypto.randomUUID()}.${extension}`
+        );
         const bucket = supabase.storage.from(BLOG_STORAGE_BUCKET);
         const { error } = await bucket.upload(filePath, file, {
             cacheControl: '3600',
@@ -1288,10 +1303,14 @@ export function createBlogEntriesModule({
             return;
         }
 
-        const { error } = await supabase.storage.from(BLOG_STORAGE_BUCKET).remove(paths);
+        const groupedPaths = groupStoragePaths(paths);
 
-        if (error) {
-            console.error(error);
+        for (const [bucket, bucketPaths] of groupedPaths.entries()) {
+            const { error } = await supabase.storage.from(bucket).remove(bucketPaths);
+
+            if (error) {
+                console.error(error);
+            }
         }
     }
 
@@ -1323,18 +1342,25 @@ export function createBlogEntriesModule({
         }
 
         try {
-            const parsed = new URL(url, window.location.origin);
-            const prefix = `/storage/v1/object/public/${BLOG_STORAGE_BUCKET}/`;
-            const index = parsed.pathname.indexOf(prefix);
+            const extracted = extractStoragePathFromUrl(url, [BLOG_STORAGE_BUCKET, BLOG_LEGACY_STORAGE_BUCKET]);
 
-            if (index === -1) {
-                return null;
-            }
-
-            return decodeURIComponent(parsed.pathname.slice(index + prefix.length));
+            return extracted?.path ?? null;
         } catch (error) {
             return null;
         }
+    }
+
+    function groupStoragePaths(paths) {
+        const grouped = new Map();
+
+        paths.forEach((path) => {
+            const bucket = getStorageBucketForScopedPath(path, STORAGE_SCOPES.blog, BLOG_LEGACY_STORAGE_BUCKET);
+            const current = grouped.get(bucket) ?? [];
+            current.push(path);
+            grouped.set(bucket, current);
+        });
+
+        return grouped;
     }
 
     function dataUrlToFile(dataUrl, fallbackName) {

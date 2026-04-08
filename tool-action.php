@@ -59,6 +59,10 @@ $toolRuntimeContext = [
     'tutorial_youtube_url' => (string) ($tool['tutorial_youtube_url'] ?? ''),
     'return_url' => (string) ($tool['return_url'] ?? buildToolsPanelUrl()),
     'embed_mode' => false,
+    'access_token' => (string) ($launchPayload['access_token'] ?? ''),
+    'user_id' => (string) ($launchPayload['user_id'] ?? ''),
+    'user_email' => (string) (($launchPayload['user']['email'] ?? null) ?: ''),
+    'project' => is_array($launchPayload['project'] ?? null) ? $launchPayload['project'] : [],
 ];
 
 require $apiPath;

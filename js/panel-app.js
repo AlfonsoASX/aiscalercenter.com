@@ -3,6 +3,7 @@ import { ADMIN_TOOLS_SECTION_ID, createAdminToolsModule } from './modules/admin-
 import { CONNECT_SECTION_ID, createConnectModule } from './modules/connect/index.js';
 import { COURSES_SECTION_ID, createCoursesModule } from './modules/courses/index.js';
 import { LEARN_SECTION_ID, createLearnModule } from './modules/learn/index.js';
+import { createProjectsModule } from './modules/projects/index.js';
 import { createToolsCatalogModule } from './modules/tools-catalog/index.js';
 import {
     authConfig,
@@ -34,6 +35,7 @@ const state = {
     activeMenuItem: null,
     userContext: null,
     currentUser: null,
+    activeProject: null,
     sidebarCollapsed: false,
     sidebarOpen: false,
     userMenuOpen: false,
@@ -64,10 +66,28 @@ const learnModule = createLearnModule({
     humanizeError: (message) => humanizeCourseError(message),
 });
 
+const projectsModule = createProjectsModule({
+    supabase,
+    getCurrentUser: () => state.currentUser,
+    getActiveProject: () => state.activeProject,
+    onOpenProject: (project) => {
+        setActiveProject(project);
+        const firstToolItem = getMenuItems(state.role).find((item) => item.tool_category_key);
+
+        if (firstToolItem) {
+            selectMenu(firstToolItem.id);
+        }
+    },
+    onProjectsLoaded: (projects) => restoreActiveProject(projects),
+    showNotice: (type, message) => notify(type, message),
+    humanizeError: (message) => humanizePanelError(message),
+});
+
 const toolsCatalogModule = createToolsCatalogModule({
     getAccessToken,
     supabase,
     getCurrentUser: () => state.currentUser,
+    getActiveProject: () => state.activeProject,
     humanizeError: (message) => humanizeToolsError(message),
 });
 
@@ -389,6 +409,36 @@ function renderAppSession(session) {
     renderMenuForRole(role);
 }
 
+function setActiveProject(project) {
+    if (!project?.id) {
+        state.activeProject = null;
+        window.localStorage.removeItem('aiscaler_active_project_id');
+        toolsCatalogModule.setProject(null);
+        return;
+    }
+
+    state.activeProject = {
+        id: String(project.id),
+        name: String(project.name ?? 'Proyecto'),
+        business_id: String(project.business_id ?? ''),
+        owner_user_id: String(project.owner_user_id ?? ''),
+    };
+    window.localStorage.setItem('aiscaler_active_project_id', state.activeProject.id);
+    toolsCatalogModule.setProject(state.activeProject);
+}
+
+function restoreActiveProject(projects) {
+    const storedProjectId = window.localStorage.getItem('aiscaler_active_project_id') ?? '';
+    const restoredProject = projects.find((project) => project.id === storedProjectId) ?? null;
+
+    if (!restoredProject) {
+        setActiveProject(null);
+        return;
+    }
+
+    setActiveProject(restoredProject);
+}
+
 function resolveUserRole(user) {
     const email = normalizeEmail(user.email);
     const bootstrapAdmins = (panelConfig.bootstrap_admins ?? []).map(normalizeEmail);
@@ -449,6 +499,16 @@ function selectMenu(menuId) {
         return;
     }
 
+    if (selectedItem.tool_category_key && !state.activeProject) {
+        notify('info', 'Selecciona o crea un proyecto antes de abrir herramientas.');
+
+        if (menuId !== getDashboardItem().id) {
+            selectMenu(getDashboardItem().id);
+        }
+
+        return;
+    }
+
     if (state.activeMenuId === menuId && selectedItem.tool_category_key) {
         toolsCatalogModule.resetView(menuId);
     }
@@ -458,6 +518,7 @@ function selectMenu(menuId) {
     ensureSectionRendered(selectedItem);
     ensureSectionBound(selectedItem);
     applyWorkspaceAccent(selectedItem);
+    applyWorkspaceChromeState(selectedItem);
 
     document.querySelectorAll('[data-menu-id]').forEach((button) => {
         const isActive = button.dataset.menuId === menuId;
@@ -472,7 +533,9 @@ function selectMenu(menuId) {
     const currentTitle = document.getElementById('app-current-title');
 
     if (currentTitle) {
-        currentTitle.textContent = selectedItem.label;
+        currentTitle.textContent = selectedItem.tool_category_key && state.activeProject
+            ? `${state.activeProject.name} / ${selectedItem.label}`
+            : selectedItem.label;
     }
 
     if (selectedItem.tool_category_key) {
@@ -521,6 +584,9 @@ function ensureSectionBound(item) {
         connectModule.bind();
     } else if (item.id === ADMIN_TOOLS_SECTION_ID) {
         adminToolsModule.bind();
+    } else if (item.id === getDashboardItem().id) {
+        projectsModule.bind();
+        learnModule.bind();
     } else if (item.tool_category_key) {
         toolsCatalogModule.bind();
     } else if (item.id === getAccountSectionItem().id) {
@@ -630,27 +696,17 @@ function renderSectionContent(item) {
 }
 
 function renderDashboardSection(item) {
-    const cards = getMenuItems(state.role).map((menuItem) => {
-        return `
-            <button type="button" class="workspace-dashboard-card" data-menu-id="${menuItem.id}">
-                <img src="${menuItem.icon_path}" alt="">
-                <span>
-                    <strong>${menuItem.label}</strong>
-                    <p>Ir a ${menuItem.label.toLowerCase()}.</p>
-                </span>
-            </button>
-        `;
-    }).join('');
-
     return `
-        <div class="workspace-section-card">
-            <h2>${item.section_title ?? item.label}</h2>
-            <p class="workspace-section-subtitle">
-                Esta es tu seccion principal. Desde aqui puedes saltar rapidamente a cualquiera de las secciones disponibles segun tu rol.
-            </p>
-            <div class="workspace-dashboard-grid">
-                ${cards}
+        <div class="workspace-home-layout">
+            <div class="workspace-section-card workspace-projects-card">
+                ${projectsModule.renderSection(item)}
             </div>
+
+            ${learnModule.renderSection({
+                id: LEARN_SECTION_ID,
+                label: 'Cursos',
+                section_title: 'Cursos',
+            })}
         </div>
     `;
 }
@@ -825,18 +881,36 @@ function applySidebarState() {
     const sidebar = document.getElementById('app-sidebar');
     const backdrop = document.getElementById('app-sidebar-backdrop');
     const isDesktop = window.innerWidth >= 1024;
+    const isHomeScreen = Boolean(layout?.classList.contains('is-home-screen'));
 
     if (layout) {
-        layout.classList.toggle('is-sidebar-collapsed', isDesktop && state.sidebarCollapsed);
+        layout.classList.toggle('is-sidebar-collapsed', !isHomeScreen && isDesktop && state.sidebarCollapsed);
     }
 
     if (sidebar) {
-        sidebar.classList.toggle('is-open', !isDesktop && state.sidebarOpen);
+        sidebar.classList.toggle('is-open', !isHomeScreen && !isDesktop && state.sidebarOpen);
     }
 
     if (backdrop) {
-        backdrop.classList.toggle('hidden', isDesktop || !state.sidebarOpen);
+        backdrop.classList.toggle('hidden', isHomeScreen || isDesktop || !state.sidebarOpen);
     }
+}
+
+function applyWorkspaceChromeState(item) {
+    const layout = document.getElementById('app-layout');
+    const isHomeScreen = item?.id === getDashboardItem().id;
+
+    if (!layout) {
+        return;
+    }
+
+    layout.classList.toggle('is-home-screen', isHomeScreen);
+
+    if (isHomeScreen) {
+        state.sidebarOpen = false;
+    }
+
+    applySidebarState();
 }
 
 function applyUserMenuState() {
@@ -867,12 +941,12 @@ function humanizeBlogError(message) {
         return 'La tabla blog_entries aun no existe en Supabase. Ejecuta el archivo supabase/blog_entries_schema.sql.';
     }
 
-    if (normalized.includes('bucket not found') || normalized.includes('blog-images')) {
-        return 'Falta configurar el bucket blog-images en Supabase Storage. Ejecuta el archivo supabase/blog_storage_setup.sql.';
+    if (normalized.includes('bucket not found') || normalized.includes('user-files') || normalized.includes('blog-images')) {
+        return 'Falta configurar el almacenamiento central user-files en Supabase. Ejecuta el archivo supabase/user_files_storage_setup.sql.';
     }
 
     if (normalized.includes('row-level security') || normalized.includes('storage.objects')) {
-        return 'Supabase Storage aun no tiene las politicas correctas para el blog. Ejecuta el archivo supabase/blog_storage_setup.sql.';
+        return 'Supabase Storage aun no tiene las politicas correctas para archivos de usuario. Ejecuta el archivo supabase/user_files_storage_setup.sql.';
     }
 
     return humanizeAuthError(message);
@@ -889,12 +963,12 @@ function humanizeCourseError(message) {
         return 'La tabla courses aun no existe en Supabase. Ejecuta el archivo supabase/courses_schema.sql.';
     }
 
-    if (normalized.includes('bucket not found') || normalized.includes('course-assets')) {
-        return 'Falta configurar el bucket course-assets en Supabase Storage. Ejecuta el archivo supabase/course_storage_setup.sql.';
+    if (normalized.includes('bucket not found') || normalized.includes('user-files') || normalized.includes('course-assets')) {
+        return 'Falta configurar el almacenamiento central user-files en Supabase. Ejecuta el archivo supabase/user_files_storage_setup.sql.';
     }
 
     if (normalized.includes('row-level security') || normalized.includes('storage.objects')) {
-        return 'Supabase Storage aun no tiene las politicas correctas para cursos. Ejecuta el archivo supabase/course_storage_setup.sql.';
+        return 'Supabase Storage aun no tiene las politicas correctas para archivos de usuario. Ejecuta el archivo supabase/user_files_storage_setup.sql.';
     }
 
     return humanizeAuthError(message);
@@ -907,12 +981,12 @@ function humanizeExecuteError(message) {
         return 'Faltan las tablas de Ejecutar en Supabase. Ejecuta supabase/scheduled_posts_schema.sql.';
     }
 
-    if (normalized.includes('bucket not found') || normalized.includes('scheduled-post-assets')) {
-        return 'Falta configurar el bucket scheduled-post-assets en Supabase Storage. Ejecuta supabase/scheduled_posts_storage_setup.sql.';
+    if (normalized.includes('bucket not found') || normalized.includes('user-files') || normalized.includes('scheduled-post-assets')) {
+        return 'Falta configurar el almacenamiento central user-files en Supabase. Ejecuta supabase/user_files_storage_setup.sql.';
     }
 
     if (normalized.includes('row-level security') || normalized.includes('storage.objects')) {
-        return 'Supabase Storage aun no tiene las politicas correctas para Ejecutar. Ejecuta supabase/scheduled_posts_storage_setup.sql.';
+        return 'Supabase Storage aun no tiene las politicas correctas para archivos de usuario. Ejecuta supabase/user_files_storage_setup.sql.';
     }
 
     return humanizeAuthError(message);

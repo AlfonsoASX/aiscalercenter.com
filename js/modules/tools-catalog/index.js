@@ -4,6 +4,7 @@ export function createToolsCatalogModule({
     getAccessToken,
     supabase,
     getCurrentUser,
+    getActiveProject,
     humanizeError,
 }) {
     const state = {
@@ -47,6 +48,16 @@ export function createToolsCatalogModule({
             return;
         }
 
+        const activeProject = getActiveProject?.() ?? null;
+        const activeProjectId = String(activeProject?.id ?? '');
+
+        if (section.projectId !== activeProjectId) {
+            section.catalogHtml = '';
+            section.loaded = false;
+            section.activeTool = null;
+            section.projectId = activeProjectId;
+        }
+
         if (!force && section.catalogHtml && !section.notice) {
             section.activeTool = null;
             renderRoot(root);
@@ -60,7 +71,7 @@ export function createToolsCatalogModule({
         renderRoot(root);
 
         try {
-            const response = await fetch(buildBrowserUrl(section.categoryKey, section.sectionId), {
+            const response = await fetch(buildBrowserUrl(section.categoryKey, section.sectionId, activeProjectId), {
                 headers: {
                     Accept: 'text/html',
                     'X-Requested-With': 'XMLHttpRequest',
@@ -187,6 +198,7 @@ export function createToolsCatalogModule({
                 body: JSON.stringify({
                     slug,
                     section_id: sectionId,
+                    project_id: String(getActiveProject?.()?.id ?? ''),
                 }),
             });
 
@@ -220,6 +232,7 @@ export function createToolsCatalogModule({
                 getAccessToken,
                 supabase,
                 getCurrentUser,
+                getActiveProject,
                 showNotice: (type, message) => showToolNotice(root, type, message),
                 humanizeError,
             });
@@ -247,6 +260,7 @@ export function createToolsCatalogModule({
                 id: slug,
                 label: String(tool.title ?? 'Herramienta'),
                 section_title: String(tool.title ?? 'Herramienta'),
+                project: getActiveProject?.() ?? null,
             });
             moduleInstance.bind();
         } catch (error) {
@@ -279,6 +293,7 @@ export function createToolsCatalogModule({
 
         if (section.catalogHtml) {
             shell.innerHTML = `
+                ${renderProjectContext()}
                 ${section.notice ? renderNotice(section.notice) : ''}
                 ${section.catalogHtml}
             `;
@@ -372,6 +387,7 @@ export function createToolsCatalogModule({
                 notice: null,
                 catalogHtml: '',
                 activeTool: null,
+                projectId: String(getActiveProject?.()?.id ?? ''),
             });
         }
 
@@ -388,13 +404,45 @@ export function createToolsCatalogModule({
         bind,
         ensureLoaded,
         resetView,
+        setProject,
     };
+
+    function setProject(project) {
+        const projectId = String(project?.id ?? '');
+
+        state.sections.forEach((section) => {
+            if (section.projectId === projectId) {
+                return;
+            }
+
+            section.projectId = projectId;
+            section.catalogHtml = '';
+            section.loaded = false;
+            section.activeTool = null;
+        });
+    }
+
+    function renderProjectContext() {
+        const project = getActiveProject?.();
+
+        if (!project?.id) {
+            return '';
+        }
+
+        return `
+            <div class="tools-project-context">
+                <span class="material-symbols-rounded">workspaces</span>
+                <span>Proyecto activo: <strong>${escapeHtml(project.name ?? 'Proyecto')}</strong></span>
+            </div>
+        `;
+    }
 }
 
-function buildBrowserUrl(categoryKey, sectionId) {
+function buildBrowserUrl(categoryKey, sectionId, projectId = '') {
     const query = new URLSearchParams({
         category_key: String(categoryKey ?? ''),
         section_id: String(sectionId ?? ''),
+        project_id: String(projectId ?? ''),
         partial: '1',
     });
 

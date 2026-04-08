@@ -9,6 +9,9 @@ $toolContext = is_array($toolRuntimeContext ?? null) ? $toolRuntimeContext : [];
 $accessToken = trim((string) ($toolContext['access_token'] ?? ''));
 $userId = trim((string) ($toolContext['user_id'] ?? ''));
 $userEmail = trim((string) ($toolContext['user_email'] ?? ''));
+$projectContext = is_array($toolContext['project'] ?? null) ? $toolContext['project'] : [];
+$activeProjectId = trim((string) ($projectContext['id'] ?? ''));
+$activeProjectName = '';
 $repository = new FormRepository();
 $fieldTypes = formBuilderFieldTypes();
 $notice = null;
@@ -23,8 +26,23 @@ try {
         throw new RuntimeException('No encontramos la sesion segura para guardar formularios. Vuelve a abrir la herramienta desde el panel.');
     }
 
-    $business = $repository->ensureDefaultBusiness($accessToken, $userId, $userEmail);
-    $businessId = (string) ($business['id'] ?? '');
+    if ($activeProjectId !== '') {
+        $project = $repository->findProject($accessToken, $activeProjectId);
+
+        if (!is_array($project)) {
+            throw new RuntimeException('No encontramos el proyecto activo para guardar formularios.');
+        }
+
+        $businessId = (string) ($project['business_id'] ?? '');
+        $activeProjectName = (string) ($project['name'] ?? 'Proyecto');
+        $business = [
+            'id' => $businessId,
+            'name' => $activeProjectName,
+        ];
+    } else {
+        $business = $repository->ensureDefaultBusiness($accessToken, $userId, $userEmail);
+        $businessId = (string) ($business['id'] ?? '');
+    }
 
     if ($businessId === '') {
         throw new RuntimeException('No fue posible resolver la cuenta de empresa.');
@@ -40,7 +58,7 @@ try {
                 throw new InvalidArgumentException('No encontramos el formulario que intentas eliminar.');
             }
 
-            $repository->softDeleteForm($accessToken, $formId);
+            $repository->softDeleteForm($accessToken, $formId, $activeProjectId);
             $notice = ['type' => 'success', 'message' => 'Formulario eliminado correctamente.'];
             $mode = 'list';
         } else {
@@ -67,7 +85,7 @@ try {
                 $mode = 'edit';
             } else {
                 $status = $builderAction === 'publish' ? 'published' : (string) ($currentForm['status'] ?? 'draft');
-                $payload = formBuilderPayloadForSave($currentForm, $businessId, $userId, $status);
+                $payload = formBuilderPayloadForSave($currentForm, $businessId, $userId, $status, $activeProjectId);
                 $currentForm = $repository->saveForm($accessToken, $payload);
                 $notice = [
                     'type' => 'success',
@@ -88,7 +106,7 @@ try {
         if ($formId === '') {
             $currentForm = formBuilderEmptyForm();
         } else {
-            $loadedForm = $repository->findForm($accessToken, $formId);
+            $loadedForm = $repository->findForm($accessToken, $formId, $activeProjectId);
 
             if (!is_array($loadedForm)) {
                 throw new RuntimeException('No encontramos el formulario solicitado.');
@@ -98,7 +116,7 @@ try {
         }
     }
 
-    $forms = $repository->listForms($accessToken, $businessId);
+    $forms = $repository->listForms($accessToken, $businessId, $activeProjectId);
 } catch (Throwable $exception) {
     $error = normalizeFormBuilderException($exception);
     $mode = $mode === 'edit' || $mode === 'new' ? $mode : 'list';
@@ -135,7 +153,7 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentForm);
     <?php if (is_array($business) && !$isEditorMode): ?>
         <div class="form-builder-business-chip">
             <span class="material-symbols-rounded">domain</span>
-            <span>Cuenta de empresa: <strong><?= htmlspecialchars((string) ($business['name'] ?? 'Mi empresa'), ENT_QUOTES, 'UTF-8'); ?></strong></span>
+            <span><?= $activeProjectId !== '' ? 'Proyecto activo' : 'Cuenta de empresa'; ?>: <strong><?= htmlspecialchars((string) ($business['name'] ?? 'Mi empresa'), ENT_QUOTES, 'UTF-8'); ?></strong></span>
         </div>
     <?php endif; ?>
 
@@ -348,7 +366,7 @@ function formBuilderMoveField(array $fields, int $index, int $direction): array
     return array_values($fields);
 }
 
-function formBuilderPayloadForSave(array $form, string $businessId, string $userId, string $status): array
+function formBuilderPayloadForSave(array $form, string $businessId, string $userId, string $status, string $projectId = ''): array
 {
     $title = trim((string) ($form['title'] ?? ''));
 
@@ -378,6 +396,7 @@ function formBuilderPayloadForSave(array $form, string $businessId, string $user
 
     $payload = [
         'business_id' => $businessId,
+        'project_id' => trim($projectId) !== '' ? trim($projectId) : null,
         'owner_user_id' => $userId,
         'title' => $title,
         'description' => trim((string) ($form['description'] ?? '')),

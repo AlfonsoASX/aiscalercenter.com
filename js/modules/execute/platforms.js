@@ -1,4 +1,4 @@
-export const EXECUTE_STORAGE_BUCKET = 'scheduled-post-assets';
+export const EXECUTE_STORAGE_BUCKET = 'user-files';
 
 const COMMON_VISIBILITY_OPTIONS = [
     { value: 'public', label: 'Publico' },

@@ -65,6 +65,7 @@ if ($launchMode === 'php_folder') {
         'access_token' => (string) ($launchPayload['access_token'] ?? ''),
         'user_id' => (string) ($launchPayload['user_id'] ?? ''),
         'user_email' => (string) (($launchPayload['user']['email'] ?? null) ?: ''),
+        'project' => is_array($launchPayload['project'] ?? null) ? $launchPayload['project'] : [],
     ];
     $panelConfig = require __DIR__ . '/config/panel.php';
     $role = (string) ($launchUser['role'] ?? 'regular') === 'admin' ? 'admin' : 'regular';
@@ -96,6 +97,10 @@ if ($launchMode === 'php_folder') {
 
     $toolTitle = (string) ($tool['title'] ?? 'Herramienta');
     $toolDescription = (string) ($tool['description'] ?? '');
+    $toolSlug = (string) ($tool['slug'] ?? '');
+    $builderMode = trim((string) ($_GET['builder'] ?? ''));
+    $hideToolChrome = $toolSlug === 'creador-landing-pages' && in_array($builderMode, ['new', 'edit'], true);
+    $hideSidebar = (bool) ($tool['hide_sidebar'] ?? false);
     $appStyleHref = is_file($appDirectory . DIRECTORY_SEPARATOR . 'style.css')
         ? 'tool-asset.php?launch=' . rawurlencode($launchToken) . '&asset=style.css'
         : null;
@@ -103,6 +108,31 @@ if ($launchMode === 'php_folder') {
     ob_start();
     require $entryPath;
     $toolPageContent = (string) ob_get_clean();
+
+    if ($hideToolChrome) {
+        ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($toolTitle, ENT_QUOTES, 'UTF-8'); ?> - AiScaler Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
+    <link rel="stylesheet" href="css/tool-panel-shell.css">
+    <?php if ($appStyleHref !== null): ?>
+        <link rel="stylesheet" href="<?= htmlspecialchars($appStyleHref, ENT_QUOTES, 'UTF-8'); ?>">
+    <?php endif; ?>
+</head>
+<body data-view="tool" class="workspace-tool-body workspace-tool-body--chrome-hidden">
+    <main class="workspace-tool-fullscreen-content">
+        <?= $toolPageContent; ?>
+    </main>
+</body>
+</html>
+        <?php
+        exit;
+    }
     ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -118,48 +148,52 @@ if ($launchMode === 'php_folder') {
     <?php endif; ?>
 </head>
 <body data-view="tool" class="workspace-tool-body">
-    <div id="app-layout" class="workspace-app" style="--workspace-accent-rgb: <?= htmlspecialchars($workspaceAccentRgb, ENT_QUOTES, 'UTF-8'); ?>;">
-        <aside id="app-sidebar" class="workspace-sidebar" aria-label="Menú lateral">
-            <div class="workspace-sidebar-head">
-                <button id="sidebar-toggle" type="button" class="workspace-icon-button" aria-label="Comprimir menú lateral">
-                    <span class="material-symbols-rounded">menu</span>
-                </button>
+    <div id="app-layout" class="workspace-app<?= $hideSidebar ? ' workspace-app--no-sidebar' : ''; ?>" style="--workspace-accent-rgb: <?= htmlspecialchars($workspaceAccentRgb, ENT_QUOTES, 'UTF-8'); ?>;">
+        <?php if (!$hideSidebar): ?>
+            <aside id="app-sidebar" class="workspace-sidebar" aria-label="Menú lateral">
+                <div class="workspace-sidebar-head">
+                    <button id="sidebar-toggle" type="button" class="workspace-icon-button" aria-label="Comprimir menú lateral">
+                        <span class="material-symbols-rounded">menu</span>
+                    </button>
 
-                <a id="dashboard-link" href="<?= htmlspecialchars(buildToolsPanelUrl((string) ($dashboardItem['id'] ?? 'inicio')), ENT_QUOTES, 'UTF-8'); ?>" class="workspace-icon-button" aria-label="Ir a inicio" title="Inicio">
-                    <span class="material-symbols-rounded">home</span>
-                </a>
-            </div>
-
-            <nav id="app-rail-nav" class="workspace-nav" aria-label="Menú principal">
-                <?php foreach ($roleMenu as $menuItem): ?>
-                    <?php
-                    $menuItem = is_array($menuItem) ? $menuItem : [];
-                    $menuTargetId = (string) ($menuItem['id'] ?? '');
-                    $menuCategoryKey = (string) ($menuItem['tool_category_key'] ?? '');
-                    $isActive = $menuCategoryKey !== '' && $menuCategoryKey === $activeCategoryKey;
-                    $menuHref = 'index.php?view=app#' . rawurlencode($menuTargetId);
-                    ?>
-                    <a href="<?= htmlspecialchars($menuHref, ENT_QUOTES, 'UTF-8'); ?>" class="workspace-nav-button<?= $isActive ? ' is-active' : ''; ?>" aria-current="<?= $isActive ? 'page' : 'false'; ?>">
-                        <span class="workspace-nav-icon" aria-hidden="true">
-                            <img src="<?= htmlspecialchars((string) ($menuItem['icon_path'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" alt="">
-                        </span>
-                        <span class="workspace-nav-copy">
-                            <span class="workspace-nav-text workspace-nav-text--default"><?= htmlspecialchars((string) ($menuItem['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
-                            <span class="workspace-nav-text workspace-nav-text--hover"><?= htmlspecialchars((string) ($menuItem['hover_label'] ?? ($menuItem['label'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></span>
-                        </span>
+                    <a id="dashboard-link" href="<?= htmlspecialchars(buildToolsPanelUrl((string) ($dashboardItem['id'] ?? 'inicio')), ENT_QUOTES, 'UTF-8'); ?>" class="workspace-icon-button" aria-label="Ir a inicio" title="Inicio">
+                        <span class="material-symbols-rounded">home</span>
                     </a>
-                <?php endforeach; ?>
-            </nav>
-        </aside>
+                </div>
 
-        <a href="<?= htmlspecialchars((string) ($tool['return_url'] ?? buildToolsPanelUrl()), ENT_QUOTES, 'UTF-8'); ?>" id="app-sidebar-backdrop" class="workspace-backdrop hidden" aria-label="Cerrar menú"></a>
+                <nav id="app-rail-nav" class="workspace-nav" aria-label="Menú principal">
+                    <?php foreach ($roleMenu as $menuItem): ?>
+                        <?php
+                        $menuItem = is_array($menuItem) ? $menuItem : [];
+                        $menuTargetId = (string) ($menuItem['id'] ?? '');
+                        $menuCategoryKey = (string) ($menuItem['tool_category_key'] ?? '');
+                        $isActive = $menuCategoryKey !== '' && $menuCategoryKey === $activeCategoryKey;
+                        $menuHref = 'index.php?view=app#' . rawurlencode($menuTargetId);
+                        ?>
+                        <a href="<?= htmlspecialchars($menuHref, ENT_QUOTES, 'UTF-8'); ?>" class="workspace-nav-button<?= $isActive ? ' is-active' : ''; ?>" aria-current="<?= $isActive ? 'page' : 'false'; ?>">
+                            <span class="workspace-nav-icon" aria-hidden="true">
+                                <img src="<?= htmlspecialchars((string) ($menuItem['icon_path'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" alt="">
+                            </span>
+                            <span class="workspace-nav-copy">
+                                <span class="workspace-nav-text workspace-nav-text--default"><?= htmlspecialchars((string) ($menuItem['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></span>
+                                <span class="workspace-nav-text workspace-nav-text--hover"><?= htmlspecialchars((string) ($menuItem['hover_label'] ?? ($menuItem['label'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></span>
+                            </span>
+                        </a>
+                    <?php endforeach; ?>
+                </nav>
+            </aside>
+
+            <a href="<?= htmlspecialchars((string) ($tool['return_url'] ?? buildToolsPanelUrl()), ENT_QUOTES, 'UTF-8'); ?>" id="app-sidebar-backdrop" class="workspace-backdrop hidden" aria-label="Cerrar menú"></a>
+        <?php endif; ?>
 
         <div class="workspace-main">
             <header class="workspace-header">
                 <div class="workspace-header-left">
-                    <button id="mobile-menu-toggle" type="button" class="workspace-icon-button workspace-mobile-toggle" aria-label="Abrir menú lateral">
-                        <span class="material-symbols-rounded">menu</span>
-                    </button>
+                    <?php if (!$hideSidebar): ?>
+                        <button id="mobile-menu-toggle" type="button" class="workspace-icon-button workspace-mobile-toggle" aria-label="Abrir menú lateral">
+                            <span class="material-symbols-rounded">menu</span>
+                        </button>
+                    <?php endif; ?>
 
                     <a href="<?= htmlspecialchars(buildToolsPanelUrl((string) ($dashboardItem['id'] ?? 'inicio')), ENT_QUOTES, 'UTF-8'); ?>" class="workspace-logo-button" aria-label="Ir a inicio">
                         <img class="workspace-header-logo" src="img/logoAiScalerCenter.png" alt="AiScaler Center Logo">

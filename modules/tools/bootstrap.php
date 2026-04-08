@@ -304,6 +304,7 @@ function sanitizeToolForCatalog(array $tool): array
         'category_key' => (string) ($tool['category_key'] ?? ''),
         'title' => (string) ($tool['title'] ?? ''),
         'description' => (string) ($tool['description'] ?? ''),
+        'image_url' => (string) ($tool['image_url'] ?? ''),
         'tutorial_youtube_url' => (string) ($tool['tutorial_youtube_url'] ?? ''),
         'sort_order' => (int) ($tool['sort_order'] ?? 0),
     ];
@@ -318,6 +319,7 @@ function builtinToolDefinitions(): array
             'category_key' => 'investigar',
             'title' => 'Google',
             'description' => 'Consulta terminos relacionados y senales de busqueda desde Google.',
+            'image_url' => '',
             'tutorial_youtube_url' => '',
             'sort_order' => 10,
             'is_active' => true,
@@ -329,6 +331,7 @@ function builtinToolDefinitions(): array
             'category_key' => 'investigar',
             'title' => 'YouTube',
             'description' => 'Consulta senales y terminos relacionados desde YouTube.',
+            'image_url' => '',
             'tutorial_youtube_url' => '',
             'sort_order' => 20,
             'is_active' => true,
@@ -340,6 +343,7 @@ function builtinToolDefinitions(): array
             'category_key' => 'investigar',
             'title' => 'Mercado Libre',
             'description' => 'Consulta senales de demanda y terminos relacionados desde Mercado Libre.',
+            'image_url' => '',
             'tutorial_youtube_url' => '',
             'sort_order' => 30,
             'is_active' => true,
@@ -351,6 +355,7 @@ function builtinToolDefinitions(): array
             'category_key' => 'investigar',
             'title' => 'Amazon',
             'description' => 'Consulta senales y terminos relacionados desde Amazon.',
+            'image_url' => '',
             'tutorial_youtube_url' => '',
             'sort_order' => 40,
             'is_active' => true,
@@ -362,8 +367,21 @@ function builtinToolDefinitions(): array
             'category_key' => 'disenar',
             'title' => 'Generador de formularios',
             'description' => 'Crea formularios publicos, compartelos sin login y guarda sus respuestas como JSON.',
+            'image_url' => '',
             'tutorial_youtube_url' => '',
             'sort_order' => 10,
+            'is_active' => true,
+            'admin_only' => false,
+        ],
+        [
+            'id' => '',
+            'slug' => 'creador-landing-pages',
+            'category_key' => 'disenar',
+            'title' => 'Creador de landing pages',
+            'description' => 'Construye landing pages visuales con bloques editables, vista en vivo y publicacion sin login.',
+            'image_url' => '',
+            'tutorial_youtube_url' => '',
+            'sort_order' => 20,
             'is_active' => true,
             'admin_only' => false,
         ],
@@ -408,6 +426,7 @@ function sanitizeToolForAdmin(array $tool): array
         'slug' => (string) ($tool['slug'] ?? ''),
         'title' => (string) ($tool['title'] ?? ''),
         'description' => (string) ($tool['description'] ?? ''),
+        'image_url' => (string) ($tool['image_url'] ?? ''),
         'tutorial_youtube_url' => (string) ($tool['tutorial_youtube_url'] ?? ''),
         'launch_mode' => (string) ($tool['launch_mode'] ?? 'php_folder'),
         'panel_module_key' => (string) ($tool['panel_module_key'] ?? ''),
@@ -427,23 +446,31 @@ function sanitizeToolForLaunch(array $tool, string $returnUrl): array
         'category_key' => (string) ($tool['category_key'] ?? ''),
         'title' => (string) ($tool['title'] ?? ''),
         'description' => (string) ($tool['description'] ?? ''),
+        'image_url' => (string) ($tool['image_url'] ?? ''),
         'tutorial_youtube_url' => (string) ($tool['tutorial_youtube_url'] ?? ''),
         'launch_mode' => (string) ($tool['launch_mode'] ?? 'php_folder'),
         'panel_module_key' => (string) ($tool['panel_module_key'] ?? ''),
         'app_folder' => (string) ($tool['app_folder'] ?? ''),
         'entry_file' => (string) ($tool['entry_file'] ?? 'index.php'),
+        'hide_sidebar' => (bool) ($tool['hide_sidebar'] ?? false),
         'return_url' => $returnUrl,
     ];
 }
 
 function extractPrivateToolConfig(array $payload): array
 {
-    return [
+    $config = [
         'launch_mode' => (string) ($payload['launch_mode'] ?? 'php_folder'),
         'panel_module_key' => (string) ($payload['panel_module_key'] ?? ''),
         'app_folder' => (string) ($payload['app_folder'] ?? ''),
         'entry_file' => (string) ($payload['entry_file'] ?? 'index.php'),
     ];
+
+    if (array_key_exists('hide_sidebar', $payload)) {
+        $config['hide_sidebar'] = filter_var($payload['hide_sidebar'], FILTER_VALIDATE_BOOL);
+    }
+
+    return $config;
 }
 
 function sanitizeToolPayloadForDatabase(array $payload): array
@@ -454,7 +481,8 @@ function sanitizeToolPayloadForDatabase(array $payload): array
         $databasePayload['launch_mode'],
         $databasePayload['panel_module_key'],
         $databasePayload['app_folder'],
-        $databasePayload['entry_file']
+        $databasePayload['entry_file'],
+        $databasePayload['hide_sidebar']
     );
 
     return $databasePayload;
@@ -468,6 +496,7 @@ function mergeToolWithPrivateConfig(array $tool, ?array $privateConfig): array
         'panel_module_key' => (string) ($privateConfig['panel_module_key'] ?? ''),
         'app_folder' => (string) ($privateConfig['app_folder'] ?? ''),
         'entry_file' => (string) ($privateConfig['entry_file'] ?? 'index.php'),
+        'hide_sidebar' => (bool) ($privateConfig['hide_sidebar'] ?? false),
     ];
 }
 
@@ -477,6 +506,7 @@ function validateToolPayload(array $payload): array
     $slug = normalizeToolSlug((string) ($payload['slug'] ?? ''));
     $categoryKey = trim((string) ($payload['category_key'] ?? ''));
     $description = trim((string) ($payload['description'] ?? ''));
+    $imageUrl = trim((string) ($payload['image_url'] ?? ''));
     $youtubeUrl = trim((string) ($payload['tutorial_youtube_url'] ?? ''));
     $launchMode = trim((string) ($payload['launch_mode'] ?? 'php_folder'));
     $panelModuleKey = trim((string) ($payload['panel_module_key'] ?? ''));
@@ -511,6 +541,10 @@ function validateToolPayload(array $payload): array
         throw new InvalidArgumentException('El tutorial debe ser una URL valida.');
     }
 
+    if ($imageUrl !== '' && !isSafeToolImageUrl($imageUrl)) {
+        throw new InvalidArgumentException('La imagen de la herramienta debe ser una URL valida o una ruta local segura.');
+    }
+
     if ($appFolder !== '' && !isSafeRelativePath($appFolder)) {
         throw new InvalidArgumentException('La carpeta de la herramienta no tiene un formato valido.');
     }
@@ -524,6 +558,7 @@ function validateToolPayload(array $payload): array
         'slug' => $slug,
         'title' => $title,
         'description' => $description,
+        'image_url' => $imageUrl,
         'tutorial_youtube_url' => $youtubeUrl,
         'launch_mode' => $launchMode,
         'panel_module_key' => $panelModuleKey,
@@ -562,6 +597,31 @@ function isSafeRelativePath(string $value): bool
     }
 
     return preg_match('/^[A-Za-z0-9._\\/-]+$/', $trimmed) === 1;
+}
+
+function isSafeToolImageUrl(string $value): bool
+{
+    $trimmed = trim($value);
+
+    if ($trimmed === '') {
+        return true;
+    }
+
+    if (preg_match('/[\\x00-\\x1F\\x7F]/', $trimmed) === 1) {
+        return false;
+    }
+
+    if (filter_var($trimmed, FILTER_VALIDATE_URL) !== false) {
+        $scheme = strtolower((string) (parse_url($trimmed, PHP_URL_SCHEME) ?? ''));
+
+        return in_array($scheme, ['http', 'https'], true);
+    }
+
+    if (str_starts_with($trimmed, '//') || str_contains($trimmed, '..')) {
+        return false;
+    }
+
+    return preg_match('/^\\/?[A-Za-z0-9._~\\/-]+(?:\\?[A-Za-z0-9._~\\/%=&-]+)?$/', $trimmed) === 1;
 }
 
 function buildToolsLaunchUrl(string $launchToken): string
@@ -684,6 +744,9 @@ function saveToolLaunchConfig(string $slug, array $config, ?string $previousSlug
         'panel_module_key' => (string) ($config['panel_module_key'] ?? ''),
         'app_folder' => (string) ($config['app_folder'] ?? ''),
         'entry_file' => (string) ($config['entry_file'] ?? 'index.php'),
+        'hide_sidebar' => array_key_exists('hide_sidebar', $config)
+            ? (bool) $config['hide_sidebar']
+            : (bool) ($registry[$slug]['hide_sidebar'] ?? false),
     ];
 
     saveToolLaunchRegistry($registry);

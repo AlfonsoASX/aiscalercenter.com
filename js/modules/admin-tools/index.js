@@ -195,6 +195,15 @@ export function createAdminToolsModule({
         if (target.matches('#admin-tools-slug')) {
             target.dataset.manual = target.value.trim() !== '' ? 'true' : 'false';
         }
+
+        if (target.matches('#admin-tools-image-url')) {
+            const form = target.closest('form');
+            const preview = form?.querySelector('[data-admin-tools-image-preview]');
+
+            if (preview instanceof HTMLElement) {
+                preview.innerHTML = renderToolImagePreview(String(target.value ?? ''), false);
+            }
+        }
     }
 
     function openEditor(tool = null) {
@@ -217,6 +226,7 @@ export function createAdminToolsModule({
             slug: String(formData.get('slug') ?? '').trim(),
             title: String(formData.get('title') ?? '').trim(),
             description: String(formData.get('description') ?? '').trim(),
+            image_url: String(formData.get('image_url') ?? '').trim(),
             tutorial_youtube_url: String(formData.get('tutorial_youtube_url') ?? '').trim(),
             launch_mode: String(formData.get('launch_mode') ?? 'php_folder').trim(),
             panel_module_key: String(formData.get('panel_module_key') ?? '').trim(),
@@ -432,8 +442,13 @@ export function createAdminToolsModule({
         return `
             <tr>
                 <td>
-                    <strong>${escapeHtml(tool.title ?? '')}</strong>
-                    <p>${escapeHtml(tool.description ?? '')}</p>
+                    <div class="admin-tools-tool-cell">
+                        ${renderToolImagePreview(tool.image_url ?? '', true)}
+                        <div>
+                            <strong>${escapeHtml(tool.title ?? '')}</strong>
+                            <p>${escapeHtml(tool.description ?? '')}</p>
+                        </div>
+                    </div>
                 </td>
                 <td>${escapeHtml(category?.label ?? tool.category_key ?? '')}</td>
                 <td>${escapeHtml(tool.launch_mode === 'panel_module' ? 'Modulo interno' : 'Aplicacion PHP')}</td>
@@ -515,6 +530,16 @@ export function createAdminToolsModule({
                             </label>
 
                             <label class="workspace-field-block admin-tools-form-grid__full">
+                                <span class="workspace-field-label">Imagen de portada 16:9</span>
+                                <input id="admin-tools-image-url" name="image_url" type="text" class="workspace-field" value="${escapeHtml(tool.image_url ?? '')}" placeholder="https://.../imagen.jpg o img/herramientas/portada.jpg">
+                                <small class="admin-tools-help-text">Puedes usar una URL externa, una ruta local o una URL de Supabase Storage. La tarjeta siempre conservara proporcion 16:9.</small>
+                            </label>
+
+                            <div class="admin-tools-form-grid__full" data-admin-tools-image-preview>
+                                ${renderToolImagePreview(tool.image_url ?? '', false)}
+                            </div>
+
+                            <label class="workspace-field-block admin-tools-form-grid__full">
                                 <span class="workspace-field-label">Tutorial en YouTube</span>
                                 <input name="tutorial_youtube_url" type="url" class="workspace-field" value="${escapeHtml(tool.tutorial_youtube_url ?? '')}" placeholder="https://www.youtube.com/watch?v=...">
                             </label>
@@ -562,6 +587,25 @@ export function createAdminToolsModule({
                         </div>
                     </form>
                 </div>
+            </div>
+        `;
+    }
+
+    function renderToolImagePreview(imageUrl, compact = false) {
+        const normalizedUrl = String(imageUrl ?? '').trim();
+        const modifier = compact ? 'admin-tools-image-preview--compact' : 'admin-tools-image-preview--large';
+
+        if (normalizedUrl === '') {
+            return `
+                <div class="admin-tools-image-preview ${modifier} is-empty" aria-label="Sin imagen de portada">
+                    <span class="material-symbols-rounded">image</span>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="admin-tools-image-preview ${modifier}">
+                <img src="${escapeHtml(normalizedUrl)}" alt="Portada de la herramienta" loading="lazy">
             </div>
         `;
     }
