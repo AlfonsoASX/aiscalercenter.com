@@ -190,7 +190,7 @@ if ($launchMode === 'php_folder') {
                         $menuTargetId = (string) ($menuItem['id'] ?? '');
                         $menuCategoryKey = (string) ($menuItem['tool_category_key'] ?? '');
                         $isActive = $menuCategoryKey !== '' && $menuCategoryKey === $activeCategoryKey;
-                        $menuHref = 'index.php?view=app#' . rawurlencode($menuTargetId);
+                        $menuHref = buildToolsPanelUrl($menuTargetId);
                         ?>
                         <a href="<?= htmlspecialchars($menuHref, ENT_QUOTES, 'UTF-8'); ?>" class="workspace-nav-button<?= $isActive ? ' is-active' : ''; ?>" aria-current="<?= $isActive ? 'page' : 'false'; ?>">
                             <span class="workspace-nav-icon" aria-hidden="true">
@@ -273,6 +273,11 @@ if ($launchMode === 'php_folder') {
     </div>
     <script>
         (() => {
+            const activeProjectContext = <?= json_encode([
+                'id' => $activeProjectId,
+                'name' => $activeProjectLabel,
+                'logo_url' => $activeProjectLogoUrl,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
             const layout = document.getElementById('app-layout');
             const sidebar = document.getElementById('app-sidebar');
             const backdrop = document.getElementById('app-sidebar-backdrop');
@@ -283,6 +288,15 @@ if ($launchMode === 'php_folder') {
             let sidebarCollapsed = false;
             let sidebarOpen = false;
             let userMenuOpen = false;
+
+            try {
+                if (activeProjectContext?.id) {
+                    window.localStorage.setItem('aiscaler_active_project_id', activeProjectContext.id);
+                    window.localStorage.setItem('aiscaler_active_project', JSON.stringify(activeProjectContext));
+                }
+            } catch (error) {
+                console.error(error);
+            }
 
             const applySidebarState = () => {
                 const isDesktop = window.innerWidth >= 1024;

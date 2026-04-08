@@ -44,6 +44,9 @@ const state = {
     boundSections: new Set(),
 };
 
+const ACTIVE_PROJECT_ID_STORAGE_KEY = 'aiscaler_active_project_id';
+const ACTIVE_PROJECT_STORAGE_KEY = 'aiscaler_active_project';
+
 const blogEntriesModule = createBlogEntriesModule({
     supabase,
     getCurrentUser: () => state.currentUser,
@@ -406,13 +409,15 @@ function renderAppSession(session) {
         appShell.classList.remove('hidden');
     }
 
+    primeActiveProjectFromStorage();
     renderMenuForRole(role);
 }
 
 function setActiveProject(project) {
     if (!project?.id) {
         state.activeProject = null;
-        window.localStorage.removeItem('aiscaler_active_project_id');
+        window.localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
+        window.localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY);
         toolsCatalogModule.setProject(null);
         updateActiveProjectSidebar();
         return;
@@ -424,13 +429,16 @@ function setActiveProject(project) {
         logo_url: String(project.logo_url ?? ''),
         owner_user_id: String(project.owner_user_id ?? ''),
     };
-    window.localStorage.setItem('aiscaler_active_project_id', state.activeProject.id);
+    window.localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, state.activeProject.id);
+    window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, JSON.stringify(state.activeProject));
     toolsCatalogModule.setProject(state.activeProject);
     updateActiveProjectSidebar();
 }
 
 function restoreActiveProject(projects) {
-    const storedProjectId = window.localStorage.getItem('aiscaler_active_project_id') ?? '';
+    const storedProjectId = state.activeProject?.id
+        ?? window.localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY)
+        ?? '';
     const restoredProject = projects.find((project) => project.id === storedProjectId) ?? null;
 
     if (!restoredProject) {
@@ -439,6 +447,21 @@ function restoreActiveProject(projects) {
     }
 
     setActiveProject(restoredProject);
+}
+
+function primeActiveProjectFromStorage() {
+    const storedProject = readStoredProjectContext();
+
+    if (!storedProject) {
+        state.activeProject = null;
+        toolsCatalogModule.setProject(null);
+        updateActiveProjectSidebar();
+        return;
+    }
+
+    state.activeProject = storedProject;
+    toolsCatalogModule.setProject(storedProject);
+    updateActiveProjectSidebar();
 }
 
 function updateActiveProjectSidebar() {
@@ -473,6 +496,39 @@ function updateActiveProjectSidebar() {
     }
 
     projectLogo.textContent = name.slice(0, 1).toUpperCase();
+}
+
+function readStoredProjectContext() {
+    const storedId = String(window.localStorage.getItem(ACTIVE_PROJECT_ID_STORAGE_KEY) ?? '').trim();
+    const storedPayload = String(window.localStorage.getItem(ACTIVE_PROJECT_STORAGE_KEY) ?? '').trim();
+
+    if (storedPayload !== '') {
+        try {
+            const parsed = JSON.parse(storedPayload);
+
+            if (parsed && typeof parsed === 'object' && String(parsed.id ?? '').trim() !== '') {
+                return {
+                    id: String(parsed.id),
+                    name: String(parsed.name ?? 'Proyecto'),
+                    logo_url: String(parsed.logo_url ?? ''),
+                    owner_user_id: String(parsed.owner_user_id ?? ''),
+                };
+            }
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    if (storedId === '') {
+        return null;
+    }
+
+    return {
+        id: storedId,
+        name: 'Proyecto',
+        logo_url: '',
+        owner_user_id: '',
+    };
 }
 
 function resolveUserRole(user) {
