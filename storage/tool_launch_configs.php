@@ -56,4 +56,10 @@ return [
         'app_folder' => 'apps/customer-follow-up',
         'entry_file' => 'index.php',
     ],
+    'creacion-bots-whatsapp' => [
+        'launch_mode' => 'php_folder',
+        'panel_module_key' => '',
+        'app_folder' => 'apps/whatsapp-bots',
+        'entry_file' => 'index.php',
+    ],
 ];

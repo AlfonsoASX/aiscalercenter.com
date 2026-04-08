@@ -2,8 +2,10 @@
 declare(strict_types=1);
 
 use AiScaler\CustomerPipeline\CustomerPipelineRepository;
+use AiScaler\WhatsAppBots\WhatsAppBotRepository;
 
 require_once __DIR__ . '/../../modules/customer-follow-up/bootstrap.php';
+require_once __DIR__ . '/../../modules/whatsapp-bots/bootstrap.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -109,9 +111,12 @@ try {
         customerPipelineAssertMethod('POST');
 
         $payload = customerPipelineReadJsonPayload();
+        $board = $repository->getBoard($accessToken, $activeProjectId);
+        $stages = is_array($board['stages'] ?? null) ? $board['stages'] : [];
         $leadId = trim((string) ($payload['lead_id'] ?? ''));
         $stageId = trim((string) ($payload['stage_id'] ?? ''));
         $sortOrder = (float) ($payload['sort_order'] ?? 0);
+        $stage = customerPipelineFindStage($stages, $stageId);
 
         if ($leadId === '' || $stageId === '') {
             throw new InvalidArgumentException('No encontramos el lead o la etapa destino.');
@@ -125,6 +130,21 @@ try {
             $sortOrder,
             array_key_exists('lost_reason', $payload) ? trim((string) ($payload['lost_reason'] ?? '')) : null
         );
+
+        if (is_array($stage)) {
+            try {
+                $whatsAppBotRepository = new WhatsAppBotRepository();
+                $whatsAppBotRepository->triggerFollowUpFromLeadStage(
+                    $accessToken,
+                    $activeProjectId,
+                    $movedLead,
+                    trim((string) ($stage['key'] ?? '')),
+                    trim((string) ($stage['title'] ?? 'Etapa'))
+                );
+            } catch (Throwable) {
+                // El movimiento del lead no debe fallar si la automatizacion de WhatsApp aun no esta configurada.
+            }
+        }
 
         customerPipelineSendJson([
             'success' => true,
@@ -223,6 +243,21 @@ function customerPipelineFindLead(array $leads, string $leadId): ?array
 
         if (trim((string) ($lead['id'] ?? '')) === $leadId && $leadId !== '') {
             return $lead;
+        }
+    }
+
+    return null;
+}
+
+function customerPipelineFindStage(array $stages, string $stageId): ?array
+{
+    foreach ($stages as $stage) {
+        if (!is_array($stage)) {
+            continue;
+        }
+
+        if (trim((string) ($stage['id'] ?? '')) === $stageId && $stageId !== '') {
+            return $stage;
         }
     }
 

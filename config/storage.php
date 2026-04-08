@@ -10,5 +10,6 @@ return [
         'landing_pages' => 'landing-pages',
         'projects' => 'projects',
         'tools' => 'tools',
+        'whatsapp_bots' => 'whatsapp-bots',
     ],
 ];

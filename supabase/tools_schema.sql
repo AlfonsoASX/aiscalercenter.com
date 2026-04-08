@@ -195,6 +195,17 @@ values
         20,
         true,
         false
+    ),
+    (
+        'creacion-bots-whatsapp',
+        'ejecutar',
+        'Creacion de bots de WhatsApp',
+        'Configura bots conversacionales, administra la bandeja humana y prepara plantillas para seguimiento comercial.',
+        '',
+        '',
+        30,
+        true,
+        false
     )
 on conflict (slug) do update
 set category_key = excluded.category_key,
