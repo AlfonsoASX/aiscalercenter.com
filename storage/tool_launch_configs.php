@@ -50,4 +50,10 @@ return [
         'app_folder' => 'internal/execute',
         'entry_file' => 'index.php',
     ],
+    'seguimiento-clientes' => [
+        'launch_mode' => 'php_folder',
+        'panel_module_key' => '',
+        'app_folder' => 'apps/customer-follow-up',
+        'entry_file' => 'index.php',
+    ],
 ];

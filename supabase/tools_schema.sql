@@ -184,6 +184,17 @@ values
         10,
         true,
         false
+    ),
+    (
+        'seguimiento-clientes',
+        'ejecutar',
+        'Seguimiento de Clientes',
+        'Gestiona prospectos con un tablero Kanban, panel lateral y entrada automatica de leads por webhook.',
+        '',
+        '',
+        20,
+        true,
+        false
     )
 on conflict (slug) do update
 set category_key = excluded.category_key,
