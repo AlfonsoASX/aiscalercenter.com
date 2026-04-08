@@ -7,52 +7,6 @@ use RuntimeException;
 
 final class FormRepository
 {
-    public function ensureDefaultBusiness(string $accessToken, string $userId, string $email = ''): array
-    {
-        $businesses = $this->listBusinesses($accessToken);
-
-        if ($businesses !== []) {
-            return $businesses[0];
-        }
-
-        $name = 'Mi empresa';
-
-        if (trim($email) !== '') {
-            $name = 'Empresa de ' . preg_replace('/@.+$/', '', trim($email));
-        }
-
-        $response = \supabaseRestRequest(
-            'POST',
-            'businesses',
-            [
-                'owner_user_id' => $userId,
-                'name' => $name,
-            ],
-            $accessToken,
-            ['Prefer: return=representation']
-        );
-
-        $data = $response['data'] ?? null;
-
-        if (!is_array($data) || $data === []) {
-            throw new RuntimeException('No fue posible preparar la cuenta de empresa para tus formularios.');
-        }
-
-        return is_array($data[0] ?? null) ? $data[0] : $data;
-    }
-
-    public function listBusinesses(string $accessToken): array
-    {
-        $response = \supabaseRestRequest(
-            'GET',
-            'businesses?select=*&order=created_at.asc',
-            [],
-            $accessToken
-        );
-
-        return is_array($response['data'] ?? null) ? $response['data'] : [];
-    }
-
     public function findProject(string $accessToken, string $projectId): ?array
     {
         $normalizedProjectId = trim($projectId);
@@ -63,7 +17,7 @@ final class FormRepository
 
         $response = \supabaseRestRequest(
             'GET',
-            'projects?select=id,business_id,name&id=eq.' . rawurlencode($normalizedProjectId) . '&deleted_at=is.null&limit=1',
+            'projects?select=id,name&id=eq.' . rawurlencode($normalizedProjectId) . '&deleted_at=is.null&limit=1',
             [],
             $accessToken
         );
@@ -77,19 +31,11 @@ final class FormRepository
         return is_array($data[0] ?? null) ? $data[0] : null;
     }
 
-    public function listForms(string $accessToken, string $businessId, string $projectId = ''): array
+    public function listForms(string $accessToken, string $projectId): array
     {
-        $query = 'forms?select=*&business_id=eq.' . rawurlencode($businessId) . '&deleted_at=is.null';
-
-        if (trim($projectId) !== '') {
-            $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
-        }
-
-        $query .= '&order=updated_at.desc';
-
         $response = \supabaseRestRequest(
             'GET',
-            $query,
+            'forms?select=*&project_id=eq.' . rawurlencode(trim($projectId)) . '&deleted_at=is.null&order=updated_at.desc',
             [],
             $accessToken
         );
@@ -97,19 +43,11 @@ final class FormRepository
         return is_array($response['data'] ?? null) ? $response['data'] : [];
     }
 
-    public function findForm(string $accessToken, string $formId, string $projectId = ''): ?array
+    public function findForm(string $accessToken, string $formId, string $projectId): ?array
     {
-        $query = 'forms?select=*&id=eq.' . rawurlencode($formId) . '&deleted_at=is.null';
-
-        if (trim($projectId) !== '') {
-            $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
-        }
-
-        $query .= '&limit=1';
-
         $response = \supabaseRestRequest(
             'GET',
-            $query,
+            'forms?select=*&id=eq.' . rawurlencode($formId) . '&project_id=eq.' . rawurlencode(trim($projectId)) . '&deleted_at=is.null&limit=1',
             [],
             $accessToken
         );
@@ -133,7 +71,7 @@ final class FormRepository
 
             $response = \supabaseRestRequest(
                 'PATCH',
-                'forms?id=eq.' . rawurlencode($id),
+                'forms?id=eq.' . rawurlencode($id) . '&project_id=eq.' . rawurlencode((string) ($payload['project_id'] ?? '')),
                 $payload,
                 $accessToken,
                 $headers
@@ -157,17 +95,11 @@ final class FormRepository
         return is_array($data[0] ?? null) ? $data[0] : $data;
     }
 
-    public function softDeleteForm(string $accessToken, string $formId, string $projectId = ''): void
+    public function softDeleteForm(string $accessToken, string $formId, string $projectId): void
     {
-        $query = 'forms?id=eq.' . rawurlencode($formId);
-
-        if (trim($projectId) !== '') {
-            $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
-        }
-
         \supabaseRestRequest(
             'PATCH',
-            $query,
+            'forms?id=eq.' . rawurlencode($formId) . '&project_id=eq.' . rawurlencode(trim($projectId)),
             ['deleted_at' => gmdate('c')],
             $accessToken,
             ['Prefer: return=minimal']

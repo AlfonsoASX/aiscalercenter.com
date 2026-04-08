@@ -420,7 +420,6 @@ function setActiveProject(project) {
     state.activeProject = {
         id: String(project.id),
         name: String(project.name ?? 'Proyecto'),
-        business_id: String(project.business_id ?? ''),
         owner_user_id: String(project.owner_user_id ?? ''),
     };
     window.localStorage.setItem('aiscaler_active_project_id', state.activeProject.id);

@@ -22,8 +22,8 @@ function normalizeFormBuilderException(Throwable $exception): string
         return 'Supabase bloqueo la operacion por permisos. Revisa las politicas de supabase/forms_schema.sql.';
     }
 
-    if (str_contains($normalized, 'duplicate key') || str_contains($normalized, 'forms_business_slug_unique')) {
-        return 'Ya existe un formulario con ese slug dentro de esta empresa. Cambia el slug e intenta de nuevo.';
+    if (str_contains($normalized, 'duplicate key') || str_contains($normalized, 'forms_project_slug_unique')) {
+        return 'Ya existe un formulario con ese slug dentro de este proyecto. Cambia el slug e intenta de nuevo.';
     }
 
     if (str_contains($normalized, 'get_public_form_definition') || str_contains($normalized, 'submit_public_form_response')) {

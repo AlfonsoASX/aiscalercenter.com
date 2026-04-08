@@ -27,8 +27,8 @@ function normalizeLandingBuilderException(Throwable $exception): string
         return 'Falta configurar Supabase Storage centralizado. Ejecuta supabase/user_files_storage_setup.sql en Supabase.';
     }
 
-    if (str_contains($normalized, 'duplicate key') || str_contains($normalized, 'landing_pages_business_slug_unique')) {
-        return 'Ya existe una landing con ese slug dentro de esta empresa. Cambia el slug e intenta de nuevo.';
+    if (str_contains($normalized, 'duplicate key') || str_contains($normalized, 'landing_pages_project_slug_unique')) {
+        return 'Ya existe una landing con ese slug dentro de este proyecto. Cambia el slug e intenta de nuevo.';
     }
 
     if (str_contains($normalized, 'get_public_landing_page_definition')) {

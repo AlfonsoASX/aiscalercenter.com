@@ -7,52 +7,6 @@ use RuntimeException;
 
 final class LandingPageRepository
 {
-    public function ensureDefaultBusiness(string $accessToken, string $userId, string $email = ''): array
-    {
-        $businesses = $this->listBusinesses($accessToken);
-
-        if ($businesses !== []) {
-            return $businesses[0];
-        }
-
-        $name = 'Mi empresa';
-
-        if (trim($email) !== '') {
-            $name = 'Empresa de ' . preg_replace('/@.+$/', '', trim($email));
-        }
-
-        $response = \supabaseRestRequest(
-            'POST',
-            'businesses',
-            [
-                'owner_user_id' => $userId,
-                'name' => $name,
-            ],
-            $accessToken,
-            ['Prefer: return=representation']
-        );
-
-        $data = $response['data'] ?? null;
-
-        if (!is_array($data) || $data === []) {
-            throw new RuntimeException('No fue posible preparar la cuenta de empresa para tus landing pages.');
-        }
-
-        return is_array($data[0] ?? null) ? $data[0] : $data;
-    }
-
-    public function listBusinesses(string $accessToken): array
-    {
-        $response = \supabaseRestRequest(
-            'GET',
-            'businesses?select=*&order=created_at.asc',
-            [],
-            $accessToken
-        );
-
-        return is_array($response['data'] ?? null) ? $response['data'] : [];
-    }
-
     public function findProject(string $accessToken, string $projectId): ?array
     {
         $normalizedProjectId = trim($projectId);
@@ -63,7 +17,7 @@ final class LandingPageRepository
 
         $response = \supabaseRestRequest(
             'GET',
-            'projects?select=id,business_id,name&id=eq.' . rawurlencode($normalizedProjectId) . '&deleted_at=is.null&limit=1',
+            'projects?select=id,name&id=eq.' . rawurlencode($normalizedProjectId) . '&deleted_at=is.null&limit=1',
             [],
             $accessToken
         );
@@ -77,19 +31,11 @@ final class LandingPageRepository
         return is_array($data[0] ?? null) ? $data[0] : null;
     }
 
-    public function listPages(string $accessToken, string $businessId, string $projectId = ''): array
+    public function listPages(string $accessToken, string $projectId): array
     {
-        $query = 'landing_pages?select=*&business_id=eq.' . rawurlencode($businessId) . '&deleted_at=is.null';
-
-        if (trim($projectId) !== '') {
-            $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
-        }
-
-        $query .= '&order=updated_at.desc';
-
         $response = \supabaseRestRequest(
             'GET',
-            $query,
+            'landing_pages?select=*&project_id=eq.' . rawurlencode(trim($projectId)) . '&deleted_at=is.null&order=updated_at.desc',
             [],
             $accessToken
         );
@@ -97,19 +43,11 @@ final class LandingPageRepository
         return is_array($response['data'] ?? null) ? $response['data'] : [];
     }
 
-    public function findPage(string $accessToken, string $pageId, string $projectId = ''): ?array
+    public function findPage(string $accessToken, string $pageId, string $projectId): ?array
     {
-        $query = 'landing_pages?select=*&id=eq.' . rawurlencode($pageId) . '&deleted_at=is.null';
-
-        if (trim($projectId) !== '') {
-            $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
-        }
-
-        $query .= '&limit=1';
-
         $response = \supabaseRestRequest(
             'GET',
-            $query,
+            'landing_pages?select=*&id=eq.' . rawurlencode($pageId) . '&project_id=eq.' . rawurlencode(trim($projectId)) . '&deleted_at=is.null&limit=1',
             [],
             $accessToken
         );
@@ -133,7 +71,7 @@ final class LandingPageRepository
 
             $response = \supabaseRestRequest(
                 'PATCH',
-                'landing_pages?id=eq.' . rawurlencode($id),
+                'landing_pages?id=eq.' . rawurlencode($id) . '&project_id=eq.' . rawurlencode((string) ($payload['project_id'] ?? '')),
                 $payload,
                 $accessToken,
                 $headers
@@ -157,17 +95,11 @@ final class LandingPageRepository
         return is_array($data[0] ?? null) ? $data[0] : $data;
     }
 
-    public function softDeletePage(string $accessToken, string $pageId, string $projectId = ''): void
+    public function softDeletePage(string $accessToken, string $pageId, string $projectId): void
     {
-        $query = 'landing_pages?id=eq.' . rawurlencode($pageId);
-
-        if (trim($projectId) !== '') {
-            $query .= '&project_id=eq.' . rawurlencode(trim($projectId));
-        }
-
         \supabaseRestRequest(
             'PATCH',
-            $query,
+            'landing_pages?id=eq.' . rawurlencode($pageId) . '&project_id=eq.' . rawurlencode(trim($projectId)),
             ['deleted_at' => gmdate('c')],
             $accessToken,
             ['Prefer: return=minimal']

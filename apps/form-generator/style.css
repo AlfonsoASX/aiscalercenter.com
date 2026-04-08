@@ -5,7 +5,7 @@
 
 .form-builder-hero,
 .form-builder-card,
-.form-builder-business-chip,
+.form-builder-project-chip,
 .form-builder-share,
 .form-builder-field-card,
 .form-builder-empty {
@@ -62,7 +62,7 @@
     padding: 1.25rem;
 }
 
-.form-builder-business-chip,
+.form-builder-project-chip,
 .form-builder-share {
     display: flex;
     align-items: flex-start;

@@ -14,31 +14,8 @@ as $$
         );
 $$;
 
-create table if not exists public.businesses (
-    id uuid primary key default gen_random_uuid(),
-    owner_user_id uuid not null references auth.users (id) on delete cascade,
-    name text not null,
-    slug text,
-    settings jsonb not null default '{}'::jsonb,
-    created_at timestamptz not null default timezone('utc', now()),
-    updated_at timestamptz not null default timezone('utc', now()),
-    deleted_at timestamptz
-);
-
-create table if not exists public.business_members (
-    business_id uuid not null references public.businesses (id) on delete cascade,
-    user_id uuid not null references auth.users (id) on delete cascade,
-    role text not null default 'member' check (role in ('owner', 'admin', 'member')),
-    status text not null default 'active' check (status in ('active', 'invited', 'disabled')),
-    invited_by uuid references auth.users (id) on delete set null,
-    created_at timestamptz not null default timezone('utc', now()),
-    updated_at timestamptz not null default timezone('utc', now()),
-    primary key (business_id, user_id)
-);
-
 create table if not exists public.projects (
     id uuid primary key default gen_random_uuid(),
-    business_id uuid not null references public.businesses (id) on delete cascade,
     owner_user_id uuid not null references auth.users (id) on delete cascade,
     name text not null,
     logo_url text not null default '',
@@ -66,17 +43,22 @@ create table if not exists public.project_members (
 );
 
 alter table public.projects
+    drop column if exists business_id cascade,
     add column if not exists logo_storage_path text not null default '',
     add column if not exists company_type text not null default '',
     add column if not exists company_goal text not null default '',
     add column if not exists metadata jsonb not null default '{}'::jsonb,
     add column if not exists deleted_at timestamptz;
 
-create index if not exists businesses_owner_idx on public.businesses (owner_user_id);
+drop table if exists public.business_members cascade;
+drop table if exists public.businesses cascade;
+
+drop index if exists public.businesses_owner_idx;
+drop index if exists public.projects_business_status_idx;
 create index if not exists project_members_project_idx on public.project_members (project_id);
 create index if not exists project_members_user_idx on public.project_members (user_id, status);
 create index if not exists project_members_email_idx on public.project_members (lower(invited_email), status);
-create index if not exists projects_business_status_idx on public.projects (business_id, status, updated_at desc);
+create index if not exists projects_status_updated_idx on public.projects (status, updated_at desc);
 create index if not exists projects_owner_idx on public.projects (owner_user_id, status);
 
 create unique index if not exists project_members_project_user_unique
@@ -190,34 +172,8 @@ as $$
         );
 $$;
 
-alter table public.businesses enable row level security;
-alter table public.business_members enable row level security;
 alter table public.projects enable row level security;
 alter table public.project_members enable row level security;
-
-drop policy if exists "Users can view owned businesses" on public.businesses;
-create policy "Users can view owned businesses"
-on public.businesses
-for select
-to authenticated
-using (
-    owner_user_id = auth.uid()
-    or public.is_admin_user()
-    or exists (
-        select 1
-        from public.business_members bm
-        where bm.business_id = id
-          and bm.user_id = auth.uid()
-          and bm.status = 'active'
-    )
-);
-
-drop policy if exists "Users can create owned businesses" on public.businesses;
-create policy "Users can create owned businesses"
-on public.businesses
-for insert
-to authenticated
-with check (owner_user_id = auth.uid() or public.is_admin_user());
 
 drop policy if exists "Users can view accessible projects" on public.projects;
 create policy "Users can view accessible projects"
@@ -270,7 +226,5 @@ for delete
 to authenticated
 using (public.can_manage_project(project_id));
 
-grant select, insert, update on public.businesses to authenticated;
-grant select, insert, update on public.business_members to authenticated;
 grant select, insert, update on public.projects to authenticated;
 grant select, insert, update, delete on public.project_members to authenticated;

@@ -19,7 +19,6 @@ export function createProjectsModule({
 }) {
     const state = {
         projects: [],
-        business: null,
         loading: false,
         saving: false,
         modalOpen: false,
@@ -87,11 +86,9 @@ export function createProjectsModule({
         renderShell();
 
         try {
-            state.business = await ensureDefaultBusiness();
-
             const { data, error } = await supabase
                 .from('projects')
-                .select('id, business_id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at, project_members(id, user_id, invited_email, role, status)')
+                .select('id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at, project_members(id, user_id, invited_email, role, status)')
                 .is('deleted_at', null)
                 .order('updated_at', { ascending: false });
 
@@ -111,45 +108,6 @@ export function createProjectsModule({
             state.loading = false;
             renderShell();
         }
-    }
-
-    async function ensureDefaultBusiness() {
-        const currentUser = getCurrentUser();
-
-        if (!currentUser?.id) {
-            throw new Error('No encontramos tu usuario activo para cargar proyectos.');
-        }
-
-        const { data, error } = await supabase
-            .from('businesses')
-            .select('id, name, owner_user_id')
-            .order('created_at', { ascending: true })
-            .limit(1);
-
-        if (error) {
-            throw error;
-        }
-
-        if (Array.isArray(data) && data.length > 0) {
-            return data[0];
-        }
-
-        const emailName = String(currentUser.email ?? '').replace(/@.+$/, '').trim();
-        const businessName = emailName ? `Empresa de ${emailName}` : 'Mi empresa';
-        const { data: created, error: createError } = await supabase
-            .from('businesses')
-            .insert({
-                owner_user_id: currentUser.id,
-                name: businessName,
-            })
-            .select('id, name, owner_user_id')
-            .single();
-
-        if (createError) {
-            throw createError;
-        }
-
-        return created;
     }
 
     function renderShell() {
@@ -456,7 +414,6 @@ export function createProjectsModule({
                     path: currentProject?.logo_storage_path ?? '',
                 };
             const payload = {
-                business_id: String(state.business?.id ?? ''),
                 owner_user_id: currentProject?.owner_user_id || currentUser.id,
                 name,
                 logo_url: logo.url,
@@ -466,11 +423,6 @@ export function createProjectsModule({
                 company_goal: companyGoal,
                 status: 'active',
             };
-
-            if (!payload.business_id) {
-                state.business = await ensureDefaultBusiness();
-                payload.business_id = String(state.business?.id ?? '');
-            }
 
             const savedProject = await upsertProject(projectId, payload);
             await addProjectMembers(savedProject.id, membersText);
@@ -496,7 +448,7 @@ export function createProjectsModule({
                 .from('projects')
                 .update(payload)
                 .eq('id', projectId)
-                .select('id, business_id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at')
+                .select('id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at')
                 .single();
 
             if (error) {
@@ -509,7 +461,7 @@ export function createProjectsModule({
         const { data, error } = await supabase
             .from('projects')
             .insert(payload)
-            .select('id, business_id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at')
+            .select('id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at')
             .single();
 
         if (error) {
@@ -609,7 +561,6 @@ export function createProjectsModule({
     function normalizeProject(project) {
         return {
             id: String(project?.id ?? ''),
-            business_id: String(project?.business_id ?? ''),
             owner_user_id: String(project?.owner_user_id ?? ''),
             name: String(project?.name ?? 'Proyecto sin nombre'),
             logo_url: String(project?.logo_url ?? ''),

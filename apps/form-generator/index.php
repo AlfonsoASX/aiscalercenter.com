@@ -16,7 +16,7 @@ $repository = new FormRepository();
 $fieldTypes = formBuilderFieldTypes();
 $notice = null;
 $error = null;
-$business = null;
+$project = null;
 $forms = [];
 $mode = trim((string) ($_GET['builder'] ?? 'list'));
 $currentForm = null;
@@ -26,27 +26,17 @@ try {
         throw new RuntimeException('No encontramos la sesion segura para guardar formularios. Vuelve a abrir la herramienta desde el panel.');
     }
 
-    if ($activeProjectId !== '') {
-        $project = $repository->findProject($accessToken, $activeProjectId);
-
-        if (!is_array($project)) {
-            throw new RuntimeException('No encontramos el proyecto activo para guardar formularios.');
-        }
-
-        $businessId = (string) ($project['business_id'] ?? '');
-        $activeProjectName = (string) ($project['name'] ?? 'Proyecto');
-        $business = [
-            'id' => $businessId,
-            'name' => $activeProjectName,
-        ];
-    } else {
-        $business = $repository->ensureDefaultBusiness($accessToken, $userId, $userEmail);
-        $businessId = (string) ($business['id'] ?? '');
+    if ($activeProjectId === '') {
+        throw new RuntimeException('Selecciona un proyecto antes de crear formularios.');
     }
 
-    if ($businessId === '') {
-        throw new RuntimeException('No fue posible resolver la cuenta de empresa.');
+    $project = $repository->findProject($accessToken, $activeProjectId);
+
+    if (!is_array($project)) {
+        throw new RuntimeException('No encontramos el proyecto activo para guardar formularios.');
     }
+
+    $activeProjectName = (string) ($project['name'] ?? 'Proyecto');
 
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $postAction = trim((string) ($_POST['form_action'] ?? ''));
@@ -85,7 +75,7 @@ try {
                 $mode = 'edit';
             } else {
                 $status = $builderAction === 'publish' ? 'published' : (string) ($currentForm['status'] ?? 'draft');
-                $payload = formBuilderPayloadForSave($currentForm, $businessId, $userId, $status, $activeProjectId);
+                $payload = formBuilderPayloadForSave($currentForm, $activeProjectId, $userId, $status);
                 $currentForm = $repository->saveForm($accessToken, $payload);
                 $notice = [
                     'type' => 'success',
@@ -116,7 +106,7 @@ try {
         }
     }
 
-    $forms = $repository->listForms($accessToken, $businessId, $activeProjectId);
+    $forms = $repository->listForms($accessToken, $activeProjectId);
 } catch (Throwable $exception) {
     $error = normalizeFormBuilderException($exception);
     $mode = $mode === 'edit' || $mode === 'new' ? $mode : 'list';
@@ -150,10 +140,10 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentForm);
         </div>
     <?php endif; ?>
 
-    <?php if (is_array($business) && !$isEditorMode): ?>
-        <div class="form-builder-business-chip">
+    <?php if (is_array($project) && !$isEditorMode): ?>
+        <div class="form-builder-project-chip">
             <span class="material-symbols-rounded">domain</span>
-            <span><?= $activeProjectId !== '' ? 'Proyecto activo' : 'Cuenta de empresa'; ?>: <strong><?= htmlspecialchars((string) ($business['name'] ?? 'Mi empresa'), ENT_QUOTES, 'UTF-8'); ?></strong></span>
+            <span>Proyecto activo: <strong><?= htmlspecialchars($activeProjectName, ENT_QUOTES, 'UTF-8'); ?></strong></span>
         </div>
     <?php endif; ?>
 
@@ -366,7 +356,7 @@ function formBuilderMoveField(array $fields, int $index, int $direction): array
     return array_values($fields);
 }
 
-function formBuilderPayloadForSave(array $form, string $businessId, string $userId, string $status, string $projectId = ''): array
+function formBuilderPayloadForSave(array $form, string $projectId, string $userId, string $status): array
 {
     $title = trim((string) ($form['title'] ?? ''));
 
@@ -395,8 +385,7 @@ function formBuilderPayloadForSave(array $form, string $businessId, string $user
     }
 
     $payload = [
-        'business_id' => $businessId,
-        'project_id' => trim($projectId) !== '' ? trim($projectId) : null,
+        'project_id' => trim($projectId),
         'owner_user_id' => $userId,
         'title' => $title,
         'description' => trim((string) ($form['description'] ?? '')),

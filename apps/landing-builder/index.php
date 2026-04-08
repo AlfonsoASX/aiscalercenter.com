@@ -15,7 +15,7 @@ $activeProjectName = '';
 $repository = new LandingPageRepository();
 $notice = null;
 $error = null;
-$business = null;
+$project = null;
 $pages = [];
 $mode = trim((string) ($_GET['builder'] ?? 'list'));
 $currentPage = null;
@@ -25,27 +25,17 @@ try {
         throw new RuntimeException('No encontramos la sesion segura para guardar landing pages. Vuelve a abrir la herramienta desde el panel.');
     }
 
-    if ($activeProjectId !== '') {
-        $project = $repository->findProject($accessToken, $activeProjectId);
-
-        if (!is_array($project)) {
-            throw new RuntimeException('No encontramos el proyecto activo para guardar landing pages.');
-        }
-
-        $businessId = (string) ($project['business_id'] ?? '');
-        $activeProjectName = (string) ($project['name'] ?? 'Proyecto');
-        $business = [
-            'id' => $businessId,
-            'name' => $activeProjectName,
-        ];
-    } else {
-        $business = $repository->ensureDefaultBusiness($accessToken, $userId, $userEmail);
-        $businessId = (string) ($business['id'] ?? '');
+    if ($activeProjectId === '') {
+        throw new RuntimeException('Selecciona un proyecto antes de crear landing pages.');
     }
 
-    if ($businessId === '') {
-        throw new RuntimeException('No fue posible resolver la cuenta de empresa.');
+    $project = $repository->findProject($accessToken, $activeProjectId);
+
+    if (!is_array($project)) {
+        throw new RuntimeException('No encontramos el proyecto activo para guardar landing pages.');
     }
+
+    $activeProjectName = (string) ($project['name'] ?? 'Proyecto');
 
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $postAction = trim((string) ($_POST['page_action'] ?? ''));
@@ -64,7 +54,7 @@ try {
             $currentPage = landingBuilderStateFromPost($_POST);
             $builderAction = trim((string) ($_POST['builder_action'] ?? 'save'));
             $status = $builderAction === 'publish' ? 'published' : (string) ($currentPage['status'] ?? 'draft');
-            $payload = landingBuilderPayloadForSave($currentPage, $businessId, $userId, $status, $activeProjectId);
+            $payload = landingBuilderPayloadForSave($currentPage, $activeProjectId, $userId, $status);
             $currentPage = $repository->savePage($accessToken, $payload);
             $notice = [
                 'type' => 'success',
@@ -94,7 +84,7 @@ try {
         }
     }
 
-    $pages = $repository->listPages($accessToken, $businessId, $activeProjectId);
+    $pages = $repository->listPages($accessToken, $activeProjectId);
 } catch (Throwable $exception) {
     $error = normalizeLandingBuilderException($exception);
     $mode = $mode === 'edit' || $mode === 'new' ? $mode : 'list';
@@ -128,10 +118,10 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentPage);
         </div>
     <?php endif; ?>
 
-    <?php if (is_array($business) && !$isEditorMode): ?>
-        <div class="landing-builder-business-chip">
+    <?php if (is_array($project) && !$isEditorMode): ?>
+        <div class="landing-builder-project-chip">
             <span class="material-symbols-rounded">domain</span>
-            <span><?= $activeProjectId !== '' ? 'Proyecto activo' : 'Cuenta de empresa'; ?>: <strong><?= htmlspecialchars((string) ($business['name'] ?? 'Mi empresa'), ENT_QUOTES, 'UTF-8'); ?></strong></span>
+            <span>Proyecto activo: <strong><?= htmlspecialchars($activeProjectName, ENT_QUOTES, 'UTF-8'); ?></strong></span>
         </div>
     <?php endif; ?>
 
@@ -414,7 +404,7 @@ function landingBuilderStateFromPost(array $post): array
     ]);
 }
 
-function landingBuilderPayloadForSave(array $page, string $businessId, string $userId, string $status, string $projectId = ''): array
+function landingBuilderPayloadForSave(array $page, string $projectId, string $userId, string $status): array
 {
     $title = trim((string) ($page['title'] ?? ''));
     $slug = normalizeLandingSlug((string) ($page['slug'] ?? $title));
@@ -424,8 +414,7 @@ function landingBuilderPayloadForSave(array $page, string $businessId, string $u
     }
 
     $payload = [
-        'business_id' => $businessId,
-        'project_id' => trim($projectId) !== '' ? trim($projectId) : null,
+        'project_id' => trim($projectId),
         'owner_user_id' => $userId,
         'slug' => $slug,
         'title' => $title,

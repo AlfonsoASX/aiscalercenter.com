@@ -28,7 +28,7 @@
 }
 
 .landing-builder-hero,
-.landing-builder-business-chip,
+.landing-builder-project-chip,
 .landing-builder-page-card,
 .landing-builder-editor,
 .landing-builder-empty {
@@ -135,7 +135,7 @@
     color: #0b8043;
 }
 
-.landing-builder-business-chip {
+.landing-builder-project-chip {
     display: inline-flex;
     align-items: center;
     gap: 0.55rem;
