@@ -50,6 +50,8 @@ export function createToolsCatalogModule({
 
         const activeProject = getActiveProject?.() ?? null;
         const activeProjectId = String(activeProject?.id ?? '');
+        const activeProjectName = String(activeProject?.name ?? '');
+        const activeProjectLogoUrl = String(activeProject?.logo_url ?? '');
 
         if (section.projectId !== activeProjectId) {
             section.catalogHtml = '';
@@ -71,7 +73,13 @@ export function createToolsCatalogModule({
         renderRoot(root);
 
         try {
-            const response = await fetch(buildBrowserUrl(section.categoryKey, section.sectionId, activeProjectId), {
+            const response = await fetch(buildBrowserUrl(
+                section.categoryKey,
+                section.sectionId,
+                activeProjectId,
+                activeProjectName,
+                activeProjectLogoUrl,
+            ), {
                 headers: {
                     Accept: 'text/html',
                     'X-Requested-With': 'XMLHttpRequest',
@@ -184,6 +192,7 @@ export function createToolsCatalogModule({
 
         try {
             const accessToken = await getAccessToken();
+            const activeProject = getActiveProject?.() ?? null;
 
             if (!accessToken) {
                 throw new Error('Tu sesion actual ya no es valida. Vuelve a iniciar sesion.');
@@ -198,7 +207,9 @@ export function createToolsCatalogModule({
                 body: JSON.stringify({
                     slug,
                     section_id: sectionId,
-                    project_id: String(getActiveProject?.()?.id ?? ''),
+                    project_id: String(activeProject?.id ?? ''),
+                    project_name: String(activeProject?.name ?? ''),
+                    project_logo_url: String(activeProject?.logo_url ?? ''),
                 }),
             });
 
@@ -293,7 +304,6 @@ export function createToolsCatalogModule({
 
         if (section.catalogHtml) {
             shell.innerHTML = `
-                ${renderProjectContext()}
                 ${section.notice ? renderNotice(section.notice) : ''}
                 ${section.catalogHtml}
             `;
@@ -422,27 +432,15 @@ export function createToolsCatalogModule({
         });
     }
 
-    function renderProjectContext() {
-        const project = getActiveProject?.();
-
-        if (!project?.id) {
-            return '';
-        }
-
-        return `
-            <div class="tools-project-context">
-                <span class="material-symbols-rounded">workspaces</span>
-                <span>Proyecto activo: <strong>${escapeHtml(project.name ?? 'Proyecto')}</strong></span>
-            </div>
-        `;
-    }
 }
 
-function buildBrowserUrl(categoryKey, sectionId, projectId = '') {
+function buildBrowserUrl(categoryKey, sectionId, projectId = '', projectName = '', projectLogoUrl = '') {
     const query = new URLSearchParams({
         category_key: String(categoryKey ?? ''),
         section_id: String(sectionId ?? ''),
         project_id: String(projectId ?? ''),
+        project_name: String(projectName ?? ''),
+        project_logo_url: String(projectLogoUrl ?? ''),
         partial: '1',
     });
 

@@ -28,7 +28,6 @@
 }
 
 .landing-builder-hero,
-.landing-builder-project-chip,
 .landing-builder-page-card,
 .landing-builder-editor,
 .landing-builder-empty {
@@ -133,14 +132,6 @@
     background: rgba(15, 157, 88, 0.1);
     border-color: rgba(15, 157, 88, 0.16);
     color: #0b8043;
-}
-
-.landing-builder-project-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    width: fit-content;
-    padding: 0.75rem 1rem;
 }
 
 .landing-builder-page-grid {

@@ -16,6 +16,8 @@ $userId = trim((string) ($serverAuth['user_id'] ?? ''));
 $categoryKey = trim((string) ($_GET['category_key'] ?? ''));
 $sectionId = trim((string) ($_GET['section_id'] ?? ''));
 $projectId = trim((string) ($_GET['project_id'] ?? ''));
+$projectName = trim((string) ($_GET['project_name'] ?? ''));
+$projectLogoUrl = trim((string) ($_GET['project_logo_url'] ?? ''));
 $openSlug = trim((string) ($_GET['open'] ?? ''));
 $repository = new ToolRepository();
 $errorMessage = '';
@@ -72,6 +74,8 @@ if ($accessToken === '' || $userId === '') {
                 'access_token' => $accessToken,
                 'project' => [
                     'id' => $projectId,
+                    'name' => $projectName,
+                    'logo_url' => $projectLogoUrl,
                 ],
                 'user' => [
                     'email' => (string) ($serverAuth['email'] ?? ''),
@@ -93,7 +97,7 @@ if ($accessToken === '' || $userId === '') {
     }
 }
 
-$fragment = renderToolsCatalogFragment($tools, $errorMessage, $category, $categoryKey, $sectionId, $isPartial);
+$fragment = renderToolsCatalogFragment($tools, $errorMessage, $category, $categoryKey, $sectionId, $projectId, $projectName, $projectLogoUrl, $isPartial);
 
 if ($isPartial) {
     header('Content-Type: text/html; charset=UTF-8');
@@ -139,6 +143,9 @@ function renderToolsCatalogFragment(
     array $category,
     string $categoryKey,
     string $sectionId,
+    string $projectId,
+    string $projectName,
+    string $projectLogoUrl,
     bool $isPartial
 ): string {
     ob_start();
@@ -185,6 +192,8 @@ function renderToolsCatalogFragment(
                                     <input type="hidden" name="category_key" value="<?= htmlspecialchars($categoryKey, ENT_QUOTES, 'UTF-8'); ?>">
                                     <input type="hidden" name="section_id" value="<?= htmlspecialchars($sectionId, ENT_QUOTES, 'UTF-8'); ?>">
                                     <input type="hidden" name="project_id" value="<?= htmlspecialchars($projectId, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="project_name" value="<?= htmlspecialchars($projectName, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <input type="hidden" name="project_logo_url" value="<?= htmlspecialchars($projectLogoUrl, ENT_QUOTES, 'UTF-8'); ?>">
                                     <input type="hidden" name="open" value="<?= htmlspecialchars((string) ($tool['slug'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                                     <button type="submit" class="tools-catalog-primary-button">
                                         <span class="material-symbols-rounded">rocket_launch</span>

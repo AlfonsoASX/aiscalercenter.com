@@ -134,6 +134,8 @@ try {
         $slug = trim((string) ($payload['slug'] ?? ''));
         $sectionId = trim((string) ($payload['section_id'] ?? ''));
         $projectId = trim((string) ($payload['project_id'] ?? ''));
+        $projectName = trim((string) ($payload['project_name'] ?? ''));
+        $projectLogoUrl = trim((string) ($payload['project_logo_url'] ?? ''));
 
         if ($slug === '') {
             throw new InvalidArgumentException('Selecciona una herramienta valida.');
@@ -165,6 +167,8 @@ try {
             'access_token' => $token,
             'project' => [
                 'id' => $projectId,
+                'name' => $projectName,
+                'logo_url' => $projectLogoUrl,
             ],
             'user' => [
                 'email' => (string) ($user['email'] ?? ''),

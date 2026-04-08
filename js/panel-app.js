@@ -414,16 +414,19 @@ function setActiveProject(project) {
         state.activeProject = null;
         window.localStorage.removeItem('aiscaler_active_project_id');
         toolsCatalogModule.setProject(null);
+        updateActiveProjectSidebar();
         return;
     }
 
     state.activeProject = {
         id: String(project.id),
         name: String(project.name ?? 'Proyecto'),
+        logo_url: String(project.logo_url ?? ''),
         owner_user_id: String(project.owner_user_id ?? ''),
     };
     window.localStorage.setItem('aiscaler_active_project_id', state.activeProject.id);
     toolsCatalogModule.setProject(state.activeProject);
+    updateActiveProjectSidebar();
 }
 
 function restoreActiveProject(projects) {
@@ -436,6 +439,40 @@ function restoreActiveProject(projects) {
     }
 
     setActiveProject(restoredProject);
+}
+
+function updateActiveProjectSidebar() {
+    const projectShell = document.getElementById('workspace-active-project');
+    const projectName = document.getElementById('workspace-active-project-name');
+    const projectLogo = document.getElementById('workspace-active-project-logo');
+
+    if (!(projectShell instanceof HTMLElement)
+        || !(projectName instanceof HTMLElement)
+        || !(projectLogo instanceof HTMLElement)) {
+        return;
+    }
+
+    const project = state.activeProject;
+
+    if (!project?.id) {
+        projectShell.classList.add('hidden');
+        projectName.textContent = '';
+        projectLogo.replaceChildren();
+        return;
+    }
+
+    const name = String(project.name ?? 'Proyecto').trim() || 'Proyecto';
+    const logoUrl = String(project.logo_url ?? '').trim();
+
+    projectShell.classList.remove('hidden');
+    projectName.textContent = name;
+
+    if (logoUrl !== '') {
+        projectLogo.innerHTML = `<img src="${escapeHtml(logoUrl)}" alt="">`;
+        return;
+    }
+
+    projectLogo.textContent = name.slice(0, 1).toUpperCase();
 }
 
 function resolveUserRole(user) {
@@ -532,9 +569,7 @@ function selectMenu(menuId) {
     const currentTitle = document.getElementById('app-current-title');
 
     if (currentTitle) {
-        currentTitle.textContent = selectedItem.tool_category_key && state.activeProject
-            ? `${state.activeProject.name} / ${selectedItem.label}`
-            : selectedItem.label;
+        currentTitle.textContent = selectedItem.label;
     }
 
     if (selectedItem.tool_category_key) {

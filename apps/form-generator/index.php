@@ -140,13 +140,6 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentForm);
         </div>
     <?php endif; ?>
 
-    <?php if (is_array($project) && !$isEditorMode): ?>
-        <div class="form-builder-project-chip">
-            <span class="material-symbols-rounded">domain</span>
-            <span>Proyecto activo: <strong><?= htmlspecialchars($activeProjectName, ENT_QUOTES, 'UTF-8'); ?></strong></span>
-        </div>
-    <?php endif; ?>
-
     <?php if ($isEditorMode): ?>
         <?= formBuilderRenderEditor($currentForm, $fieldTypes, $toolContext); ?>
     <?php else: ?>

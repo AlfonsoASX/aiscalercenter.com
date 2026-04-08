@@ -829,6 +829,61 @@ $authClientConfig = [
             padding: 0 0.25rem 0.5rem;
         }
 
+        .workspace-sidebar-project {
+            display: grid;
+            justify-items: center;
+            gap: 0.55rem;
+            min-width: 0;
+            padding: 0.15rem 0.35rem 0.45rem;
+            background: transparent;
+            cursor: default;
+        }
+
+        .workspace-sidebar-project.hidden {
+            display: none;
+        }
+
+        .workspace-sidebar-project-logo {
+            width: 4rem;
+            height: 4rem;
+            flex: 0 0 auto;
+            display: grid;
+            place-items: center;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #ffffff;
+            color: #1f5fd6;
+            font-size: 1.2rem;
+            font-weight: 800;
+            box-shadow:
+                inset 0 0 0 1px rgba(19, 42, 74, 0.08),
+                0 10px 24px rgba(19, 42, 74, 0.08);
+        }
+
+        .workspace-sidebar-project-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            padding: 0.24rem;
+        }
+
+        .workspace-sidebar-project-copy {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .workspace-sidebar-project-copy strong {
+            display: -webkit-box;
+            overflow: hidden;
+            color: #202124;
+            font-size: 0.88rem;
+            font-weight: 700;
+            line-height: 1.3;
+            text-align: center;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+
         .workspace-icon-button,
         .workspace-logout-button {
             display: inline-flex;
@@ -1412,6 +1467,15 @@ $authClientConfig = [
             opacity: 0;
         }
 
+        .workspace-app.is-sidebar-collapsed .workspace-sidebar-project {
+            justify-content: center;
+            padding-inline: 0.1rem;
+        }
+
+        .workspace-app.is-sidebar-collapsed .workspace-sidebar-project-copy {
+            display: none;
+        }
+
         .workspace-app.is-sidebar-collapsed .workspace-nav-button:hover .workspace-nav-text--default,
         .workspace-app.is-sidebar-collapsed .workspace-nav-button:hover .workspace-nav-text--hover,
         .workspace-app.is-sidebar-collapsed .workspace-nav-button:focus-visible .workspace-nav-text--default,
@@ -1492,6 +1556,13 @@ $authClientConfig = [
                 <button id="dashboard-link" type="button" class="workspace-icon-button" data-menu-id="inicio" aria-label="Ir a inicio" title="Inicio">
                     <span class="material-symbols-rounded">home</span>
                 </button>
+            </div>
+
+            <div id="workspace-active-project" class="workspace-sidebar-project hidden" aria-live="polite">
+                <span id="workspace-active-project-logo" class="workspace-sidebar-project-logo" aria-hidden="true"></span>
+                <span class="workspace-sidebar-project-copy">
+                    <strong id="workspace-active-project-name"></strong>
+                </span>
             </div>
 
             <nav id="app-rail-nav" class="workspace-nav" aria-label="Menú principal"></nav>

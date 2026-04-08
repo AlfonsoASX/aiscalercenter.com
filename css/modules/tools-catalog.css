@@ -12,23 +12,6 @@
     gap: 1rem;
 }
 
-.tools-project-context {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: fit-content;
-    padding: 0.65rem 0.9rem;
-    border: 1px solid rgba(32, 33, 36, 0.08);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.82);
-    color: var(--md-text-muted);
-    font-size: 0.9rem;
-}
-
-.tools-project-context strong {
-    color: var(--md-text);
-}
-
 .tools-catalog-grid {
     display: grid;
     gap: 1rem;

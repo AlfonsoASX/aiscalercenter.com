@@ -118,13 +118,6 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentPage);
         </div>
     <?php endif; ?>
 
-    <?php if (is_array($project) && !$isEditorMode): ?>
-        <div class="landing-builder-project-chip">
-            <span class="material-symbols-rounded">domain</span>
-            <span>Proyecto activo: <strong><?= htmlspecialchars($activeProjectName, ENT_QUOTES, 'UTF-8'); ?></strong></span>
-        </div>
-    <?php endif; ?>
-
     <?php if ($isEditorMode): ?>
         <?= landingBuilderRenderEditor($currentPage, $toolContext); ?>
     <?php else: ?>

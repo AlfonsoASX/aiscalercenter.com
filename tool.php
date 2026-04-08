@@ -74,6 +74,13 @@ if ($launchMode === 'php_folder') {
     $roleMenu = is_array($panelConfig['menus'][$role] ?? null) ? $panelConfig['menus'][$role] : [];
     $displayName = trim((string) ($launchUser['display_name'] ?? '')) ?: trim((string) ($launchUser['email'] ?? '')) ?: 'Usuario';
     $userEmail = trim((string) ($launchUser['email'] ?? '')) ?: 'Cuenta sin correo';
+    $activeProject = is_array($launchPayload['project'] ?? null) ? $launchPayload['project'] : [];
+    $activeProjectId = trim((string) ($activeProject['id'] ?? ''));
+    $activeProjectName = trim((string) ($activeProject['name'] ?? ''));
+    $activeProjectLogoUrl = trim((string) ($activeProject['logo_url'] ?? ''));
+    $showActiveProject = $activeProjectId !== '' || $activeProjectName !== '' || $activeProjectLogoUrl !== '';
+    $activeProjectLabel = $activeProjectName !== '' ? $activeProjectName : 'Proyecto';
+    $activeProjectInitial = strtoupper(substr($activeProjectLabel, 0, 1));
     $activeCategoryKey = trim((string) ($tool['category_key'] ?? ''));
     $workspaceAccentRgb = '47, 124, 239';
 
@@ -160,6 +167,21 @@ if ($launchMode === 'php_folder') {
                         <span class="material-symbols-rounded">home</span>
                     </a>
                 </div>
+
+                <?php if ($showActiveProject): ?>
+                    <div class="workspace-sidebar-project">
+                        <span class="workspace-sidebar-project-logo" aria-hidden="true">
+                            <?php if ($activeProjectLogoUrl !== ''): ?>
+                                <img src="<?= htmlspecialchars($activeProjectLogoUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="">
+                            <?php else: ?>
+                                <?= htmlspecialchars($activeProjectInitial, ENT_QUOTES, 'UTF-8'); ?>
+                            <?php endif; ?>
+                        </span>
+                        <span class="workspace-sidebar-project-copy">
+                            <strong><?= htmlspecialchars($activeProjectLabel, ENT_QUOTES, 'UTF-8'); ?></strong>
+                        </span>
+                    </div>
+                <?php endif; ?>
 
                 <nav id="app-rail-nav" class="workspace-nav" aria-label="Menú principal">
                     <?php foreach ($roleMenu as $menuItem): ?>
