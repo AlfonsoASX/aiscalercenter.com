@@ -1,0 +1,6 @@
+@import url("/css/analytics-tools.css");
+
+.analytics-app--traffic {
+    --analytics-accent: #1d4ed8;
+    --analytics-accent-soft: rgba(29, 78, 216, 0.12);
+}

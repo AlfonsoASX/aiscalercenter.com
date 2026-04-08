@@ -1,0 +1,6 @@
+@import url("/css/analytics-tools.css");
+
+.analytics-app--cpl {
+    --analytics-accent: #15803d;
+    --analytics-accent-soft: rgba(21, 128, 61, 0.12);
+}

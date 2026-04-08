@@ -1,0 +1,6 @@
+@import url("/css/analytics-tools.css");
+
+.analytics-app--utm {
+    --analytics-accent: #d97706;
+    --analytics-accent-soft: rgba(217, 119, 6, 0.12);
+}

@@ -206,6 +206,61 @@ values
         30,
         true,
         false
+    ),
+    (
+        'semaforo-trafico',
+        'analizar',
+        'Semaforo de Trafico',
+        'Consolida fuentes, sesiones, rebote y activos listos para medir dentro del proyecto.',
+        '',
+        '',
+        10,
+        true,
+        false
+    ),
+    (
+        'termometro-cpl',
+        'analizar',
+        'Termometro de Costo por Lead',
+        'Visualiza el CPL del proyecto y detecta cuando el costo se sale de rango.',
+        '',
+        '',
+        20,
+        true,
+        false
+    ),
+    (
+        'vision-rayos-x',
+        'analizar',
+        'Vision de Rayos X',
+        'Observa mapas de calor, profundidad de scroll y grabaciones anonimas por landing.',
+        '',
+        '',
+        30,
+        true,
+        false
+    ),
+    (
+        'rastreador-inteligente',
+        'analizar',
+        'Rastreador Inteligente',
+        'Genera y ordena UTMs por publicacion para saber que contenido gana.',
+        '',
+        '',
+        40,
+        true,
+        false
+    ),
+    (
+        'auditor-salud-campanas',
+        'analizar',
+        'Auditor de Salud de Campanas',
+        'Levanta alertas tempranas sobre fallas tecnicas, links ausentes y campanas en riesgo.',
+        '',
+        '',
+        50,
+        true,
+        false
     )
 on conflict (slug) do update
 set category_key = excluded.category_key,

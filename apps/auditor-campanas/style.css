@@ -1,0 +1,6 @@
+@import url("/css/analytics-tools.css");
+
+.analytics-app--auditor {
+    --analytics-accent: #dc2626;
+    --analytics-accent-soft: rgba(220, 38, 38, 0.12);
+}

@@ -1,0 +1,6 @@
+@import url("/css/analytics-tools.css");
+
+.analytics-app--rayos-x {
+    --analytics-accent: #7c3aed;
+    --analytics-accent-soft: rgba(124, 58, 237, 0.12);
+}
