@@ -285,7 +285,7 @@ function formBuilderStateFromPost(array $post): array
         'id' => trim((string) ($post['id'] ?? '')),
         'title' => trim((string) ($post['title'] ?? '')),
         'description' => trim((string) ($post['description'] ?? '')),
-        'slug' => normalizeFormSlug((string) ($post['slug'] ?? $post['title'] ?? 'formulario')),
+        'slug' => trim((string) ($post['slug'] ?? '')),
         'status' => trim((string) ($post['status'] ?? 'draft')) ?: 'draft',
         'public_id' => trim((string) ($post['public_id'] ?? '')),
         'fields' => formBuilderFieldsFromPost($post),
@@ -382,7 +382,7 @@ function formBuilderPayloadForSave(array $form, string $projectId, string $userI
         'owner_user_id' => $userId,
         'title' => $title,
         'description' => trim((string) ($form['description'] ?? '')),
-        'slug' => normalizeFormSlug((string) ($form['slug'] ?? $title)),
+        'slug' => formBuilderResolveInternalSlug($form, $title),
         'status' => in_array($status, ['draft', 'published', 'archived'], true) ? $status : 'draft',
         'fields' => $fields,
         'settings' => is_array($form['settings'] ?? null) ? $form['settings'] : [],
@@ -396,6 +396,19 @@ function formBuilderPayloadForSave(array $form, string $projectId, string $userI
     }
 
     return $payload;
+}
+
+function formBuilderResolveInternalSlug(array $form, string $title): string
+{
+    $existingSlug = trim((string) ($form['slug'] ?? ''));
+
+    if ($existingSlug !== '') {
+        return normalizeFormSlug($existingSlug);
+    }
+
+    $seed = trim((string) ($form['id'] ?? '')) ?: trim((string) ($form['public_id'] ?? '')) ?: bin2hex(random_bytes(4));
+
+    return normalizeFormSlug($title) . '-' . substr(hash('sha1', $seed), 0, 8);
 }
 
 function formBuilderRenderList(array $forms, array $toolContext): string
@@ -565,11 +578,6 @@ function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolCont
 
                     <div class="form-google-panel" data-form-panel="settings">
                         <section class="form-google-settings">
-                            <label class="form-builder-field">
-                                <span>Slug interno</span>
-                                <input type="text" name="slug" value="<?= htmlspecialchars((string) ($form['slug'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="diagnostico-inicial">
-                            </label>
-
                             <label class="form-builder-field">
                                 <span>Texto del boton</span>
                                 <input type="text" name="submit_label" value="<?= htmlspecialchars((string) ($settings['submit_label'] ?? 'Enviar respuesta'), ENT_QUOTES, 'UTF-8'); ?>">

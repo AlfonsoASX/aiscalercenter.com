@@ -400,7 +400,7 @@ function landingBuilderStateFromPost(array $post): array
 function landingBuilderPayloadForSave(array $page, string $projectId, string $userId, string $status): array
 {
     $title = trim((string) ($page['title'] ?? ''));
-    $slug = normalizeLandingSlug((string) ($page['slug'] ?? $title));
+    $slug = landingBuilderResolveInternalSlug($page, $title);
 
     if ($title === '') {
         throw new InvalidArgumentException('La landing necesita un titulo.');
@@ -432,6 +432,19 @@ function landingBuilderPayloadForSave(array $page, string $projectId, string $us
     }
 
     return $payload;
+}
+
+function landingBuilderResolveInternalSlug(array $page, string $title): string
+{
+    $existingSlug = trim((string) ($page['slug'] ?? ''));
+
+    if ($existingSlug !== '') {
+        return normalizeLandingSlug($existingSlug);
+    }
+
+    $seed = trim((string) ($page['id'] ?? '')) ?: trim((string) ($page['public_id'] ?? '')) ?: bin2hex(random_bytes(4));
+
+    return normalizeLandingSlug($title) . '-' . substr(hash('sha1', $seed), 0, 8);
 }
 
 function landingBuilderRenderList(array $pages, array $toolContext): string
@@ -560,10 +573,6 @@ function landingBuilderRenderEditor(array $page, array $toolContext): string
                 <label>
                     <span>Titulo</span>
                     <input type="text" name="title" value="<?= htmlspecialchars((string) ($page['title'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="Landing para mi oferta" data-landing-title-input required>
-                </label>
-                <label>
-                    <span>Slug</span>
-                    <input type="text" name="slug" value="<?= htmlspecialchars((string) ($page['slug'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="landing-mi-oferta">
                 </label>
                 <label>
                     <span>Descripcion interna</span>

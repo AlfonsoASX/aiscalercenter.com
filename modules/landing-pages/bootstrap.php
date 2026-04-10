@@ -28,7 +28,7 @@ function normalizeLandingBuilderException(Throwable $exception): string
     }
 
     if (str_contains($normalized, 'duplicate key') || str_contains($normalized, 'landing_pages_project_slug_unique')) {
-        return 'Ya existe una landing con ese slug dentro de este proyecto. Cambia el slug e intenta de nuevo.';
+        return 'Ya existe una landing con un identificador interno similar. Guarda nuevamente o cambia ligeramente el titulo.';
     }
 
     if (str_contains($normalized, 'get_public_landing_page_definition')) {
