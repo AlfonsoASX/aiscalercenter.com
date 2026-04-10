@@ -46,6 +46,10 @@ if ($accessToken === '' || $userId === '') {
         }
 
         if ($openSlug !== '') {
+            if (isRetiredToolSlug($openSlug)) {
+                throw new RuntimeException('La herramienta solicitada ya no esta disponible en esta categoria.');
+            }
+
             $tool = $repository->findBySlug($accessToken, $openSlug);
 
             if (!is_array($tool)) {
@@ -89,7 +93,10 @@ if ($accessToken === '' || $userId === '') {
             exit;
         }
 
-        $tools = array_map('sanitizeToolForCatalog', $repository->listTools($accessToken, $categoryKey));
+        $tools = array_values(array_filter(
+            array_map('sanitizeToolForCatalog', $repository->listTools($accessToken, $categoryKey)),
+            static fn(array $tool): bool => !isRetiredToolSlug((string) ($tool['slug'] ?? ''))
+        ));
         $tools = mergeCatalogToolsWithBuiltins($tools, $categoryKey);
     } catch (Throwable $exception) {
         $errorMessage = normalizeToolsExceptionMessage($exception);
@@ -262,12 +269,14 @@ function mergeCatalogToolsWithBuiltins(array $tools, string $categoryKey): array
         $indexed[(string) ($tool['slug'] ?? '')] = $tool;
     }
 
-    unset($indexed['validar-mercado']);
+    foreach (retiredToolSlugs() as $retiredSlug) {
+        unset($indexed[$retiredSlug]);
+    }
 
     foreach ($builtins as $builtin) {
         $slug = (string) ($builtin['slug'] ?? '');
 
-        if ($slug !== '' && !isset($indexed[$slug])) {
+        if ($slug !== '' && !isRetiredToolSlug($slug) && !isset($indexed[$slug])) {
             $indexed[$slug] = sanitizeToolForCatalog($builtin);
         }
     }

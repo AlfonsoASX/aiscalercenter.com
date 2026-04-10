@@ -44,6 +44,13 @@ return array (
     'app_folder' => 'apps/landing-builder',
     'entry_file' => 'index.php',
   ),
+  'crear-imagenes-ia' =>
+  array (
+    'launch_mode' => 'php_folder',
+    'panel_module_key' => '',
+    'app_folder' => 'apps/ai-image-studio',
+    'entry_file' => 'index.php',
+  ),
   'planificar-publicaciones' => 
   array (
     'launch_mode' => 'panel_module',

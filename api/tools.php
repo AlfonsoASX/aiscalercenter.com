@@ -24,7 +24,10 @@ try {
             throw new InvalidArgumentException('Selecciona una categoria de herramientas.');
         }
 
-        $tools = array_map('sanitizeToolForCatalog', $repository->listTools($token, $categoryKey));
+        $tools = array_values(array_filter(
+            array_map('sanitizeToolForCatalog', $repository->listTools($token, $categoryKey)),
+            static fn(array $tool): bool => !isRetiredToolSlug((string) ($tool['slug'] ?? ''))
+        ));
 
         sendToolsJson([
             'success' => true,
@@ -72,7 +75,10 @@ try {
                 $tool,
                 getToolLaunchConfig((string) ($tool['slug'] ?? ''))
             ));
-        }, $repository->listTools($token));
+        }, array_values(array_filter(
+            $repository->listTools($token),
+            static fn(array $tool): bool => !isRetiredToolSlug((string) ($tool['slug'] ?? ''))
+        )));
 
         sendToolsJson([
             'success' => true,
@@ -139,6 +145,10 @@ try {
 
         if ($slug === '') {
             throw new InvalidArgumentException('Selecciona una herramienta valida.');
+        }
+
+        if (isRetiredToolSlug($slug)) {
+            throw new InvalidArgumentException('La herramienta solicitada ya no esta disponible.');
         }
 
         $tool = $repository->findBySlug($token, $slug);

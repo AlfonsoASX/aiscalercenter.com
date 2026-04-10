@@ -351,18 +351,6 @@ function builtinToolDefinitions(): array
         ],
         [
             'id' => '',
-            'slug' => 'investigar-amazon',
-            'category_key' => 'investigar',
-            'title' => 'Amazon',
-            'description' => 'Consulta senales y terminos relacionados desde Amazon.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 40,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
             'slug' => 'generador-formularios',
             'category_key' => 'disenar',
             'title' => 'Generador de formularios',
@@ -382,6 +370,18 @@ function builtinToolDefinitions(): array
             'image_url' => '',
             'tutorial_youtube_url' => '',
             'sort_order' => 20,
+            'is_active' => true,
+            'admin_only' => false,
+        ],
+        [
+            'id' => '',
+            'slug' => 'crear-imagenes-ia',
+            'category_key' => 'disenar',
+            'title' => 'Crear imagenes con IA',
+            'description' => 'Prepara prompts, estilos y formatos visuales para generar creativos desde una interfaz simple.',
+            'image_url' => '',
+            'tutorial_youtube_url' => '',
+            'sort_order' => 30,
             'is_active' => true,
             'admin_only' => false,
         ],
@@ -461,7 +461,7 @@ function builtinToolDefinitions(): array
             'id' => '',
             'slug' => 'auditor-salud-campanas',
             'category_key' => 'analizar',
-            'title' => 'Auditor de Salud de Campanas',
+            'title' => 'Auditor de Salud de Campañas',
             'description' => 'Levanta alertas tempranas sobre fallas tecnicas, links ausentes y campanas en riesgo.',
             'image_url' => '',
             'tutorial_youtube_url' => '',
@@ -500,6 +500,19 @@ function findBuiltinToolBySlug(string $slug): ?array
     }
 
     return null;
+}
+
+function retiredToolSlugs(): array
+{
+    return [
+        'validar-mercado',
+        'investigar-amazon',
+    ];
+}
+
+function isRetiredToolSlug(string $slug): bool
+{
+    return in_array(trim($slug), retiredToolSlugs(), true);
 }
 
 function sanitizeToolForAdmin(array $tool): array

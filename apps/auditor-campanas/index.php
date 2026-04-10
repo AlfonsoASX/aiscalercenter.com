@@ -17,7 +17,7 @@ $trafficRows = [];
 $storedAlerts = [];
 
 try {
-    $resolvedContext = analyticsResolveToolContext($toolContext, 'Auditor de Salud de Campanas', $repository);
+    $resolvedContext = analyticsResolveToolContext($toolContext, 'Auditor de Salud de Campañas', $repository);
     $project = $resolvedContext['project'];
     $postRows = $repository->listScheduledPosts($resolvedContext['access_token'], $resolvedContext['project_id']);
     $targetRows = $repository->listScheduledTargets($resolvedContext['access_token'], $postRows);
@@ -38,7 +38,7 @@ $infoCount = count($alerts) - $criticalCount - $warningCount;
     <section class="analytics-hero">
         <div class="analytics-hero-copy">
             <p class="analytics-eyebrow">Analiza</p>
-            <h1>Auditor de Salud de Campanas</h1>
+            <h1>Auditor de Salud de Campañas</h1>
             <p>Una vista temprana para detectar fallas antes de quemar presupuesto: landings sin publicar, publicaciones sin destino o campanas que ya dieron senales de riesgo.</p>
         </div>
 

@@ -142,17 +142,6 @@ values
         false
     ),
     (
-        'investigar-amazon',
-        'investigar',
-        'Amazon',
-        'Consulta senales y terminos relacionados desde Amazon.',
-        '',
-        '',
-        40,
-        true,
-        false
-    ),
-    (
         'generador-formularios',
         'disenar',
         'Generador de formularios',
@@ -171,6 +160,17 @@ values
         '',
         '',
         20,
+        true,
+        false
+    ),
+    (
+        'crear-imagenes-ia',
+        'disenar',
+        'Crear imagenes con IA',
+        'Prepara prompts, estilos y formatos visuales para generar creativos desde una interfaz simple.',
+        '',
+        '',
+        30,
         true,
         false
     ),
@@ -254,7 +254,7 @@ values
     (
         'auditor-salud-campanas',
         'analizar',
-        'Auditor de Salud de Campanas',
+        'Auditor de Salud de Campañas',
         'Levanta alertas tempranas sobre fallas tecnicas, links ausentes y campanas en riesgo.',
         '',
         '',
@@ -273,7 +273,7 @@ set category_key = excluded.category_key,
     admin_only = excluded.admin_only;
 
 delete from public.tools
-where slug = 'validar-mercado';
+where slug in ('validar-mercado', 'investigar-amazon');
 
 alter table public.tool_categories enable row level security;
 alter table public.tools enable row level security;
