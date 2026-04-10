@@ -89,7 +89,7 @@ export function createToolsCatalogModule({
             const html = await response.text();
 
             if (!response.ok && html.trim() === '') {
-                throw new Error('No fue posible cargar las herramientas de esta categoria.');
+                throw new Error('No fue posible cargar las herramientas de esta seccion.');
             }
 
             section.catalogHtml = html;
@@ -379,7 +379,7 @@ export function createToolsCatalogModule({
             <div class="tools-catalog-empty">
                 <span class="material-symbols-rounded tools-catalog-spin">progress_activity</span>
                 <h3>${escapeHtml(item?.section_title ?? item?.label ?? 'Herramientas')}</h3>
-                <p>Preparando las herramientas asignadas a esta categoria...</p>
+                <p>Preparando las herramientas disponibles en esta seccion...</p>
             </div>
         `;
     }

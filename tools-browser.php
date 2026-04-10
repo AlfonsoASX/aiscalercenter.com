@@ -52,7 +52,7 @@ if ($accessToken === '' || $userId === '') {
 
             $tool = findAppToolBySlug($openSlug, $serverUser);
 
-            if (!is_array($tool) || (string) ($tool['category_key'] ?? '') !== $categoryKey) {
+            if (!is_array($tool) || ($categoryKey !== 'all' && (string) ($tool['category_key'] ?? '') !== $categoryKey)) {
                 throw new RuntimeException('La herramienta solicitada ya no esta disponible en esta categoria.');
             }
 
@@ -88,7 +88,11 @@ if ($accessToken === '' || $userId === '') {
             exit;
         }
 
-        $tools = array_map('sanitizeToolForCatalog', listAppToolsByCategory($categoryKey, $serverUser));
+        $categoryLabels = resolveToolCategoryLabelMap(listToolCategories());
+        $tools = array_map(static function (array $tool) use ($categoryLabels): array {
+            $tool['category_label'] = $categoryLabels[(string) ($tool['category_key'] ?? '')] ?? humanizeToolCategoryKey((string) ($tool['category_key'] ?? ''));
+            return sanitizeToolForCatalog($tool);
+        }, listAppToolsByCategory($categoryKey, $serverUser));
     } catch (Throwable $exception) {
         $errorMessage = normalizeToolsExceptionMessage($exception);
         $tools = [];
@@ -169,7 +173,7 @@ function renderToolsCatalogFragment(
 
                         <div class="tools-catalog-card-copy">
                             <span class="tools-catalog-eyebrow">
-                                <?= htmlspecialchars((string) ($category['label'] ?? 'Herramientas'), ENT_QUOTES, 'UTF-8'); ?>
+                                <?= htmlspecialchars((string) ($tool['category_label'] ?: ($category['label'] ?? 'Herramientas')), ENT_QUOTES, 'UTF-8'); ?>
                             </span>
                             <h3><?= htmlspecialchars((string) ($tool['title'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></h3>
                             <p><?= htmlspecialchars((string) ($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
@@ -248,4 +252,25 @@ function resolveToolRoleFromEmail(string $email): string
     $bootstrapAdmins = array_map('strtolower', array_map('trim', (array) ($panelConfig['bootstrap_admins'] ?? [])));
 
     return in_array(strtolower(trim($email)), $bootstrapAdmins, true) ? 'admin' : 'regular';
+}
+
+function resolveToolCategoryLabelMap(array $categories): array
+{
+    $map = [];
+
+    foreach ($categories as $category) {
+        if (!is_array($category)) {
+            continue;
+        }
+
+        $key = (string) ($category['key'] ?? '');
+
+        if ($key === '') {
+            continue;
+        }
+
+        $map[$key] = (string) ($category['label'] ?? humanizeToolCategoryKey($key));
+    }
+
+    return $map;
 }

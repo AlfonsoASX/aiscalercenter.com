@@ -283,6 +283,7 @@ function sanitizeToolForCatalog(array $tool): array
         'id' => (string) ($tool['id'] ?? ''),
         'slug' => (string) ($tool['slug'] ?? ''),
         'category_key' => (string) ($tool['category_key'] ?? ''),
+        'category_label' => (string) ($tool['category_label'] ?? ''),
         'title' => (string) ($tool['title'] ?? ''),
         'description' => (string) ($tool['description'] ?? ''),
         'image_url' => (string) ($tool['image_url'] ?? ''),
@@ -299,6 +300,29 @@ function toolsWorkspaceRoot(): string
 function toolsAppsRoot(): string
 {
     return toolsWorkspaceRoot() . DIRECTORY_SEPARATOR . 'apps';
+}
+
+function toolCategorySortOrders(): array
+{
+    $panelConfig = require __DIR__ . '/../../config/panel.php';
+    $items = (array) ($panelConfig['menus']['admin'] ?? $panelConfig['menus']['regular'] ?? []);
+    $orders = [];
+
+    foreach ($items as $index => $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $categoryKey = trim((string) ($item['tool_category_key'] ?? ''));
+
+        if ($categoryKey === '' || isset($orders[$categoryKey])) {
+            continue;
+        }
+
+        $orders[$categoryKey] = $index * 10;
+    }
+
+    return $orders;
 }
 
 function listToolCategories(): array
@@ -404,12 +428,20 @@ function listAppToolDefinitions(): array
     }
 
     $tools = array_values($indexedTools);
+    $categoryOrders = toolCategorySortOrders();
 
     usort($tools, static function (array $left, array $right): int {
         $leftCategory = (string) ($left['category_key'] ?? '');
         $rightCategory = (string) ($right['category_key'] ?? '');
 
         if ($leftCategory !== $rightCategory) {
+            $leftCategoryOrder = $categoryOrders[$leftCategory] ?? 1000;
+            $rightCategoryOrder = $categoryOrders[$rightCategory] ?? 1000;
+
+            if ($leftCategoryOrder !== $rightCategoryOrder) {
+                return $leftCategoryOrder <=> $rightCategoryOrder;
+            }
+
             return strcmp($leftCategory, $rightCategory);
         }
 
@@ -515,7 +547,7 @@ function listAppToolsByCategory(string $categoryKey, ?array $user = null): array
     }
 
     return array_values(array_filter(listAppToolDefinitions(), static function (array $tool) use ($normalizedCategoryKey, $user): bool {
-        if ((string) ($tool['category_key'] ?? '') !== $normalizedCategoryKey) {
+        if ($normalizedCategoryKey !== 'all' && (string) ($tool['category_key'] ?? '') !== $normalizedCategoryKey) {
             return false;
         }
 

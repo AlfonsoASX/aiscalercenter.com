@@ -3,6 +3,15 @@ declare(strict_types=1);
 
 $regularMenu = [
     [
+        'id' => 'inicio-herramientas',
+        'label' => 'Inicio',
+        'hover_label' => 'Todas las herramientas',
+        'icon_path' => 'img/ico/5.svg',
+        'color' => '#2F7CEF',
+        'section_title' => 'Inicio',
+        'tool_category_key' => 'all',
+    ],
+    [
         'id' => 'Investigar',
         'label' => 'Investigar',
         'hover_label' => 'Genera ideas',
