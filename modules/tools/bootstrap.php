@@ -453,7 +453,7 @@ function normalizeAppToolDefinition(array $definition, string $appDirectory): ?a
     }
 
     $panelModuleKey = trim((string) ($definition['panel_module_key'] ?? ''));
-    $appFolder = trim((string) ($definition['app_folder'] ?? $relativeAppFolder), '/');
+    $appFolder = trim($relativeAppFolder, '/');
     $entryFile = ltrim(trim((string) ($definition['entry_file'] ?? 'index.php')), '/');
 
     if ($entryFile === '') {

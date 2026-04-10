@@ -14,6 +14,5 @@ return [
     'admin_only' => false,
     'launch_mode' => 'php_folder',
     'panel_module_key' => '',
-    'app_folder' => 'apps/whatsapp-bots',
     'entry_file' => 'index.php',
 ];
