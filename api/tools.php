@@ -112,10 +112,11 @@ try {
         }
 
         $returnUrl = buildToolsPanelUrl($sectionId);
+        $sourceSection = resolveToolLaunchSourceSection($sectionId, '', $tool);
         $launchToken = bin2hex(random_bytes(24));
 
         rememberToolLaunch($launchToken, [
-            'tool' => sanitizeToolForLaunch(mergeToolWithPrivateConfig($tool, $privateConfig), $returnUrl),
+            'tool' => sanitizeToolForLaunch(mergeToolWithPrivateConfig($tool, $privateConfig), $returnUrl, $sourceSection),
             'user_id' => (string) ($user['id'] ?? ''),
             'access_token' => $token,
             'project' => [

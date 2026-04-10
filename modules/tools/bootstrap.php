@@ -374,6 +374,72 @@ function listToolCategories(): array
     return array_values($categories);
 }
 
+function findPanelSectionItem(string $sectionId): ?array
+{
+    $candidate = trim($sectionId);
+
+    if ($candidate === '') {
+        return null;
+    }
+
+    $panelConfig = require __DIR__ . '/../../config/panel.php';
+    $items = [];
+
+    if (is_array($panelConfig['dashboard'] ?? null)) {
+        $items[] = $panelConfig['dashboard'];
+    }
+
+    foreach ((array) ($panelConfig['menus']['admin'] ?? $panelConfig['menus']['regular'] ?? []) as $item) {
+        if (is_array($item)) {
+            $items[] = $item;
+        }
+    }
+
+    if (is_array($panelConfig['account_section'] ?? null)) {
+        $items[] = $panelConfig['account_section'];
+    }
+
+    foreach ($items as $item) {
+        if ((string) ($item['id'] ?? '') === $candidate) {
+            return $item;
+        }
+    }
+
+    return null;
+}
+
+function resolveToolLaunchSourceSection(string $sectionId, string $categoryKey = '', array $tool = []): array
+{
+    $panelItem = findPanelSectionItem($sectionId);
+
+    if (is_array($panelItem)) {
+        return [
+            'id' => (string) ($panelItem['id'] ?? ''),
+            'label' => (string) ($panelItem['label'] ?? $panelItem['section_title'] ?? 'Herramientas'),
+        ];
+    }
+
+    $resolvedCategoryKey = trim($categoryKey);
+
+    if ($resolvedCategoryKey === '') {
+        $resolvedCategoryKey = trim((string) ($tool['category_key'] ?? ''));
+    }
+
+    if ($resolvedCategoryKey !== '') {
+        $category = findToolCategory(listToolCategories(), $resolvedCategoryKey);
+
+        return [
+            'id' => '',
+            'label' => (string) ($category['label'] ?? humanizeToolCategoryKey($resolvedCategoryKey)),
+        ];
+    }
+
+    return [
+        'id' => '',
+        'label' => 'Herramientas',
+    ];
+}
+
 function humanizeToolCategoryKey(string $categoryKey): string
 {
     $normalized = trim(str_replace(['-', '_'], ' ', $categoryKey));
@@ -597,7 +663,7 @@ function isRetiredToolSlug(string $slug): bool
     return in_array(trim($slug), retiredToolSlugs(), true);
 }
 
-function sanitizeToolForLaunch(array $tool, string $returnUrl): array
+function sanitizeToolForLaunch(array $tool, string $returnUrl, array $sourceSection = []): array
 {
     return [
         'id' => (string) ($tool['id'] ?? ''),
@@ -613,6 +679,8 @@ function sanitizeToolForLaunch(array $tool, string $returnUrl): array
         'entry_file' => (string) ($tool['entry_file'] ?? 'index.php'),
         'hide_sidebar' => (bool) ($tool['hide_sidebar'] ?? false),
         'return_url' => $returnUrl,
+        'source_section_id' => (string) ($sourceSection['id'] ?? ''),
+        'source_section_label' => (string) ($sourceSection['label'] ?? ''),
     ];
 }
 

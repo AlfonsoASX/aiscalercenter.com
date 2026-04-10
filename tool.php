@@ -19,9 +19,85 @@ if (!$tool) {
 }
 
 $launchMode = (string) ($tool['launch_mode'] ?? 'php_folder');
+$panelConfig = require __DIR__ . '/config/panel.php';
+$launchUser = is_array($launchPayload['user'] ?? null) ? $launchPayload['user'] : [];
+$role = (string) ($launchUser['role'] ?? 'regular') === 'admin' ? 'admin' : 'regular';
+$dashboardItem = is_array($panelConfig['dashboard'] ?? null) ? $panelConfig['dashboard'] : ['id' => 'inicio', 'label' => 'Inicio'];
+$accountItem = is_array($panelConfig['account_section'] ?? null) ? $panelConfig['account_section'] : ['id' => 'configuracion', 'label' => 'Configuracion'];
+$roleMenu = is_array($panelConfig['menus'][$role] ?? null) ? $panelConfig['menus'][$role] : [];
+$displayName = trim((string) ($launchUser['display_name'] ?? '')) ?: trim((string) ($launchUser['email'] ?? '')) ?: 'Usuario';
+$userEmail = trim((string) ($launchUser['email'] ?? '')) ?: 'Cuenta sin correo';
+$activeProject = is_array($launchPayload['project'] ?? null) ? $launchPayload['project'] : [];
+$activeProjectId = trim((string) ($activeProject['id'] ?? ''));
+$activeProjectName = trim((string) ($activeProject['name'] ?? ''));
+$activeProjectLogoUrl = trim((string) ($activeProject['logo_url'] ?? ''));
+$showActiveProject = $activeProjectId !== '' || $activeProjectName !== '' || $activeProjectLogoUrl !== '';
+$activeProjectLabel = $activeProjectName !== '' ? $activeProjectName : 'Proyecto';
+$activeProjectInitial = strtoupper(substr($activeProjectLabel, 0, 1));
+$activeCategoryKey = trim((string) ($tool['category_key'] ?? ''));
+$activeSectionId = trim((string) ($tool['source_section_id'] ?? ''));
+$activeSectionLabel = trim((string) ($tool['source_section_label'] ?? ''));
+$workspaceAccentRgb = '47, 124, 239';
+$activeCategoryItem = null;
+
+foreach ($roleMenu as $menuItem) {
+    if (!is_array($menuItem) || (string) ($menuItem['tool_category_key'] ?? '') !== $activeCategoryKey) {
+        continue;
+    }
+
+    $activeCategoryItem = $menuItem;
+    $hexColor = strtoupper(ltrim(trim((string) ($menuItem['color'] ?? '')), '#'));
+
+    if (preg_match('/^[0-9A-F]{3}$/', $hexColor) === 1) {
+        $hexColor = $hexColor[0] . $hexColor[0] . $hexColor[1] . $hexColor[1] . $hexColor[2] . $hexColor[2];
+    }
+
+    if (preg_match('/^[0-9A-F]{6}$/', $hexColor) === 1) {
+        $workspaceAccentRgb = hexdec(substr($hexColor, 0, 2)) . ', ' . hexdec(substr($hexColor, 2, 2)) . ', ' . hexdec(substr($hexColor, 4, 2));
+    }
+
+    break;
+}
+
+if ($activeSectionLabel === '') {
+    $activeSectionLabel = trim((string) ($activeCategoryItem['label'] ?? ''));
+}
+
+if ($activeSectionLabel === '') {
+    $activeSectionLabel = $activeCategoryKey !== '' ? humanizeToolCategoryKey($activeCategoryKey) : 'Herramientas';
+}
+
+$panelHomeUrl = buildToolsPanelUrl((string) ($dashboardItem['id'] ?? 'inicio'));
+$sectionReturnUrl = trim((string) ($tool['return_url'] ?? '')) ?: ($activeSectionId !== '' ? buildToolsPanelUrl($activeSectionId) : $panelHomeUrl);
+$toolTitle = (string) ($tool['title'] ?? 'Herramienta');
+$toolDescription = (string) ($tool['description'] ?? '');
+$toolBreadcrumbs = [
+    [
+        'label' => 'Panel',
+        'href' => $panelHomeUrl,
+    ],
+];
+
+if ($showActiveProject) {
+    $toolBreadcrumbs[] = [
+        'label' => $activeProjectLabel,
+        'href' => $panelHomeUrl,
+    ];
+}
+
+if ($activeSectionLabel !== '') {
+    $toolBreadcrumbs[] = [
+        'label' => $activeSectionLabel,
+        'href' => $sectionReturnUrl,
+    ];
+}
+
+$toolBreadcrumbs[] = [
+    'label' => $toolTitle,
+    'href' => '',
+];
 
 if ($launchMode === 'php_folder') {
-    $launchUser = is_array($launchPayload['user'] ?? null) ? $launchPayload['user'] : [];
     $workspaceRoot = realpath(__DIR__) ?: __DIR__;
     $appFolder = trim((string) ($tool['app_folder'] ?? ''), '/');
     $entryFile = ltrim((string) ($tool['entry_file'] ?? 'index.php'), '/');
@@ -67,43 +143,6 @@ if ($launchMode === 'php_folder') {
         'user_email' => (string) (($launchPayload['user']['email'] ?? null) ?: ''),
         'project' => is_array($launchPayload['project'] ?? null) ? $launchPayload['project'] : [],
     ];
-    $panelConfig = require __DIR__ . '/config/panel.php';
-    $role = (string) ($launchUser['role'] ?? 'regular') === 'admin' ? 'admin' : 'regular';
-    $dashboardItem = is_array($panelConfig['dashboard'] ?? null) ? $panelConfig['dashboard'] : ['id' => 'inicio', 'label' => 'Inicio'];
-    $accountItem = is_array($panelConfig['account_section'] ?? null) ? $panelConfig['account_section'] : ['id' => 'configuracion', 'label' => 'Configuracion'];
-    $roleMenu = is_array($panelConfig['menus'][$role] ?? null) ? $panelConfig['menus'][$role] : [];
-    $displayName = trim((string) ($launchUser['display_name'] ?? '')) ?: trim((string) ($launchUser['email'] ?? '')) ?: 'Usuario';
-    $userEmail = trim((string) ($launchUser['email'] ?? '')) ?: 'Cuenta sin correo';
-    $activeProject = is_array($launchPayload['project'] ?? null) ? $launchPayload['project'] : [];
-    $activeProjectId = trim((string) ($activeProject['id'] ?? ''));
-    $activeProjectName = trim((string) ($activeProject['name'] ?? ''));
-    $activeProjectLogoUrl = trim((string) ($activeProject['logo_url'] ?? ''));
-    $showActiveProject = $activeProjectId !== '' || $activeProjectName !== '' || $activeProjectLogoUrl !== '';
-    $activeProjectLabel = $activeProjectName !== '' ? $activeProjectName : 'Proyecto';
-    $activeProjectInitial = strtoupper(substr($activeProjectLabel, 0, 1));
-    $activeCategoryKey = trim((string) ($tool['category_key'] ?? ''));
-    $workspaceAccentRgb = '47, 124, 239';
-
-    foreach ($roleMenu as $menuItem) {
-        if (!is_array($menuItem) || (string) ($menuItem['tool_category_key'] ?? '') !== $activeCategoryKey) {
-            continue;
-        }
-
-        $hexColor = strtoupper(ltrim(trim((string) ($menuItem['color'] ?? '')), '#'));
-
-        if (preg_match('/^[0-9A-F]{3}$/', $hexColor) === 1) {
-            $hexColor = $hexColor[0] . $hexColor[0] . $hexColor[1] . $hexColor[1] . $hexColor[2] . $hexColor[2];
-        }
-
-        if (preg_match('/^[0-9A-F]{6}$/', $hexColor) === 1) {
-            $workspaceAccentRgb = hexdec(substr($hexColor, 0, 2)) . ', ' . hexdec(substr($hexColor, 2, 2)) . ', ' . hexdec(substr($hexColor, 4, 2));
-        }
-
-        break;
-    }
-
-    $toolTitle = (string) ($tool['title'] ?? 'Herramienta');
-    $toolDescription = (string) ($tool['description'] ?? '');
     $toolSlug = (string) ($tool['slug'] ?? '');
     $builderMode = trim((string) ($_GET['builder'] ?? ''));
     $hideToolChrome = $toolSlug === 'creador-landing-pages' && in_array($builderMode, ['new', 'edit'], true);
@@ -263,6 +302,36 @@ if ($launchMode === 'php_folder') {
                     </div>
                 </div>
             </header>
+
+            <nav class="workspace-breadcrumb-shell" aria-label="Migas de pan">
+                <ol class="workspace-breadcrumbs">
+                    <?php foreach ($toolBreadcrumbs as $breadcrumbIndex => $breadcrumb): ?>
+                        <?php
+                        $breadcrumb = is_array($breadcrumb) ? $breadcrumb : [];
+                        $isCurrentBreadcrumb = $breadcrumbIndex === array_key_last($toolBreadcrumbs);
+                        $breadcrumbLabel = (string) ($breadcrumb['label'] ?? '');
+                        $breadcrumbHref = (string) ($breadcrumb['href'] ?? '');
+                        ?>
+                        <li class="workspace-breadcrumb-item">
+                            <?php if (!$isCurrentBreadcrumb && $breadcrumbHref !== ''): ?>
+                                <a class="workspace-breadcrumb-link" href="<?= htmlspecialchars($breadcrumbHref, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?= htmlspecialchars($breadcrumbLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </a>
+                            <?php else: ?>
+                                <span class="workspace-breadcrumb-current"<?= $isCurrentBreadcrumb ? ' aria-current="page"' : ''; ?>>
+                                    <?= htmlspecialchars($breadcrumbLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                            <?php endif; ?>
+                        </li>
+
+                        <?php if (!$isCurrentBreadcrumb): ?>
+                            <li class="workspace-breadcrumb-separator" aria-hidden="true">
+                                <span class="material-symbols-rounded">chevron_right</span>
+                            </li>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </ol>
+            </nav>
 
             <main class="workspace-content">
                 <section class="workspace-tool-content">
@@ -447,6 +516,36 @@ $moduleStylesheet = match ($panelModuleKey) {
                     <span id="tool-user-name" class="tool-runtime-user">Cargando usuario...</span>
                 </div>
             </header>
+
+            <nav class="workspace-breadcrumb-shell" aria-label="Migas de pan">
+                <ol class="workspace-breadcrumbs">
+                    <?php foreach ($toolBreadcrumbs as $breadcrumbIndex => $breadcrumb): ?>
+                        <?php
+                        $breadcrumb = is_array($breadcrumb) ? $breadcrumb : [];
+                        $isCurrentBreadcrumb = $breadcrumbIndex === array_key_last($toolBreadcrumbs);
+                        $breadcrumbLabel = (string) ($breadcrumb['label'] ?? '');
+                        $breadcrumbHref = (string) ($breadcrumb['href'] ?? '');
+                        ?>
+                        <li class="workspace-breadcrumb-item">
+                            <?php if (!$isCurrentBreadcrumb && $breadcrumbHref !== ''): ?>
+                                <a class="workspace-breadcrumb-link" href="<?= htmlspecialchars($breadcrumbHref, ENT_QUOTES, 'UTF-8'); ?>">
+                                    <?= htmlspecialchars($breadcrumbLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </a>
+                            <?php else: ?>
+                                <span class="workspace-breadcrumb-current"<?= $isCurrentBreadcrumb ? ' aria-current="page"' : ''; ?>>
+                                    <?= htmlspecialchars($breadcrumbLabel, ENT_QUOTES, 'UTF-8'); ?>
+                                </span>
+                            <?php endif; ?>
+                        </li>
+
+                        <?php if (!$isCurrentBreadcrumb): ?>
+                            <li class="workspace-breadcrumb-separator" aria-hidden="true">
+                                <span class="material-symbols-rounded">chevron_right</span>
+                            </li>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </ol>
+            </nav>
         <?php endif; ?>
         <div id="tool-notice" class="tool-runtime-notice hidden"></div>
         <main id="tool-runtime-mount" class="tool-runtime-mount"></main>

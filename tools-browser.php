@@ -64,10 +64,13 @@ if ($accessToken === '' || $userId === '') {
 
             $launchToken = bin2hex(random_bytes(24));
 
+            $sourceSection = resolveToolLaunchSourceSection($sectionId, $categoryKey, $tool);
+
             rememberToolLaunch($launchToken, [
                 'tool' => sanitizeToolForLaunch(
                     mergeToolWithPrivateConfig($tool, $privateConfig),
-                    buildToolsPanelUrl($sectionId)
+                    buildToolsPanelUrl($sectionId),
+                    $sourceSection
                 ),
                 'user_id' => $userId,
                 'access_token' => $accessToken,

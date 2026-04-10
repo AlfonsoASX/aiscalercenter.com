@@ -453,6 +453,68 @@ details.workspace-user-menu:not([open]) .workspace-user-panel {
     background: transparent;
 }
 
+.workspace-breadcrumb-shell {
+    padding: 0.9rem 1.5rem 0;
+}
+
+.workspace-breadcrumbs {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    list-style: none;
+    color: #5f6368;
+}
+
+.workspace-breadcrumb-item,
+.workspace-breadcrumb-separator {
+    display: inline-flex;
+    align-items: center;
+}
+
+.workspace-breadcrumb-link,
+.workspace-breadcrumb-current {
+    min-height: 1.9rem;
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.92rem;
+    line-height: 1.4;
+}
+
+.workspace-breadcrumb-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #5f6368;
+    text-decoration: none;
+    transition: color 160ms ease;
+}
+
+.workspace-breadcrumb-link:hover {
+    color: #163b7a;
+}
+
+.workspace-breadcrumb-link:focus-visible {
+    outline: 3px solid rgba(47, 124, 239, 0.22);
+    outline-offset: 3px;
+    border-radius: 0.5rem;
+}
+
+.workspace-breadcrumb-separator {
+    color: #9aa0a6;
+}
+
+.workspace-breadcrumb-separator .material-symbols-rounded {
+    font-size: 1rem;
+}
+
+.workspace-breadcrumb-current {
+    color: #202124;
+    font-weight: 700;
+}
+
 .workspace-section-card {
     min-height: calc(100vh - 10rem);
     border: 1px solid rgba(19, 42, 74, 0.08);

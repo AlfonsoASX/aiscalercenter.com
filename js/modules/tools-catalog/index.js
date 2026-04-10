@@ -6,6 +6,7 @@ export function createToolsCatalogModule({
     getCurrentUser,
     getActiveProject,
     humanizeError,
+    onStateChange,
 }) {
     const state = {
         sections: new Map(),
@@ -294,26 +295,21 @@ export function createToolsCatalogModule({
 
         if (section.activeTool) {
             shell.innerHTML = renderToolShell(section.activeTool);
-            return;
-        }
-
-        if (section.loading) {
+        } else if (section.loading) {
             shell.innerHTML = renderLoadingState({});
-            return;
-        }
-
-        if (section.catalogHtml) {
+        } else if (section.catalogHtml) {
             shell.innerHTML = `
                 ${section.notice ? renderNotice(section.notice) : ''}
                 ${section.catalogHtml}
             `;
-            return;
+        } else {
+            shell.innerHTML = `
+                ${section.notice ? renderNotice(section.notice) : ''}
+                ${section.setupRequired ? renderSetupState() : renderLoadingState({})}
+            `;
         }
 
-        shell.innerHTML = `
-            ${section.notice ? renderNotice(section.notice) : ''}
-            ${section.setupRequired ? renderSetupState() : renderLoadingState({})}
-        `;
+        emitStateChange(section);
     }
 
     function renderToolShell(activeTool) {
@@ -415,6 +411,7 @@ export function createToolsCatalogModule({
         ensureLoaded,
         resetView,
         setProject,
+        getActiveTool,
     };
 
     function setProject(project) {
@@ -429,6 +426,36 @@ export function createToolsCatalogModule({
             section.catalogHtml = '';
             section.loaded = false;
             section.activeTool = null;
+        });
+    }
+
+    function getActiveTool(sectionId) {
+        const section = state.sections.get(String(sectionId ?? '')) ?? null;
+
+        if (!section?.activeTool) {
+            return null;
+        }
+
+        return {
+            slug: String(section.activeTool.slug ?? ''),
+            title: String(section.activeTool.title ?? ''),
+            tutorialUrl: String(section.activeTool.tutorialUrl ?? ''),
+            moduleKey: String(section.activeTool.moduleKey ?? ''),
+            loading: section.activeTool.loading === true,
+        };
+    }
+
+    function emitStateChange(section) {
+        if (typeof onStateChange !== 'function') {
+            return;
+        }
+
+        onStateChange({
+            sectionId: String(section?.sectionId ?? ''),
+            categoryKey: String(section?.categoryKey ?? ''),
+            activeTool: getActiveTool(String(section?.sectionId ?? '')),
+            loading: section?.loading === true,
+            loaded: section?.loaded === true,
         });
     }
 

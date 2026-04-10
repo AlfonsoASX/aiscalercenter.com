@@ -91,6 +91,7 @@ const toolsCatalogModule = createToolsCatalogModule({
     getCurrentUser: () => state.currentUser,
     getActiveProject: () => state.activeProject,
     humanizeError: (message) => humanizeToolsError(message),
+    onStateChange: () => renderBreadcrumbs(),
 });
 
 const connectModule = createConnectModule({
@@ -414,6 +415,7 @@ function setActiveProject(project) {
         window.localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY);
         toolsCatalogModule.setProject(null);
         updateActiveProjectSidebar();
+        renderBreadcrumbs();
         return;
     }
 
@@ -427,6 +429,7 @@ function setActiveProject(project) {
     window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, JSON.stringify(state.activeProject));
     toolsCatalogModule.setProject(state.activeProject);
     updateActiveProjectSidebar();
+    renderBreadcrumbs();
 }
 
 function restoreActiveProject(projects) {
@@ -475,6 +478,7 @@ function updateActiveProjectSidebar() {
         projectShell.classList.add('hidden');
         projectName.textContent = '';
         projectLogo.replaceChildren();
+        renderBreadcrumbs();
         return;
     }
 
@@ -486,10 +490,12 @@ function updateActiveProjectSidebar() {
 
     if (logoUrl !== '') {
         projectLogo.innerHTML = `<img src="${escapeHtml(logoUrl)}" alt="">`;
+        renderBreadcrumbs();
         return;
     }
 
     projectLogo.textContent = name.slice(0, 1).toUpperCase();
+    renderBreadcrumbs();
 }
 
 function readStoredProjectContext() {
@@ -626,6 +632,7 @@ function selectMenu(menuId) {
         void toolsCatalogModule.ensureLoaded(menuId);
     }
 
+    renderBreadcrumbs();
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}#${menuId}`);
 
     if (window.innerWidth < 1024) {
@@ -727,6 +734,102 @@ function getPanelItems(role) {
         ...getMenuItems(role),
         getAccountSectionItem(),
     ];
+}
+
+function renderBreadcrumbs() {
+    const breadcrumbs = document.getElementById('app-breadcrumbs');
+
+    if (!(breadcrumbs instanceof HTMLElement)) {
+        return;
+    }
+
+    const items = buildBreadcrumbItems();
+
+    breadcrumbs.innerHTML = items.map((item, index) => {
+        const isCurrent = item.current === true;
+        const content = item.menuId && !isCurrent
+            ? `
+                <button type="button" class="workspace-breadcrumb-link" data-menu-id="${escapeHtml(String(item.menuId ?? ''))}">
+                    ${escapeHtml(String(item.label ?? ''))}
+                </button>
+            `
+            : `
+                <span class="workspace-breadcrumb-current"${isCurrent ? ' aria-current="page"' : ''}>
+                    ${escapeHtml(String(item.label ?? ''))}
+                </span>
+            `;
+
+        return `
+            <li class="workspace-breadcrumb-item">
+                ${content}
+            </li>
+            ${index < items.length - 1
+                ? `
+                    <li class="workspace-breadcrumb-separator" aria-hidden="true">
+                        <span class="material-symbols-rounded">chevron_right</span>
+                    </li>
+                `
+                : ''}
+        `;
+    }).join('');
+}
+
+function buildBreadcrumbItems() {
+    const dashboardItem = getDashboardItem();
+    const accountItem = getAccountSectionItem();
+    const activeItem = state.activeMenuItem ?? null;
+    const items = [
+        {
+            label: 'Panel',
+            menuId: dashboardItem.id,
+            current: false,
+        },
+    ];
+
+    if (!activeItem || activeItem.id === dashboardItem.id) {
+        items[0].current = true;
+        return items;
+    }
+
+    if (shouldRenderProjectBreadcrumb(activeItem, accountItem)) {
+        items.push({
+            label: String(state.activeProject?.name ?? 'Proyecto').trim() || 'Proyecto',
+            menuId: dashboardItem.id,
+            current: false,
+        });
+    }
+
+    const activeTool = activeItem.tool_category_key
+        ? toolsCatalogModule.getActiveTool(activeItem.id)
+        : null;
+
+    items.push({
+        label: String(activeItem.section_title ?? activeItem.label ?? 'Seccion').trim() || 'Seccion',
+        menuId: activeTool?.title ? activeItem.id : '',
+        current: !activeTool?.title,
+    });
+
+    if (activeTool?.title) {
+        items.push({
+            label: String(activeTool.title).trim() || 'Herramienta',
+            menuId: '',
+            current: true,
+        });
+    }
+
+    return items;
+}
+
+function shouldRenderProjectBreadcrumb(activeItem, accountItem) {
+    if (!state.activeProject?.id) {
+        return false;
+    }
+
+    if (!activeItem) {
+        return false;
+    }
+
+    return activeItem.id !== getDashboardItem().id && activeItem.id !== accountItem.id;
 }
 
 function renderSections(items) {
