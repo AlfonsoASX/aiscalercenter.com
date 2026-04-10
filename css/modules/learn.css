@@ -23,6 +23,22 @@
     line-height: 1.55;
 }
 
+.workspace-home-layout.workspace-home-layout--learn-focused {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace-home-layout.workspace-home-layout--learn-focused > .workspace-projects-card {
+    display: none;
+}
+
+.workspace-home-layout.workspace-home-layout--learn-focused > .workspace-section-card.learn-module {
+    min-height: calc(100vh - 10rem);
+}
+
+.workspace-app.workspace-app--learn-focused .workspace-breadcrumb-shell {
+    display: none;
+}
+
 .learn-back-button {
     flex-shrink: 0;
 }

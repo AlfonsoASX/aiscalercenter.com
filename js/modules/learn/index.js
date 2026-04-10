@@ -200,6 +200,9 @@ export function createLearnModule({
         state.activeLessonKey = null;
         state.moduleNotice = null;
         renderModule();
+        window.requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
         void ensureCourseCoverUrl(course);
     }
 
@@ -213,6 +216,9 @@ export function createLearnModule({
         state.activeLessonKey = lessonKey;
         state.moduleNotice = null;
         renderModule();
+        window.requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
         void ensureLessonAsset(lessonKey);
     }
 
@@ -277,6 +283,7 @@ export function createLearnModule({
     }
 
     function renderModule() {
+        const root = document.getElementById('learn-module');
         const shell = document.getElementById('learn-module-shell');
 
         if (!shell) {
@@ -284,6 +291,8 @@ export function createLearnModule({
         }
 
         const activeCourse = getActiveCourse();
+
+        applyFocusedLayout(root, Boolean(activeCourse));
 
         shell.innerHTML = `
             <div class="learn-module-header">
@@ -301,6 +310,25 @@ export function createLearnModule({
 
             ${renderCurrentScreen(activeCourse)}
         `;
+    }
+
+    function applyFocusedLayout(root, isFocused) {
+        if (!(root instanceof HTMLElement)) {
+            return;
+        }
+
+        const homeLayout = root.closest('.workspace-home-layout');
+        const appLayout = root.closest('#app-layout');
+
+        if (!(homeLayout instanceof HTMLElement)) {
+            return;
+        }
+
+        homeLayout.classList.toggle('workspace-home-layout--learn-focused', isFocused);
+
+        if (appLayout instanceof HTMLElement) {
+            appLayout.classList.toggle('workspace-app--learn-focused', isFocused);
+        }
     }
 
     function resolveModuleTitle(activeCourse) {
