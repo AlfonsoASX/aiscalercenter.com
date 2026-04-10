@@ -681,7 +681,7 @@ function buildToolsPanelUrl(?string $sectionId = null): string
         $candidate = (string) (($panelConfig['dashboard']['id'] ?? 'inicio'));
     }
 
-    return $panelUrl . '#' . $candidate;
+    return $panelUrl . '#' . rawurlencode($candidate);
 }
 
 function redirectToolsWithClientFlash(string $targetUrl, string $message, string $type = 'error'): never

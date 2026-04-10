@@ -887,7 +887,17 @@ function renderSettingsSection(item) {
 }
 
 function getRequestedMenuId() {
-    return window.location.hash.replace('#', '').trim();
+    const rawHash = window.location.hash.replace('#', '').trim();
+
+    if (!rawHash) {
+        return '';
+    }
+
+    try {
+        return decodeURIComponent(rawHash).trim();
+    } catch (error) {
+        return rawHash;
+    }
 }
 
 function escapePanelSelector(value) {
