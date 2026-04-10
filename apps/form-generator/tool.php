@@ -1,0 +1,19 @@
+<?php
+declare(strict_types=1);
+
+return [
+    'id' => '',
+    'slug' => 'generador-formularios',
+    'category_key' => 'disenar',
+    'title' => 'Generador de formularios',
+    'description' => 'Crea formularios publicos, compartelos sin login y guarda sus respuestas como JSON.',
+    'image_url' => '',
+    'tutorial_youtube_url' => '',
+    'sort_order' => 10,
+    'is_active' => true,
+    'admin_only' => false,
+    'launch_mode' => 'php_folder',
+    'panel_module_key' => '',
+    'app_folder' => 'apps/form-generator',
+    'entry_file' => 'index.php',
+];

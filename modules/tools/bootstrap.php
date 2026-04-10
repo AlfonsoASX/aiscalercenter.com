@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/ToolRepository.php';
-
 function ensureToolsSessionStarted(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -230,17 +228,6 @@ function requireStoredToolsServerUser(): array
     return [$token, authenticateToolsRequest($token)];
 }
 
-function requireAdminToolsUser(): array
-{
-    [$token, $user] = requireAuthenticatedToolsUser();
-
-    if (!isToolsAdminUser($user)) {
-        throw new RuntimeException('Solo un administrador puede gestionar herramientas.');
-    }
-
-    return [$token, $user];
-}
-
 function isToolsAdminUser(array $user): bool
 {
     $email = strtolower(trim((string) ($user['email'] ?? '')));
@@ -267,17 +254,11 @@ function sendToolsJson(array $payload, int $status = 200): never
 
 function isMissingToolsTable(Throwable $exception): bool
 {
-    $message = strtolower($exception->getMessage());
-
-    return str_contains($message, 'tool_categories') || str_contains($message, 'tools');
+    return false;
 }
 
 function normalizeToolsExceptionMessage(Throwable $exception): string
 {
-    if (isMissingToolsTable($exception)) {
-        return 'La estructura de herramientas aun no existe. Ejecuta supabase/tools_schema.sql en Supabase.';
-    }
-
     return $exception->getMessage();
 }
 
@@ -310,169 +291,222 @@ function sanitizeToolForCatalog(array $tool): array
     ];
 }
 
-function builtinToolDefinitions(): array
+function toolsWorkspaceRoot(): string
 {
+    return realpath(__DIR__ . '/../..') ?: dirname(__DIR__, 2);
+}
+
+function toolsAppsRoot(): string
+{
+    return toolsWorkspaceRoot() . DIRECTORY_SEPARATOR . 'apps';
+}
+
+function listToolCategories(): array
+{
+    $panelConfig = require __DIR__ . '/../../config/panel.php';
+    $items = (array) ($panelConfig['menus']['admin'] ?? $panelConfig['menus']['regular'] ?? []);
+    $categories = [];
+
+    foreach ($items as $index => $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $categoryKey = trim((string) ($item['tool_category_key'] ?? ''));
+
+        if ($categoryKey === '' || isset($categories[$categoryKey])) {
+            continue;
+        }
+
+        $categories[$categoryKey] = [
+            'key' => $categoryKey,
+            'label' => (string) ($item['section_title'] ?? $item['label'] ?? ucfirst($categoryKey)),
+            'description' => (string) ($item['description'] ?? ''),
+            'sort_order' => $index * 10,
+        ];
+    }
+
+    foreach (listAppToolDefinitions() as $tool) {
+        $categoryKey = trim((string) ($tool['category_key'] ?? ''));
+
+        if ($categoryKey === '' || isset($categories[$categoryKey])) {
+            continue;
+        }
+
+        $categories[$categoryKey] = [
+            'key' => $categoryKey,
+            'label' => humanizeToolCategoryKey($categoryKey),
+            'description' => '',
+            'sort_order' => 1000 + count($categories),
+        ];
+    }
+
+    usort($categories, static function (array $left, array $right): int {
+        return ((int) ($left['sort_order'] ?? 0)) <=> ((int) ($right['sort_order'] ?? 0));
+    });
+
+    return array_values($categories);
+}
+
+function humanizeToolCategoryKey(string $categoryKey): string
+{
+    $normalized = trim(str_replace(['-', '_'], ' ', $categoryKey));
+
+    if ($normalized === '') {
+        return 'Herramientas';
+    }
+
+    return ucwords($normalized);
+}
+
+function listAppToolDefinitions(): array
+{
+    static $tools = null;
+
+    if (is_array($tools)) {
+        return $tools;
+    }
+
+    $appsRoot = toolsAppsRoot();
+
+    if (!is_dir($appsRoot)) {
+        $tools = [];
+        return $tools;
+    }
+
+    $metadataFiles = glob($appsRoot . DIRECTORY_SEPARATOR . '*' . DIRECTORY_SEPARATOR . 'tool.php') ?: [];
+    $indexedTools = [];
+
+    foreach ($metadataFiles as $metadataFile) {
+        if (!is_file($metadataFile)) {
+            continue;
+        }
+
+        $appDirectory = dirname($metadataFile);
+
+        try {
+            $definition = require $metadataFile;
+        } catch (Throwable) {
+            continue;
+        }
+
+        if (!is_array($definition)) {
+            continue;
+        }
+
+        $tool = normalizeAppToolDefinition($definition, $appDirectory);
+
+        if (!is_array($tool) || !(bool) ($tool['is_active'] ?? true) || isRetiredToolSlug((string) ($tool['slug'] ?? ''))) {
+            continue;
+        }
+
+        $indexedTools[(string) $tool['slug']] = $tool;
+    }
+
+    $tools = array_values($indexedTools);
+
+    usort($tools, static function (array $left, array $right): int {
+        $leftCategory = (string) ($left['category_key'] ?? '');
+        $rightCategory = (string) ($right['category_key'] ?? '');
+
+        if ($leftCategory !== $rightCategory) {
+            return strcmp($leftCategory, $rightCategory);
+        }
+
+        $leftOrder = (int) ($left['sort_order'] ?? 0);
+        $rightOrder = (int) ($right['sort_order'] ?? 0);
+
+        if ($leftOrder === $rightOrder) {
+            return strcmp((string) ($left['title'] ?? ''), (string) ($right['title'] ?? ''));
+        }
+
+        return $leftOrder <=> $rightOrder;
+    });
+
+    return $tools;
+}
+
+function normalizeAppToolDefinition(array $definition, string $appDirectory): ?array
+{
+    $workspaceRoot = toolsWorkspaceRoot();
+    $realAppDirectory = realpath($appDirectory) ?: $appDirectory;
+    $normalizedWorkspaceRoot = rtrim(str_replace('\\', '/', $workspaceRoot), '/');
+    $normalizedAppDirectory = rtrim(str_replace('\\', '/', $realAppDirectory), '/');
+
+    if (!str_starts_with($normalizedAppDirectory, $normalizedWorkspaceRoot . '/')) {
+        return null;
+    }
+
+    $relativeAppFolder = ltrim(substr($normalizedAppDirectory, strlen($normalizedWorkspaceRoot)), '/');
+    $slug = normalizeToolSlug((string) ($definition['slug'] ?? basename($normalizedAppDirectory)));
+    $categoryKey = trim((string) ($definition['category_key'] ?? ''));
+    $title = trim((string) ($definition['title'] ?? ''));
+
+    if ($slug === '' || $categoryKey === '' || $title === '') {
+        return null;
+    }
+
+    $launchMode = trim((string) ($definition['launch_mode'] ?? 'php_folder'));
+
+    if (!in_array($launchMode, ['php_folder', 'panel_module'], true)) {
+        $launchMode = 'php_folder';
+    }
+
+    $panelModuleKey = trim((string) ($definition['panel_module_key'] ?? ''));
+    $appFolder = trim((string) ($definition['app_folder'] ?? $relativeAppFolder), '/');
+    $entryFile = ltrim(trim((string) ($definition['entry_file'] ?? 'index.php')), '/');
+
+    if ($entryFile === '') {
+        $entryFile = 'index.php';
+    }
+
+    if ($launchMode === 'panel_module' && $panelModuleKey === '') {
+        return null;
+    }
+
+    if ($appFolder !== '' && !isSafeRelativePath($appFolder)) {
+        return null;
+    }
+
+    if (!isSafeRelativePath($entryFile)) {
+        return null;
+    }
+
+    if ($launchMode === 'php_folder' && ($appFolder === '' || !is_file($workspaceRoot . DIRECTORY_SEPARATOR . $appFolder . DIRECTORY_SEPARATOR . $entryFile))) {
+        return null;
+    }
+
+    $imageUrl = trim((string) ($definition['image_url'] ?? ''));
+    $youtubeUrl = trim((string) ($definition['tutorial_youtube_url'] ?? ''));
+
+    if ($imageUrl !== '' && !isSafeToolImageUrl($imageUrl)) {
+        $imageUrl = '';
+    }
+
+    if ($youtubeUrl !== '' && filter_var($youtubeUrl, FILTER_VALIDATE_URL) === false) {
+        $youtubeUrl = '';
+    }
+
     return [
-        [
-            'id' => '',
-            'slug' => 'investigar-google',
-            'category_key' => 'investigar',
-            'title' => 'Google',
-            'description' => 'Consulta terminos relacionados y senales de busqueda desde Google.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 10,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'investigar-youtube',
-            'category_key' => 'investigar',
-            'title' => 'YouTube',
-            'description' => 'Consulta senales y terminos relacionados desde YouTube.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 20,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'investigar-mercado-libre',
-            'category_key' => 'investigar',
-            'title' => 'Mercado Libre',
-            'description' => 'Consulta senales de demanda y terminos relacionados desde Mercado Libre.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 30,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'generador-formularios',
-            'category_key' => 'disenar',
-            'title' => 'Generador de formularios',
-            'description' => 'Crea formularios publicos, compartelos sin login y guarda sus respuestas como JSON.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 10,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'creador-landing-pages',
-            'category_key' => 'disenar',
-            'title' => 'Creador de landing pages',
-            'description' => 'Construye landing pages visuales con bloques editables, vista en vivo y publicacion sin login.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 20,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'crear-imagenes-ia',
-            'category_key' => 'disenar',
-            'title' => 'Crear imagenes con IA',
-            'description' => 'Prepara prompts, estilos y formatos visuales para generar creativos desde una interfaz simple.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 30,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'seguimiento-clientes',
-            'category_key' => 'ejecutar',
-            'title' => 'Seguimiento de Clientes',
-            'description' => 'Gestiona prospectos con un tablero Kanban, panel lateral y entrada automatica de leads por webhook.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 20,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'creacion-bots-whatsapp',
-            'category_key' => 'ejecutar',
-            'title' => 'Creacion de bots de WhatsApp',
-            'description' => 'Configura bots conversacionales, administra la bandeja humana y prepara plantillas para seguimiento comercial.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 30,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'semaforo-trafico',
-            'category_key' => 'analizar',
-            'title' => 'Semaforo de Trafico',
-            'description' => 'Consolida fuentes, sesiones, rebote y activos listos para medir dentro del proyecto.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 10,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'termometro-cpl',
-            'category_key' => 'analizar',
-            'title' => 'Termometro de Costo por Lead',
-            'description' => 'Visualiza el CPL del proyecto y detecta cuando el costo se sale de rango.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 20,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'vision-rayos-x',
-            'category_key' => 'analizar',
-            'title' => 'Vision de Rayos X',
-            'description' => 'Observa mapas de calor, profundidad de scroll y grabaciones anonimas por landing.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 30,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'rastreador-inteligente',
-            'category_key' => 'analizar',
-            'title' => 'Rastreador Inteligente',
-            'description' => 'Genera y ordena UTMs por publicacion para saber que contenido gana.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 40,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
-        [
-            'id' => '',
-            'slug' => 'auditor-salud-campanas',
-            'category_key' => 'analizar',
-            'title' => 'Auditor de Salud de Campañas',
-            'description' => 'Levanta alertas tempranas sobre fallas tecnicas, links ausentes y campanas en riesgo.',
-            'image_url' => '',
-            'tutorial_youtube_url' => '',
-            'sort_order' => 50,
-            'is_active' => true,
-            'admin_only' => false,
-        ],
+        'id' => (string) ($definition['id'] ?? ''),
+        'slug' => $slug,
+        'category_key' => $categoryKey,
+        'title' => $title,
+        'description' => trim((string) ($definition['description'] ?? '')),
+        'image_url' => $imageUrl,
+        'tutorial_youtube_url' => $youtubeUrl,
+        'sort_order' => (int) ($definition['sort_order'] ?? 0),
+        'is_active' => filter_var($definition['is_active'] ?? true, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
+        'admin_only' => filter_var($definition['admin_only'] ?? false, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
+        'launch_mode' => $launchMode,
+        'panel_module_key' => $panelModuleKey,
+        'app_folder' => $appFolder,
+        'entry_file' => $entryFile,
+        'hide_sidebar' => filter_var($definition['hide_sidebar'] ?? false, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
     ];
 }
 
-function listBuiltinToolsByCategory(string $categoryKey): array
+function listAppToolsByCategory(string $categoryKey, ?array $user = null): array
 {
     $normalizedCategoryKey = trim($categoryKey);
 
@@ -480,12 +514,20 @@ function listBuiltinToolsByCategory(string $categoryKey): array
         return [];
     }
 
-    return array_values(array_filter(builtinToolDefinitions(), static function (array $tool) use ($normalizedCategoryKey): bool {
-        return (string) ($tool['category_key'] ?? '') === $normalizedCategoryKey;
+    return array_values(array_filter(listAppToolDefinitions(), static function (array $tool) use ($normalizedCategoryKey, $user): bool {
+        if ((string) ($tool['category_key'] ?? '') !== $normalizedCategoryKey) {
+            return false;
+        }
+
+        if ((bool) ($tool['admin_only'] ?? false) && is_array($user) && !isToolsAdminUser($user)) {
+            return false;
+        }
+
+        return true;
     }));
 }
 
-function findBuiltinToolBySlug(string $slug): ?array
+function findAppToolBySlug(string $slug, ?array $user = null): ?array
 {
     $normalizedSlug = trim($slug);
 
@@ -493,10 +535,16 @@ function findBuiltinToolBySlug(string $slug): ?array
         return null;
     }
 
-    foreach (builtinToolDefinitions() as $tool) {
-        if ((string) ($tool['slug'] ?? '') === $normalizedSlug) {
-            return $tool;
+    foreach (listAppToolDefinitions() as $tool) {
+        if ((string) ($tool['slug'] ?? '') !== $normalizedSlug) {
+            continue;
         }
+
+        if ((bool) ($tool['admin_only'] ?? false) && is_array($user) && !isToolsAdminUser($user)) {
+            return null;
+        }
+
+        return $tool;
     }
 
     return null;
@@ -513,26 +561,6 @@ function retiredToolSlugs(): array
 function isRetiredToolSlug(string $slug): bool
 {
     return in_array(trim($slug), retiredToolSlugs(), true);
-}
-
-function sanitizeToolForAdmin(array $tool): array
-{
-    return [
-        'id' => (string) ($tool['id'] ?? ''),
-        'category_key' => (string) ($tool['category_key'] ?? ''),
-        'slug' => (string) ($tool['slug'] ?? ''),
-        'title' => (string) ($tool['title'] ?? ''),
-        'description' => (string) ($tool['description'] ?? ''),
-        'image_url' => (string) ($tool['image_url'] ?? ''),
-        'tutorial_youtube_url' => (string) ($tool['tutorial_youtube_url'] ?? ''),
-        'launch_mode' => (string) ($tool['launch_mode'] ?? 'php_folder'),
-        'panel_module_key' => (string) ($tool['panel_module_key'] ?? ''),
-        'app_folder' => (string) ($tool['app_folder'] ?? ''),
-        'entry_file' => (string) ($tool['entry_file'] ?? 'index.php'),
-        'sort_order' => (int) ($tool['sort_order'] ?? 0),
-        'is_active' => (bool) ($tool['is_active'] ?? true),
-        'admin_only' => (bool) ($tool['admin_only'] ?? false),
-    ];
 }
 
 function sanitizeToolForLaunch(array $tool, string $returnUrl): array
@@ -554,37 +582,6 @@ function sanitizeToolForLaunch(array $tool, string $returnUrl): array
     ];
 }
 
-function extractPrivateToolConfig(array $payload): array
-{
-    $config = [
-        'launch_mode' => (string) ($payload['launch_mode'] ?? 'php_folder'),
-        'panel_module_key' => (string) ($payload['panel_module_key'] ?? ''),
-        'app_folder' => (string) ($payload['app_folder'] ?? ''),
-        'entry_file' => (string) ($payload['entry_file'] ?? 'index.php'),
-    ];
-
-    if (array_key_exists('hide_sidebar', $payload)) {
-        $config['hide_sidebar'] = filter_var($payload['hide_sidebar'], FILTER_VALIDATE_BOOL);
-    }
-
-    return $config;
-}
-
-function sanitizeToolPayloadForDatabase(array $payload): array
-{
-    $databasePayload = $payload;
-
-    unset(
-        $databasePayload['launch_mode'],
-        $databasePayload['panel_module_key'],
-        $databasePayload['app_folder'],
-        $databasePayload['entry_file'],
-        $databasePayload['hide_sidebar']
-    );
-
-    return $databasePayload;
-}
-
 function mergeToolWithPrivateConfig(array $tool, ?array $privateConfig): array
 {
     return [
@@ -595,84 +592,6 @@ function mergeToolWithPrivateConfig(array $tool, ?array $privateConfig): array
         'entry_file' => (string) ($privateConfig['entry_file'] ?? 'index.php'),
         'hide_sidebar' => (bool) ($privateConfig['hide_sidebar'] ?? false),
     ];
-}
-
-function validateToolPayload(array $payload): array
-{
-    $title = trim((string) ($payload['title'] ?? ''));
-    $slug = normalizeToolSlug((string) ($payload['slug'] ?? ''));
-    $categoryKey = trim((string) ($payload['category_key'] ?? ''));
-    $description = trim((string) ($payload['description'] ?? ''));
-    $imageUrl = trim((string) ($payload['image_url'] ?? ''));
-    $youtubeUrl = trim((string) ($payload['tutorial_youtube_url'] ?? ''));
-    $launchMode = trim((string) ($payload['launch_mode'] ?? 'php_folder'));
-    $panelModuleKey = trim((string) ($payload['panel_module_key'] ?? ''));
-    $appFolder = trim((string) ($payload['app_folder'] ?? ''));
-    $entryFile = trim((string) ($payload['entry_file'] ?? 'index.php'));
-
-    if ($title === '') {
-        throw new InvalidArgumentException('El titulo de la herramienta es obligatorio.');
-    }
-
-    if ($slug === '') {
-        throw new InvalidArgumentException('La herramienta necesita un slug valido.');
-    }
-
-    if ($categoryKey === '') {
-        throw new InvalidArgumentException('Selecciona en que categoria se mostrara la herramienta.');
-    }
-
-    if (!in_array($launchMode, ['php_folder', 'panel_module'], true)) {
-        throw new InvalidArgumentException('Selecciona un modo de apertura valido.');
-    }
-
-    if ($launchMode === 'panel_module' && $panelModuleKey === '') {
-        throw new InvalidArgumentException('Indica la clave interna del modulo del panel.');
-    }
-
-    if ($launchMode === 'php_folder' && $appFolder === '') {
-        throw new InvalidArgumentException('Indica la carpeta protegida donde vive la herramienta.');
-    }
-
-    if ($youtubeUrl !== '' && filter_var($youtubeUrl, FILTER_VALIDATE_URL) === false) {
-        throw new InvalidArgumentException('El tutorial debe ser una URL valida.');
-    }
-
-    if ($imageUrl !== '' && !isSafeToolImageUrl($imageUrl)) {
-        throw new InvalidArgumentException('La imagen de la herramienta debe ser una URL valida o una ruta local segura.');
-    }
-
-    if ($appFolder !== '' && !isSafeRelativePath($appFolder)) {
-        throw new InvalidArgumentException('La carpeta de la herramienta no tiene un formato valido.');
-    }
-
-    if ($entryFile !== '' && !isSafeRelativePath($entryFile)) {
-        throw new InvalidArgumentException('El archivo de entrada no tiene un formato valido.');
-    }
-
-    $normalized = [
-        'category_key' => $categoryKey,
-        'slug' => $slug,
-        'title' => $title,
-        'description' => $description,
-        'image_url' => $imageUrl,
-        'tutorial_youtube_url' => $youtubeUrl,
-        'launch_mode' => $launchMode,
-        'panel_module_key' => $panelModuleKey,
-        'app_folder' => trim($appFolder, '/'),
-        'entry_file' => $entryFile === '' ? 'index.php' : ltrim($entryFile, '/'),
-        'sort_order' => (int) ($payload['sort_order'] ?? 0),
-        'is_active' => filter_var($payload['is_active'] ?? true, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
-        'admin_only' => filter_var($payload['admin_only'] ?? false, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
-    ];
-
-    $id = trim((string) ($payload['id'] ?? ''));
-
-    if ($id !== '') {
-        $normalized['id'] = $id;
-    }
-
-    return $normalized;
 }
 
 function normalizeToolSlug(string $value): string
@@ -784,79 +703,19 @@ function redirectToolsWithClientFlash(string $targetUrl, string $message, string
     exit;
 }
 
-function toolLaunchRegistryPath(): string
-{
-    return __DIR__ . '/../../storage/tool_launch_configs.php';
-}
-
-function readToolLaunchRegistry(): array
-{
-    $path = toolLaunchRegistryPath();
-
-    if (!is_file($path)) {
-        return [];
-    }
-
-    $registry = require $path;
-
-    return is_array($registry) ? $registry : [];
-}
-
-function saveToolLaunchRegistry(array $registry): void
-{
-    $path = toolLaunchRegistryPath();
-    $directory = dirname($path);
-
-    if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
-        throw new RuntimeException('No fue posible preparar el directorio del registro privado de herramientas.');
-    }
-
-    $php = "<?php\n";
-    $php .= "declare(strict_types=1);\n\n";
-    $php .= 'return ' . var_export($registry, true) . ";\n";
-
-    if (file_put_contents($path, $php, LOCK_EX) === false) {
-        throw new RuntimeException('No fue posible guardar el registro privado de herramientas.');
-    }
-}
-
 function getToolLaunchConfig(string $slug): ?array
 {
-    $registry = readToolLaunchRegistry();
-    $payload = $registry[$slug] ?? null;
+    $tool = findAppToolBySlug($slug);
 
-    return is_array($payload) ? $payload : null;
-}
-
-function saveToolLaunchConfig(string $slug, array $config, ?string $previousSlug = null): void
-{
-    $registry = readToolLaunchRegistry();
-
-    if ($previousSlug !== null && $previousSlug !== '' && $previousSlug !== $slug) {
-        unset($registry[$previousSlug]);
+    if (!is_array($tool)) {
+        return null;
     }
 
-    $registry[$slug] = [
-        'launch_mode' => (string) ($config['launch_mode'] ?? 'php_folder'),
-        'panel_module_key' => (string) ($config['panel_module_key'] ?? ''),
-        'app_folder' => (string) ($config['app_folder'] ?? ''),
-        'entry_file' => (string) ($config['entry_file'] ?? 'index.php'),
-        'hide_sidebar' => array_key_exists('hide_sidebar', $config)
-            ? (bool) $config['hide_sidebar']
-            : (bool) ($registry[$slug]['hide_sidebar'] ?? false),
+    return [
+        'launch_mode' => (string) ($tool['launch_mode'] ?? 'php_folder'),
+        'panel_module_key' => (string) ($tool['panel_module_key'] ?? ''),
+        'app_folder' => (string) ($tool['app_folder'] ?? ''),
+        'entry_file' => (string) ($tool['entry_file'] ?? 'index.php'),
+        'hide_sidebar' => (bool) ($tool['hide_sidebar'] ?? false),
     ];
-
-    saveToolLaunchRegistry($registry);
-}
-
-function deleteToolLaunchConfig(string $slug): void
-{
-    $registry = readToolLaunchRegistry();
-
-    if (!array_key_exists($slug, $registry)) {
-        return;
-    }
-
-    unset($registry[$slug]);
-    saveToolLaunchRegistry($registry);
 }

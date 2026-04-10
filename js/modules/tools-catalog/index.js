@@ -368,8 +368,8 @@ export function createToolsCatalogModule({
     function renderSetupState() {
         return `
             <div class="tools-catalog-setup">
-                <strong>Falta preparar la base de herramientas.</strong>
-                <p>Ejecuta <code>supabase/tools_schema.sql</code> en Supabase para habilitar esta capa.</p>
+                <strong>No hay herramientas disponibles para esta categoria.</strong>
+                <p>Agrega un archivo <code>tool.php</code> dentro de la carpeta de cada app para publicarla en el catalogo.</p>
             </div>
         `;
     }

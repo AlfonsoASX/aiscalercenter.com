@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
 
-use AiScaler\Tools\ToolRepository;
-
 require_once __DIR__ . '/lib/supabase_api.php';
 require_once __DIR__ . '/modules/tools/bootstrap.php';
 
@@ -13,13 +11,15 @@ $isPartial = trim((string) ($_GET['partial'] ?? '')) === '1';
 $serverAuth = getToolsServerAuth();
 $accessToken = trim((string) ($serverAuth['access_token'] ?? ''));
 $userId = trim((string) ($serverAuth['user_id'] ?? ''));
+$serverUser = [
+    'email' => (string) ($serverAuth['email'] ?? ''),
+];
 $categoryKey = trim((string) ($_GET['category_key'] ?? ''));
 $sectionId = trim((string) ($_GET['section_id'] ?? ''));
 $projectId = trim((string) ($_GET['project_id'] ?? ''));
 $projectName = trim((string) ($_GET['project_name'] ?? ''));
 $projectLogoUrl = trim((string) ($_GET['project_logo_url'] ?? ''));
 $openSlug = trim((string) ($_GET['open'] ?? ''));
-$repository = new ToolRepository();
 $errorMessage = '';
 $category = [
     'key' => $categoryKey,
@@ -34,7 +34,7 @@ if ($accessToken === '' || $userId === '') {
     $errorMessage = 'Selecciona una categoria valida de herramientas.';
 } else {
     try {
-        $categories = $repository->listCategories($accessToken);
+        $categories = listToolCategories();
         $foundCategory = findToolCategory($categories, $categoryKey);
 
         if (is_array($foundCategory)) {
@@ -50,12 +50,7 @@ if ($accessToken === '' || $userId === '') {
                 throw new RuntimeException('La herramienta solicitada ya no esta disponible en esta categoria.');
             }
 
-            $tool = $repository->findBySlug($accessToken, $openSlug);
-
-            if (!is_array($tool)) {
-                $builtinTool = findBuiltinToolBySlug($openSlug);
-                $tool = is_array($builtinTool) ? sanitizeToolForCatalog($builtinTool) : null;
-            }
+            $tool = findAppToolBySlug($openSlug, $serverUser);
 
             if (!is_array($tool) || (string) ($tool['category_key'] ?? '') !== $categoryKey) {
                 throw new RuntimeException('La herramienta solicitada ya no esta disponible en esta categoria.');
@@ -93,11 +88,7 @@ if ($accessToken === '' || $userId === '') {
             exit;
         }
 
-        $tools = array_values(array_filter(
-            array_map('sanitizeToolForCatalog', $repository->listTools($accessToken, $categoryKey)),
-            static fn(array $tool): bool => !isRetiredToolSlug((string) ($tool['slug'] ?? ''))
-        ));
-        $tools = mergeCatalogToolsWithBuiltins($tools, $categoryKey);
+        $tools = array_map('sanitizeToolForCatalog', listAppToolsByCategory($categoryKey, $serverUser));
     } catch (Throwable $exception) {
         $errorMessage = normalizeToolsExceptionMessage($exception);
         $tools = [];
@@ -169,7 +160,7 @@ function renderToolsCatalogFragment(
                 <div class="tools-catalog-empty tools-catalog-empty--full">
                     <span class="material-symbols-rounded">apps</span>
                     <h3>Aun no hay herramientas aqui</h3>
-                    <p>Cuando un administrador agregue herramientas para esta categoria, apareceran en esta vista.</p>
+                    <p>Cuando exista un archivo <code>tool.php</code> activo dentro de una app de esta categoria, aparecera en esta vista.</p>
                 </div>
             <?php else: ?>
                 <?php foreach ($tools as $tool): ?>
@@ -249,52 +240,6 @@ function renderToolsCatalogMedia(array $tool): string
         htmlspecialchars($imageUrl, ENT_QUOTES, 'UTF-8'),
         htmlspecialchars($title, ENT_QUOTES, 'UTF-8')
     );
-}
-
-function mergeCatalogToolsWithBuiltins(array $tools, string $categoryKey): array
-{
-    $builtins = listBuiltinToolsByCategory($categoryKey);
-
-    if ($builtins === []) {
-        return $tools;
-    }
-
-    $indexed = [];
-
-    foreach ($tools as $tool) {
-        if (!is_array($tool)) {
-            continue;
-        }
-
-        $indexed[(string) ($tool['slug'] ?? '')] = $tool;
-    }
-
-    foreach (retiredToolSlugs() as $retiredSlug) {
-        unset($indexed[$retiredSlug]);
-    }
-
-    foreach ($builtins as $builtin) {
-        $slug = (string) ($builtin['slug'] ?? '');
-
-        if ($slug !== '' && !isRetiredToolSlug($slug) && !isset($indexed[$slug])) {
-            $indexed[$slug] = sanitizeToolForCatalog($builtin);
-        }
-    }
-
-    $merged = array_values($indexed);
-
-    usort($merged, static function (array $left, array $right): int {
-        $leftOrder = (int) ($left['sort_order'] ?? 0);
-        $rightOrder = (int) ($right['sort_order'] ?? 0);
-
-        if ($leftOrder === $rightOrder) {
-            return strcmp((string) ($left['title'] ?? ''), (string) ($right['title'] ?? ''));
-        }
-
-        return $leftOrder <=> $rightOrder;
-    });
-
-    return $merged;
 }
 
 function resolveToolRoleFromEmail(string $email): string

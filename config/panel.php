@@ -73,14 +73,6 @@ $adminMenu = [
         'color' => '#000000',
         'section_title' => 'Cursos',
     ],
-    [
-        'id' => 'herramientas',
-        'label' => 'Herramientas',
-        'hover_label' => 'Herramientas',
-        'icon_path' => 'img/ico/5.svg',
-        'color' => '#000000',
-        'section_title' => 'Herramientas',
-    ],
 ];
 
 return [

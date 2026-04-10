@@ -1,5 +1,4 @@
 import { BLOG_ENTRIES_SECTION_ID, createBlogEntriesModule } from './modules/blog-entries/index.js';
-import { ADMIN_TOOLS_SECTION_ID, createAdminToolsModule } from './modules/admin-tools/index.js';
 import { CONNECT_SECTION_ID, createConnectModule } from './modules/connect/index.js';
 import { COURSES_SECTION_ID, createCoursesModule } from './modules/courses/index.js';
 import { LEARN_SECTION_ID, createLearnModule } from './modules/learn/index.js';
@@ -96,11 +95,6 @@ const toolsCatalogModule = createToolsCatalogModule({
 
 const connectModule = createConnectModule({
     getAccessToken,
-});
-
-const adminToolsModule = createAdminToolsModule({
-    getAccessToken,
-    humanizeError: (message) => humanizeToolsError(message),
 });
 
 if (view === 'app') {
@@ -632,10 +626,6 @@ function selectMenu(menuId) {
         void toolsCatalogModule.ensureLoaded(menuId);
     }
 
-    if (selectedItem.id === ADMIN_TOOLS_SECTION_ID) {
-        void adminToolsModule.ensureLoaded();
-    }
-
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}#${menuId}`);
 
     if (window.innerWidth < 1024) {
@@ -672,8 +662,6 @@ function ensureSectionBound(item) {
         learnModule.bind();
     } else if (item.id === CONNECT_SECTION_ID) {
         connectModule.bind();
-    } else if (item.id === ADMIN_TOOLS_SECTION_ID) {
-        adminToolsModule.bind();
     } else if (item.id === getDashboardItem().id) {
         projectsModule.bind();
         learnModule.bind();
@@ -770,8 +758,6 @@ function renderSectionContent(item) {
         ? learnModule.renderSection(item)
         : item.id === CONNECT_SECTION_ID
         ? connectModule.renderSection(item)
-        : item.id === ADMIN_TOOLS_SECTION_ID
-        ? adminToolsModule.renderSection(item)
         : item.tool_category_key
         ? toolsCatalogModule.renderSection(item)
         : item.id === getDashboardItem().id
@@ -1085,12 +1071,8 @@ function humanizeExecuteError(message) {
 function humanizeToolsError(message) {
     const normalized = String(message ?? '').toLowerCase();
 
-    if ((normalized.includes('pgrst205') || normalized.includes('could not find the table')) && (normalized.includes('tools') || normalized.includes('tool_categories'))) {
-        return 'La base de herramientas aun no existe en Supabase. Ejecuta el archivo supabase/tools_schema.sql.';
-    }
-
-    if (normalized.includes('duplicate key value') || normalized.includes('tools_slug_key')) {
-        return 'Ya existe una herramienta con ese slug. Usa uno diferente.';
+    if (normalized.includes('tool.php') || normalized.includes('apps/*/tool.php')) {
+        return 'Las herramientas ahora se configuran desde el archivo tool.php dentro de cada app.';
     }
 
     return humanizeAuthError(message);

@@ -1,8 +1,6 @@
 <?php
 declare(strict_types=1);
 
-use AiScaler\Tools\ToolRepository;
-
 require_once __DIR__ . '/../lib/supabase_api.php';
 require_once __DIR__ . '/../modules/tools/bootstrap.php';
 
@@ -11,23 +9,18 @@ cleanupExpiredToolLaunches();
 
 header('Content-Type: application/json; charset=UTF-8');
 
-$repository = new ToolRepository();
-
 try {
     $action = resolveToolsAction();
 
     if ($action === 'catalog') {
-        [$token] = requireAuthenticatedToolsUser();
+        [, $user] = requireAuthenticatedToolsUser();
         $categoryKey = trim((string) ($_GET['category_key'] ?? ''));
 
         if ($categoryKey === '') {
             throw new InvalidArgumentException('Selecciona una categoria de herramientas.');
         }
 
-        $tools = array_values(array_filter(
-            array_map('sanitizeToolForCatalog', $repository->listTools($token, $categoryKey)),
-            static fn(array $tool): bool => !isRetiredToolSlug((string) ($tool['slug'] ?? ''))
-        ));
+        $tools = array_map('sanitizeToolForCatalog', listAppToolsByCategory($categoryKey, $user));
 
         sendToolsJson([
             'success' => true,
@@ -69,69 +62,24 @@ try {
     }
 
     if ($action === 'admin_bootstrap') {
-        [$token] = requireAdminToolsUser();
-        $tools = array_map(static function (array $tool): array {
-            return sanitizeToolForAdmin(mergeToolWithPrivateConfig(
-                $tool,
-                getToolLaunchConfig((string) ($tool['slug'] ?? ''))
-            ));
-        }, array_values(array_filter(
-            $repository->listTools($token),
-            static fn(array $tool): bool => !isRetiredToolSlug((string) ($tool['slug'] ?? ''))
-        )));
-
         sendToolsJson([
-            'success' => true,
-            'data' => [
-                'categories' => $repository->listCategories($token),
-                'tools' => $tools,
-            ],
-        ]);
+            'success' => false,
+            'message' => 'El CRUD de herramientas fue reemplazado por archivos apps/*/tool.php.',
+        ], 410);
     }
 
     if ($action === 'save') {
-        [$token] = requireAdminToolsUser();
-        $payload = validateToolPayload(readToolsJsonPayload());
-        $previousTool = isset($payload['id']) ? $repository->findById($token, (string) $payload['id']) : null;
-        $savedTool = $repository->save($token, sanitizeToolPayloadForDatabase($payload));
-        saveToolLaunchConfig(
-            (string) ($savedTool['slug'] ?? ''),
-            extractPrivateToolConfig($payload),
-            is_array($previousTool) ? (string) ($previousTool['slug'] ?? '') : null
-        );
-        $savedTool = mergeToolWithPrivateConfig($savedTool, getToolLaunchConfig((string) ($savedTool['slug'] ?? '')));
-
         sendToolsJson([
-            'success' => true,
-            'message' => 'Herramienta guardada correctamente.',
-            'data' => [
-                'tool' => sanitizeToolForAdmin($savedTool),
-            ],
-        ]);
+            'success' => false,
+            'message' => 'Las herramientas ya no se guardan por API. Edita el archivo tool.php dentro de la carpeta de cada app.',
+        ], 410);
     }
 
     if ($action === 'delete') {
-        [$token] = requireAdminToolsUser();
-        $payload = readToolsJsonPayload();
-        $id = trim((string) ($payload['id'] ?? ''));
-
-        if ($id === '') {
-            throw new InvalidArgumentException('No encontramos la herramienta que intentas borrar.');
-        }
-
-        $existing = $repository->findById($token, $id);
-
-        if (!$existing) {
-            throw new InvalidArgumentException('La herramienta ya no existe.');
-        }
-
-        $repository->delete($token, $id);
-        deleteToolLaunchConfig((string) ($existing['slug'] ?? ''));
-
         sendToolsJson([
-            'success' => true,
-            'message' => 'Herramienta eliminada correctamente.',
-        ]);
+            'success' => false,
+            'message' => 'Las herramientas ya no se eliminan por API. Quita o desactiva el tool.php de la app correspondiente.',
+        ], 410);
     }
 
     if ($action === 'launch') {
@@ -151,12 +99,7 @@ try {
             throw new InvalidArgumentException('La herramienta solicitada ya no esta disponible.');
         }
 
-        $tool = $repository->findBySlug($token, $slug);
-
-        if (!$tool) {
-            $builtinTool = findBuiltinToolBySlug($slug);
-            $tool = is_array($builtinTool) ? sanitizeToolForCatalog($builtinTool) : null;
-        }
+        $tool = findAppToolBySlug($slug, $user);
 
         if (!$tool) {
             throw new InvalidArgumentException('La herramienta solicitada ya no esta disponible.');
