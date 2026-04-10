@@ -88,9 +88,13 @@ if ($accessToken === '' || $userId === '') {
             exit;
         }
 
-        $categoryLabels = resolveToolCategoryLabelMap(listToolCategories());
-        $tools = array_map(static function (array $tool) use ($categoryLabels): array {
-            $tool['category_label'] = $categoryLabels[(string) ($tool['category_key'] ?? '')] ?? humanizeToolCategoryKey((string) ($tool['category_key'] ?? ''));
+        $categoryMetaMap = resolveToolCategoryMetaMap();
+        $tools = array_map(static function (array $tool) use ($categoryMetaMap): array {
+            $toolCategoryKey = (string) ($tool['category_key'] ?? '');
+            $categoryMeta = $categoryMetaMap[$toolCategoryKey] ?? null;
+            $tool['category_label'] = (string) ($categoryMeta['label'] ?? humanizeToolCategoryKey($toolCategoryKey));
+            $tool['category_color'] = (string) ($categoryMeta['color'] ?? '#5F6368');
+            $tool['category_sort_order'] = (int) ($categoryMeta['sort_order'] ?? 1000);
             return sanitizeToolForCatalog($tool);
         }, listAppToolsByCategory($categoryKey, $serverUser));
     } catch (Throwable $exception) {
@@ -159,68 +163,127 @@ function renderToolsCatalogFragment(
             </div>
         <?php endif; ?>
 
-        <div class="tools-catalog-grid">
-            <?php if ($tools === []): ?>
+        <?php if ($tools === []): ?>
+            <div class="tools-catalog-grid">
                 <div class="tools-catalog-empty tools-catalog-empty--full">
                     <span class="material-symbols-rounded">apps</span>
                     <h3>Aun no hay herramientas aqui</h3>
                     <p>Cuando exista un archivo <code>tool.php</code> activo dentro de una app de esta categoria, aparecera en esta vista.</p>
                 </div>
-            <?php else: ?>
+            </div>
+        <?php elseif ($categoryKey === 'all'): ?>
+            <?= renderAllToolsCatalogGroups($tools, $categoryKey, $sectionId, $projectId, $projectName, $projectLogoUrl, $isPartial); ?>
+        <?php else: ?>
+            <div class="tools-catalog-grid">
                 <?php foreach ($tools as $tool): ?>
-                    <article class="tools-catalog-card">
-                        <?= renderToolsCatalogMedia($tool); ?>
-
-                        <div class="tools-catalog-card-copy">
-                            <span class="tools-catalog-eyebrow">
-                                <?= htmlspecialchars((string) ($tool['category_label'] ?: ($category['label'] ?? 'Herramientas')), ENT_QUOTES, 'UTF-8'); ?>
-                            </span>
-                            <h3><?= htmlspecialchars((string) ($tool['title'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></h3>
-                            <p><?= htmlspecialchars((string) ($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
-                        </div>
-
-                        <div class="tools-catalog-card-actions">
-                            <?php if ($isPartial): ?>
-                                <button
-                                    type="button"
-                                    class="tools-catalog-primary-button"
-                                    data-tools-open-slug="<?= htmlspecialchars((string) ($tool['slug'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-                                >
-                                    <span class="material-symbols-rounded">rocket_launch</span>
-                                    <span>Abrir herramienta</span>
-                                </button>
-                            <?php else: ?>
-                                <form method="get" action="tools-browser.php">
-                                    <input type="hidden" name="category_key" value="<?= htmlspecialchars($categoryKey, ENT_QUOTES, 'UTF-8'); ?>">
-                                    <input type="hidden" name="section_id" value="<?= htmlspecialchars($sectionId, ENT_QUOTES, 'UTF-8'); ?>">
-                                    <input type="hidden" name="project_id" value="<?= htmlspecialchars($projectId, ENT_QUOTES, 'UTF-8'); ?>">
-                                    <input type="hidden" name="project_name" value="<?= htmlspecialchars($projectName, ENT_QUOTES, 'UTF-8'); ?>">
-                                    <input type="hidden" name="project_logo_url" value="<?= htmlspecialchars($projectLogoUrl, ENT_QUOTES, 'UTF-8'); ?>">
-                                    <input type="hidden" name="open" value="<?= htmlspecialchars((string) ($tool['slug'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
-                                    <button type="submit" class="tools-catalog-primary-button">
-                                        <span class="material-symbols-rounded">rocket_launch</span>
-                                        <span>Abrir herramienta</span>
-                                    </button>
-                                </form>
-                            <?php endif; ?>
-
-                            <?php if (trim((string) ($tool['tutorial_youtube_url'] ?? '')) !== ''): ?>
-                                <a
-                                    class="tools-catalog-secondary-button"
-                                    href="<?= htmlspecialchars((string) ($tool['tutorial_youtube_url'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                >
-                                    <span class="material-symbols-rounded">smart_display</span>
-                                    <span>Ver tutorial</span>
-                                </a>
-                            <?php endif; ?>
-                        </div>
-                    </article>
+                    <?= renderToolsCatalogCard($tool, $categoryKey, $sectionId, $projectId, $projectName, $projectLogoUrl, $isPartial, (string) ($category['label'] ?? 'Herramientas')); ?>
                 <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
+            </div>
+        <?php endif; ?>
     </div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function renderAllToolsCatalogGroups(
+    array $tools,
+    string $categoryKey,
+    string $sectionId,
+    string $projectId,
+    string $projectName,
+    string $projectLogoUrl,
+    bool $isPartial
+): string {
+    $groups = [];
+
+    foreach ($tools as $tool) {
+        if (!is_array($tool)) {
+            continue;
+        }
+
+        $groupKey = (string) ($tool['category_key'] ?? 'general');
+
+        if (!isset($groups[$groupKey])) {
+            $groups[$groupKey] = [
+                'key' => $groupKey,
+                'label' => (string) ($tool['category_label'] ?? humanizeToolCategoryKey($groupKey)),
+                'color' => (string) ($tool['category_color'] ?? '#5F6368'),
+                'sort_order' => (int) ($tool['category_sort_order'] ?? 1000),
+                'tools' => [],
+            ];
+        }
+
+        $groups[$groupKey]['tools'][] = $tool;
+    }
+
+    usort($groups, static function (array $left, array $right): int {
+        $leftOrder = (int) ($left['sort_order'] ?? 1000);
+        $rightOrder = (int) ($right['sort_order'] ?? 1000);
+
+        if ($leftOrder === $rightOrder) {
+            return strcmp((string) ($left['label'] ?? ''), (string) ($right['label'] ?? ''));
+        }
+
+        return $leftOrder <=> $rightOrder;
+    });
+
+    ob_start();
+    ?>
+    <div class="tools-catalog-group-stack">
+        <?php foreach ($groups as $group): ?>
+            <section class="tools-catalog-group">
+                <header class="tools-catalog-group-head">
+                    <h3><?= htmlspecialchars((string) ($group['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></h3>
+                </header>
+
+                <div class="tools-catalog-grid">
+                    <?php foreach ((array) ($group['tools'] ?? []) as $tool): ?>
+                        <?= renderToolsCatalogCard($tool, $categoryKey, $sectionId, $projectId, $projectName, $projectLogoUrl, $isPartial, (string) ($group['label'] ?? 'Herramientas')); ?>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endforeach; ?>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function renderToolsCatalogCard(
+    array $tool,
+    string $categoryKey,
+    string $sectionId,
+    string $projectId,
+    string $projectName,
+    string $projectLogoUrl,
+    bool $isPartial,
+    string $fallbackCategoryLabel
+): string {
+    $slug = (string) ($tool['slug'] ?? '');
+    $title = (string) ($tool['title'] ?? '');
+    $description = (string) ($tool['description'] ?? '');
+    $categoryLabel = (string) (($tool['category_label'] ?? '') !== '' ? $tool['category_label'] : $fallbackCategoryLabel);
+    $categoryColor = trim((string) ($tool['category_color'] ?? '#5F6368'));
+    $openUrl = buildToolCardUrl($categoryKey, $sectionId, $projectId, $projectName, $projectLogoUrl, $slug);
+
+    ob_start();
+    ?>
+    <a
+        class="tools-catalog-card-link"
+        href="<?= htmlspecialchars($openUrl, ENT_QUOTES, 'UTF-8'); ?>"
+        <?= $isPartial ? 'data-tools-open-slug="' . htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') . '"' : ''; ?>
+    >
+        <article class="tools-catalog-card" style="--tools-category-color: <?= htmlspecialchars($categoryColor, ENT_QUOTES, 'UTF-8'); ?>;">
+            <?= renderToolsCatalogMedia($tool); ?>
+
+            <div class="tools-catalog-card-copy">
+                <h3><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?></h3>
+                <p class="tools-catalog-card-meta"><?= htmlspecialchars($categoryLabel, ENT_QUOTES, 'UTF-8'); ?></p>
+                <p><?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8'); ?></p>
+            </div>
+        </article>
+    </a>
     <?php
 
     return (string) ob_get_clean();
@@ -254,22 +317,66 @@ function resolveToolRoleFromEmail(string $email): string
     return in_array(strtolower(trim($email)), $bootstrapAdmins, true) ? 'admin' : 'regular';
 }
 
-function resolveToolCategoryLabelMap(array $categories): array
+function buildToolCardUrl(
+    string $categoryKey,
+    string $sectionId,
+    string $projectId,
+    string $projectName,
+    string $projectLogoUrl,
+    string $slug
+): string {
+    $query = http_build_query([
+        'category_key' => $categoryKey,
+        'section_id' => $sectionId,
+        'project_id' => $projectId,
+        'project_name' => $projectName,
+        'project_logo_url' => $projectLogoUrl,
+        'open' => $slug,
+    ]);
+
+    return 'tools-browser.php?' . $query;
+}
+
+function resolveToolCategoryMetaMap(): array
 {
+    $panelConfig = require __DIR__ . '/config/panel.php';
+    $items = (array) ($panelConfig['menus']['regular'] ?? []);
     $map = [];
 
-    foreach ($categories as $category) {
+    foreach ($items as $index => $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+
+        $key = trim((string) ($item['tool_category_key'] ?? ''));
+
+        if ($key === '' || isset($map[$key])) {
+            continue;
+        }
+
+        $map[$key] = [
+            'label' => (string) ($item['section_title'] ?? $item['label'] ?? humanizeToolCategoryKey($key)),
+            'color' => (string) ($item['color'] ?? '#5F6368'),
+            'sort_order' => $index * 10,
+        ];
+    }
+
+    foreach (listToolCategories() as $category) {
         if (!is_array($category)) {
             continue;
         }
 
         $key = (string) ($category['key'] ?? '');
 
-        if ($key === '') {
+        if ($key === '' || isset($map[$key])) {
             continue;
         }
 
-        $map[$key] = (string) ($category['label'] ?? humanizeToolCategoryKey($key));
+        $map[$key] = [
+            'label' => (string) ($category['label'] ?? humanizeToolCategoryKey($key)),
+            'color' => '#5F6368',
+            'sort_order' => (int) ($category['sort_order'] ?? 1000),
+        ];
     }
 
     return $map;

@@ -284,6 +284,8 @@ function sanitizeToolForCatalog(array $tool): array
         'slug' => (string) ($tool['slug'] ?? ''),
         'category_key' => (string) ($tool['category_key'] ?? ''),
         'category_label' => (string) ($tool['category_label'] ?? ''),
+        'category_color' => (string) ($tool['category_color'] ?? '#5F6368'),
+        'category_sort_order' => (int) ($tool['category_sort_order'] ?? 1000),
         'title' => (string) ($tool['title'] ?? ''),
         'description' => (string) ($tool['description'] ?? ''),
         'image_url' => (string) ($tool['image_url'] ?? ''),
