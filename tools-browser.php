@@ -280,7 +280,7 @@ function renderToolsCatalogCard(
             <div class="tools-catalog-card-copy">
                 <h3><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?></h3>
                 <p class="tools-catalog-card-meta"><?= htmlspecialchars($categoryLabel, ENT_QUOTES, 'UTF-8'); ?></p>
-                <p><?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8'); ?></p>
+                <p class="tools-catalog-card-description"><?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8'); ?></p>
             </div>
         </article>
     </a>

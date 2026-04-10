@@ -114,6 +114,13 @@
     color: var(--md-text-muted);
 }
 
+.tools-catalog-card-description {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
 .tools-catalog-card-actions {
     display: flex;
     flex-wrap: wrap;
