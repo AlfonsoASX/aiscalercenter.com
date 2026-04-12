@@ -18,8 +18,8 @@ export const panelConfig = authConfig?.panel ?? {
 export const view = document.body.dataset.view ?? '';
 export const absoluteUrls = {
     landing: new URL(authConfig?.landingUrl ?? '/', window.location.origin).toString(),
-    login: new URL(authConfig?.loginUrl ?? '/?view=login', window.location.origin).toString(),
-    app: new URL(authConfig?.appUrl ?? '/?view=app', window.location.origin).toString(),
+    login: new URL(authConfig?.loginUrl ?? '/login', window.location.origin).toString(),
+    app: new URL(authConfig?.appUrl ?? '/app', window.location.origin).toString(),
 };
 
 const authState = {

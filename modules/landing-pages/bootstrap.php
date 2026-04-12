@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../lib/app_routing.php';
 require_once __DIR__ . '/../../lib/supabase_api.php';
 require_once __DIR__ . '/../../lib/app_storage.php';
 require_once __DIR__ . '/LandingPageRepository.php';
@@ -54,24 +55,7 @@ function generateLandingBlockId(): string
 
 function landingShareUrl(string $publicId): string
 {
-    $scheme = 'http';
-
-    if (
-        (isset($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
-        || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https'
-    ) {
-        $scheme = 'https';
-    }
-
-    $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
-    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/tool.php'));
-    $basePath = rtrim(dirname($scriptName), '/');
-
-    if ($basePath === '/' || $basePath === '.') {
-        $basePath = '';
-    }
-
-    return $scheme . '://' . $host . $basePath . '/landing.php?p=' . rawurlencode($publicId);
+    return appPublicLandingUrl($publicId);
 }
 
 function landingBuilderJsonEncode(array $payload): string

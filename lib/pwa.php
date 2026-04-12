@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/app_routing.php';
+
 function pwaRootDir(): string
 {
     return dirname(__DIR__);
@@ -37,19 +39,21 @@ function renderPwaHead(array $options = []): string
 <?php if ($description !== ''): ?>
     <meta name="description" content="<?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8'); ?>">
 <?php endif; ?>
-    <link rel="manifest" href="<?= htmlspecialchars($manifestHref, ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="icon" type="image/png" sizes="32x32" href="<?= htmlspecialchars($faviconHref, ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="icon" type="image/png" sizes="192x192" href="<?= htmlspecialchars($iconHref, ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="theme-color" content="<?= htmlspecialchars($themeColor, ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="<?= htmlspecialchars($darkThemeColor, ENT_QUOTES, 'UTF-8'); ?>">
+    <meta name="msapplication-TileColor" content="<?= htmlspecialchars($backgroundColor, ENT_QUOTES, 'UTF-8'); ?>">
+<?php if (appShouldEnablePwa()): ?>
+    <link rel="manifest" href="<?= htmlspecialchars($manifestHref, ENT_QUOTES, 'UTF-8'); ?>">
     <link rel="apple-touch-icon" href="<?= htmlspecialchars($appleTouchIconHref, ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="application-name" content="<?= htmlspecialchars($applicationName, ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="apple-mobile-web-app-title" content="<?= htmlspecialchars($shortName, ENT_QUOTES, 'UTF-8'); ?>">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="<?= htmlspecialchars($themeColor, ENT_QUOTES, 'UTF-8'); ?>">
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="<?= htmlspecialchars($darkThemeColor, ENT_QUOTES, 'UTF-8'); ?>">
-    <meta name="msapplication-TileColor" content="<?= htmlspecialchars($backgroundColor, ENT_QUOTES, 'UTF-8'); ?>">
     <script type="module" src="<?= htmlspecialchars($registrationScriptHref, ENT_QUOTES, 'UTF-8'); ?>"></script>
+<?php endif; ?>
     <?php
 
     return (string) ob_get_clean();

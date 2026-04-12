@@ -1145,7 +1145,7 @@ export function createBlogEntriesModule({
     }
 
     function buildBlogEntryUrl(slug) {
-        return `${window.location.origin}${window.location.pathname.replace(/index\.php$/, '')}blog.php?slug=${encodeURIComponent(slug)}`;
+        return new URL(`/blog/${encodeURIComponent(slug)}`, window.location.origin).toString();
     }
 
     function clearCoverDraft(coverInput = null) {

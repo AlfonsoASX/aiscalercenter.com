@@ -5,13 +5,21 @@ require_once __DIR__ . '/lib/pwa.php';
 
 header('Content-Type: application/manifest+json; charset=UTF-8');
 
+if (!appShouldEnablePwa()) {
+    http_response_code(404);
+    echo json_encode([
+        'error' => 'PWA disponible solo en el subdominio principal.',
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $manifest = [
-    'id' => './index.php?view=app',
+    'id' => appPanelUrl(),
     'name' => 'AiScaler Center',
     'short_name' => 'AiScaler',
     'description' => 'Panel y herramientas de AiScaler Center para operar proyectos y flujos de trabajo con IA desde cualquier dispositivo.',
-    'start_url' => './index.php?view=app',
-    'scope' => './',
+    'start_url' => appPanelUrl(),
+    'scope' => appHomeUrl(),
     'display' => 'standalone',
     'orientation' => 'any',
     'lang' => 'es-MX',
@@ -40,7 +48,7 @@ $manifest = [
         [
             'name' => 'Panel',
             'short_name' => 'Panel',
-            'url' => './index.php?view=app',
+            'url' => appPanelUrl(),
             'icons' => [
                 [
                     'src' => pwaAssetUrl('img/pwa/icon-192.png'),
@@ -52,7 +60,7 @@ $manifest = [
         [
             'name' => 'Acceso',
             'short_name' => 'Acceso',
-            'url' => './index.php?view=login',
+            'url' => appLoginUrl(),
             'icons' => [
                 [
                     'src' => pwaAssetUrl('img/pwa/icon-192.png'),

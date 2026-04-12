@@ -8,3 +8,41 @@
     Order allow,deny
     Deny from all
 </Directory>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    RewriteCond %{HTTP_HOST} ^f\.asx\.mx$ [NC]
+    RewriteRule ^([A-Za-z0-9_-]+)/?$ form.php?f=$1 [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^f\.asx\.mx$ [NC]
+    RewriteRule ^$ form.php [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^p\.asx\.mx$ [NC]
+    RewriteRule ^([A-Za-z0-9_-]+)/?$ landing.php?p=$1 [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^p\.asx\.mx$ [NC]
+    RewriteRule ^$ landing.php [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^login/?$ index.php?view=login [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^app/?$ index.php?view=app [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^blog/([^/]+)/?$ blog.php?slug=$1 [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^terminos-y-condiciones/?$ terminos-y-condiciones.php [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^aviso-de-privacidad/?$ aviso-de-privacidad.php [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^$ index.php [L]
+</IfModule>

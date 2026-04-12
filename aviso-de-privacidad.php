@@ -80,7 +80,7 @@ require_once __DIR__ . '/lib/pwa.php';
     <div class="legal-shell">
         <div class="legal-topbar">
             <img src="img/logoAiScalerCenter.png" alt="AiScaler Center Logo">
-            <a class="legal-back" href="index.php?view=app">Volver al panel</a>
+            <a class="legal-back" href="<?= htmlspecialchars(appPanelUrl(), ENT_QUOTES, 'UTF-8'); ?>">Volver al panel</a>
         </div>
 
         <section class="legal-card">

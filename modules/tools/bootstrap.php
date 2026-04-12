@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../lib/app_routing.php';
+
 function ensureToolsSessionStarted(): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) {
@@ -744,28 +746,16 @@ function isSafeToolImageUrl(string $value): bool
 
 function buildToolsLaunchUrl(string $launchToken): string
 {
-    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/api/tools.php'));
-    $scriptDirectory = rtrim(dirname($scriptName), '/');
-    $basePath = preg_replace('#/api$#', '', $scriptDirectory) ?: '';
-
-    return ($basePath === '' ? '' : $basePath) . '/tool.php?launch=' . rawurlencode($launchToken);
+    return appToolUrl('tool.php', ['launch' => $launchToken]);
 }
 
 function buildToolsBrowserUrl(string $browserToken): string
 {
-    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/api/tools.php'));
-    $scriptDirectory = rtrim(dirname($scriptName), '/');
-    $basePath = preg_replace('#/api$#', '', $scriptDirectory) ?: '';
-
-    return ($basePath === '' ? '' : $basePath) . '/tools-browser.php?browse=' . rawurlencode($browserToken);
+    return appToolUrl('tools-browser.php', ['browse' => $browserToken]);
 }
 
 function buildToolsPanelUrl(?string $sectionId = null): string
 {
-    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/api/tools.php'));
-    $scriptDirectory = rtrim(dirname($scriptName), '/');
-    $basePath = preg_replace('#/api$#', '', $scriptDirectory) ?: '';
-    $panelUrl = ($basePath === '' ? '' : $basePath) . '/index.php?view=app';
     $panelConfig = require __DIR__ . '/../../config/panel.php';
     $validIds = [];
 
@@ -783,7 +773,7 @@ function buildToolsPanelUrl(?string $sectionId = null): string
         $candidate = (string) (($panelConfig['dashboard']['id'] ?? 'inicio'));
     }
 
-    return $panelUrl . '#' . rawurlencode($candidate);
+    return appPanelUrl($candidate);
 }
 
 function redirectToolsWithClientFlash(string $targetUrl, string $message, string $type = 'error'): never

@@ -7,7 +7,7 @@ require_once __DIR__ . '/lib/pwa.php';
 require_once __DIR__ . '/modules/landing-pages/bootstrap.php';
 
 $repository = new LandingPageRepository();
-$identifier = trim((string) ($_GET['p'] ?? ''));
+$identifier = trim((string) ($_GET['p'] ?? appCurrentPublicIdentifier()));
 $page = null;
 $error = null;
 

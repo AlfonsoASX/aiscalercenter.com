@@ -17,6 +17,8 @@
     const previewFrame = root.querySelector('.landing-builder-preview-frame');
     const uploadUrl = String(root.dataset.uploadUrl || '').trim();
     const storagePublicBase = String(root.dataset.storagePublicBase || '').trim().toLowerCase();
+    const termsUrl = String(root.dataset.termsUrl || `${window.location.origin}/terminos-y-condiciones`).trim();
+    const privacyUrl = String(root.dataset.privacyUrl || `${window.location.origin}/aviso-de-privacidad`).trim();
 
     if (!(blocksField instanceof HTMLTextAreaElement)
         || !(settingsField instanceof HTMLTextAreaElement)
@@ -152,8 +154,8 @@
                 brand_name: 'AiScaler',
                 body: 'Una landing clara para presentar tu oferta y convertir visitantes en oportunidades.',
                 items: [
-                    { title: 'Terminos', body: 'terminos-y-condiciones.php' },
-                    { title: 'Privacidad', body: 'aviso-de-privacidad.php' },
+                    { title: 'Terminos', body: termsUrl },
+                    { title: 'Privacidad', body: privacyUrl },
                 ],
                 copyright: '(c) 2026 AiScaler. Todos los derechos reservados.',
                 background_image_url: '',
@@ -552,7 +554,7 @@
             return `
                 ${renderBlockInput(block, 'brand_name', 'Marca')}
                 ${renderBlockTextarea(block, 'body', 'Descripcion')}
-                ${renderBlockTextarea(block, 'items', 'Vinculos del footer', 'Texto | URL\\nPrivacidad | aviso-de-privacidad.php', itemsToText(block.items))}
+                ${renderBlockTextarea(block, 'items', 'Vinculos del footer', `Texto | URL\\nPrivacidad | ${privacyUrl}`, itemsToText(block.items))}
                 ${renderBlockInput(block, 'copyright', 'Copyright')}
                 ${renderBlockBackgroundControls(block)}
             `;

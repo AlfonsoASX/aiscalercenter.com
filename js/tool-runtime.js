@@ -45,7 +45,7 @@ async function bootToolRuntime() {
     if (!session?.user) {
         window.sessionStorage.setItem('aiscaler_flash', 'Inicia sesion para abrir la herramienta.');
         window.sessionStorage.setItem('aiscaler_flash_type', 'error');
-        window.location.href = authConfig?.loginUrl ?? 'index.php?view=login';
+        window.location.href = authConfig?.loginUrl ?? '/login';
         return;
     }
 

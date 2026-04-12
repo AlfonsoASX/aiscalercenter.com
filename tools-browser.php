@@ -337,8 +337,6 @@ function buildToolCardUrl(
         'category_key' => $categoryKey,
         'section_id' => $sectionId,
         'project_id' => $projectId,
-        'project_name' => $projectName,
-        'project_logo_url' => $projectLogoUrl,
         'open' => $slug,
     ]);
 

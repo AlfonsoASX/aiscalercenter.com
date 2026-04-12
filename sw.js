@@ -1,13 +1,12 @@
-const VERSION = 'aiscaler-pwa-v1';
+const VERSION = 'aiscaler-pwa-v2';
 const STATIC_CACHE = `${VERSION}-static`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const EXTERNAL_CACHE = `${VERSION}-external`;
 
 const PRECACHE_URLS = [
     appUrl('./'),
-    appUrl('index.php'),
-    appUrl('index.php?view=login'),
-    appUrl('index.php?view=app'),
+    appUrl('login'),
+    appUrl('app'),
     appUrl('offline.html'),
     appUrl('manifest.php'),
     appUrl('img/pwa/favicon-32.png'),

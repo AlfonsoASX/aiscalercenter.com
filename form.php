@@ -7,7 +7,7 @@ require_once __DIR__ . '/lib/pwa.php';
 require_once __DIR__ . '/modules/forms/bootstrap.php';
 
 $repository = new FormRepository();
-$identifier = trim((string) ($_GET['f'] ?? ''));
+$identifier = trim((string) ($_GET['f'] ?? appCurrentPublicIdentifier()));
 $form = null;
 $notice = null;
 $error = null;

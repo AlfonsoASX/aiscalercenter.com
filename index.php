@@ -11,10 +11,21 @@ $publishableKey = trim((string) ($supabaseConfig['publishable_key'] ?? ''));
 $anonKey = trim((string) ($supabaseConfig['anon_key'] ?? ''));
 $supabasePublicKey = $publishableKey !== '' && $publishableKey !== 'tu_publishable_key' ? $publishableKey : $anonKey;
 
-$redirectUrl = strtok($_SERVER['REQUEST_URI'] ?? '/index.php', '?') ?: '/index.php';
-$loginUrl = $redirectUrl . '?view=login';
-$appUrl = $redirectUrl . '?view=app';
 $view = (string) ($_GET['view'] ?? '');
+
+if ($view === '') {
+    $requestPath = appCurrentRequestPath();
+
+    if ($requestPath === '/login') {
+        $view = 'login';
+    } elseif ($requestPath === '/app') {
+        $view = 'app';
+    }
+}
+
+$redirectUrl = appHomeUrl();
+$loginUrl = appLoginUrl();
+$appUrl = appPanelUrl();
 $showLoginView = $view === 'login';
 $showAppView = $view === 'app';
 $hasSupabaseConfig = $supabaseProjectUrl !== ''
@@ -1731,12 +1742,12 @@ function appAssetUrl(string $path): string
                                 <span>Cerrar sesion</span>
                             </button>
 
-                            <a href="terminos-y-condiciones.php" class="workspace-user-link">
+                            <a href="<?= htmlspecialchars(appTermsUrl(), ENT_QUOTES, 'UTF-8'); ?>" class="workspace-user-link">
                                 <span class="material-symbols-rounded">gavel</span>
                                 <span>Terminos y condiciones</span>
                             </a>
 
-                            <a href="aviso-de-privacidad.php" class="workspace-user-link">
+                            <a href="<?= htmlspecialchars(appPrivacyUrl(), ENT_QUOTES, 'UTF-8'); ?>" class="workspace-user-link">
                                 <span class="material-symbols-rounded">policy</span>
                                 <span>Aviso de privacidad</span>
                             </a>

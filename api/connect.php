@@ -11,6 +11,7 @@ use AiScaler\Connect\Providers\LinkedInProfile\LinkedInProfileProvider;
 use AiScaler\Connect\Providers\YouTubeChannel\YouTubeChannelProvider;
 use AiScaler\Connect\SocialConnectionRepository;
 
+require_once __DIR__ . '/../lib/app_routing.php';
 require_once __DIR__ . '/../lib/supabase_api.php';
 require_once __DIR__ . '/../modules/connect/bootstrap.php';
 
@@ -264,11 +265,7 @@ function buildAuthorizationUrl(array $oauth, string $state): string
 
 function buildPanelReturnUrl(): string
 {
-    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/api/connect.php'));
-    $scriptDirectory = rtrim(dirname($scriptName), '/');
-    $basePath = preg_replace('#/api$#', '', $scriptDirectory) ?: '';
-
-    return ($basePath === '' ? '' : $basePath) . '/index.php?view=app#Conecta';
+    return appPanelUrl('Conecta');
 }
 
 function buildConnectionDisplayName(array $definition): string

@@ -78,8 +78,6 @@ export function createToolsCatalogModule({
                 section.categoryKey,
                 section.sectionId,
                 activeProjectId,
-                activeProjectName,
-                activeProjectLogoUrl,
             ), {
                 headers: {
                     Accept: 'text/html',
@@ -90,7 +88,7 @@ export function createToolsCatalogModule({
             const html = await response.text();
 
             if (!response.ok && html.trim() === '') {
-                throw new Error('No fue posible cargar las herramientas de esta seccion.');
+                throw new Error(`No fue posible cargar las herramientas de esta seccion (HTTP ${response.status || 0}).`);
             }
 
             section.catalogHtml = html;
@@ -461,13 +459,11 @@ export function createToolsCatalogModule({
 
 }
 
-function buildBrowserUrl(categoryKey, sectionId, projectId = '', projectName = '', projectLogoUrl = '') {
+function buildBrowserUrl(categoryKey, sectionId, projectId = '') {
     const query = new URLSearchParams({
         category_key: String(categoryKey ?? ''),
         section_id: String(sectionId ?? ''),
         project_id: String(projectId ?? ''),
-        project_name: String(projectName ?? ''),
-        project_logo_url: String(projectLogoUrl ?? ''),
         partial: '1',
     });
 

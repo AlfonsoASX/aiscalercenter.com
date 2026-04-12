@@ -148,7 +148,7 @@ $slug = trim((string) ($_GET['slug'] ?? ''));
     <div class="article-shell">
         <div class="article-topbar">
             <img src="img/logoAiScalerCenter.png" alt="AiScaler Center Logo">
-            <a href="index.php?view=app#entradas-del-blog">Volver al panel</a>
+            <a href="<?= htmlspecialchars(appPanelUrl('entradas-del-blog'), ENT_QUOTES, 'UTF-8'); ?>">Volver al panel</a>
         </div>
 
         <div id="article-loading" class="article-loading">Cargando articulo...</div>

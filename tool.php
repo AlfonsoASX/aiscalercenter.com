@@ -310,12 +310,12 @@ if ($launchMode === 'php_folder') {
                                 <span>Cerrar sesion</span>
                             </a>
 
-                            <a href="terminos-y-condiciones.php" class="workspace-user-link">
+                            <a href="<?= htmlspecialchars(appTermsUrl(), ENT_QUOTES, 'UTF-8'); ?>" class="workspace-user-link">
                                 <span class="material-symbols-rounded">gavel</span>
                                 <span>Terminos y condiciones</span>
                             </a>
 
-                            <a href="aviso-de-privacidad.php" class="workspace-user-link">
+                            <a href="<?= htmlspecialchars(appPrivacyUrl(), ENT_QUOTES, 'UTF-8'); ?>" class="workspace-user-link">
                                 <span class="material-symbols-rounded">policy</span>
                                 <span>Aviso de privacidad</span>
                             </a>
@@ -454,8 +454,8 @@ $anonKey = trim((string) ($supabaseConfig['anon_key'] ?? ''));
 $supabasePublicKey = $publishableKey !== '' && $publishableKey !== 'tu_publishable_key' ? $publishableKey : $anonKey;
 
 $toolUrl = strtok($_SERVER['REQUEST_URI'] ?? '/tool.php', '?') ?: '/tool.php';
-$loginUrl = 'index.php?view=login';
-$appUrl = 'index.php?view=app';
+$loginUrl = appLoginUrl();
+$appUrl = appPanelUrl();
 $hasSupabaseConfig = $supabaseProjectUrl !== ''
     && $supabaseProjectUrl !== 'https://tu-project-ref.supabase.co'
     && $supabasePublicKey !== ''
@@ -465,7 +465,7 @@ $hasSupabaseConfig = $supabaseProjectUrl !== ''
 $authClientConfig = [
     'supabaseUrl' => $supabaseProjectUrl,
     'supabaseKey' => $supabasePublicKey,
-    'landingUrl' => 'index.php',
+    'landingUrl' => appHomeUrl(),
     'loginUrl' => $loginUrl,
     'appUrl' => $appUrl,
     'hasSupabaseConfig' => $hasSupabaseConfig,

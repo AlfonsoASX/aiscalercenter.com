@@ -224,8 +224,8 @@ function landingBuilderDefaultBlocks(): array
             'brand_name' => 'AiScaler',
             'body' => 'Una landing clara para presentar tu oferta y convertir visitantes en oportunidades.',
             'items' => [
-                ['title' => 'Terminos', 'body' => 'terminos-y-condiciones.php'],
-                ['title' => 'Privacidad', 'body' => 'aviso-de-privacidad.php'],
+                ['title' => 'Terminos', 'body' => appTermsUrl(true)],
+                ['title' => 'Privacidad', 'body' => appPrivacyUrl(true)],
             ],
             'copyright' => '(c) 2026 AiScaler. Todos los derechos reservados.',
             'background_image_url' => '',
@@ -531,6 +531,8 @@ function landingBuilderRenderEditor(array $page, array $toolContext): string
         data-landing-builder
         data-upload-url="tool-action.php?launch=<?= htmlspecialchars($launch, ENT_QUOTES, 'UTF-8'); ?>"
         data-storage-public-base="<?= htmlspecialchars(appStoragePublicBaseUrl(), ENT_QUOTES, 'UTF-8'); ?>"
+        data-terms-url="<?= htmlspecialchars(appTermsUrl(true), ENT_QUOTES, 'UTF-8'); ?>"
+        data-privacy-url="<?= htmlspecialchars(appPrivacyUrl(true), ENT_QUOTES, 'UTF-8'); ?>"
     >
         <form method="post" class="landing-builder-form" data-landing-form>
             <input type="hidden" name="page_action" value="save_page">
