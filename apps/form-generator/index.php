@@ -20,6 +20,7 @@ $project = null;
 $forms = [];
 $mode = trim((string) ($_GET['builder'] ?? 'list'));
 $currentForm = null;
+$formInsights = formBuilderEmptyInsightsSummary();
 
 try {
     if ($accessToken === '' || $userId === '') {
@@ -107,6 +108,12 @@ try {
     }
 
     $forms = $repository->listForms($accessToken, $activeProjectId);
+
+    if (is_array($currentForm) && trim((string) ($currentForm['id'] ?? '')) !== '') {
+        $responses = $repository->listFormResponses($accessToken, (string) $currentForm['id'], $activeProjectId);
+        $sessions = $repository->listFormSessions($accessToken, (string) $currentForm['id'], $activeProjectId);
+        $formInsights = formBuilderBuildInsightsSummary($currentForm, $responses, $sessions);
+    }
 } catch (Throwable $exception) {
     $error = normalizeFormBuilderException($exception);
     $mode = $mode === 'edit' || $mode === 'new' ? $mode : 'list';
@@ -119,8 +126,8 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentForm);
         <header class="form-builder-hero">
             <div>
                 <p class="form-builder-eyebrow">Diseñar</p>
-                <h1>Generador de formularios</h1>
-                <p>Crea formularios publicos, compartelos sin login y guarda cada respuesta como un JSON conectado a la empresa y al usuario creador.</p>
+                <h1>Formularios</h1>
+                <p>Crea formularios publicos, compartelos sin login y revisa respuestas completas, visitas y abandono en tiempo real.</p>
             </div>
 
             <a href="tool.php?launch=<?= htmlspecialchars(rawurlencode((string) ($toolContext['launch_token'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>&builder=new" class="form-builder-primary">
@@ -141,7 +148,7 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentForm);
     <?php endif; ?>
 
     <?php if ($isEditorMode): ?>
-        <?= formBuilderRenderEditor($currentForm, $fieldTypes, $toolContext); ?>
+        <?= formBuilderRenderEditor($currentForm, $fieldTypes, $toolContext, $formInsights); ?>
     <?php else: ?>
         <?= formBuilderRenderList($forms, $toolContext); ?>
     <?php endif; ?>
@@ -151,14 +158,32 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentForm);
 function formBuilderFieldTypes(): array
 {
     return [
-        'short_text' => 'Texto corto',
-        'long_text' => 'Texto largo',
+        'short_text' => 'Respuesta corta',
+        'long_text' => 'Parrafo',
+        'single_choice' => 'Varias opciones',
+        'multiple_choice' => 'Casillas',
+        'dropdown' => 'Desplegable',
+        'date' => 'Fecha',
+        'time' => 'Hora',
         'email' => 'Correo electronico',
         'phone' => 'Telefono',
         'number' => 'Numero',
-        'date' => 'Fecha',
-        'single_choice' => 'Opcion multiple: una respuesta',
-        'multiple_choice' => 'Opcion multiple: varias respuestas',
+    ];
+}
+
+function formBuilderFieldTypeIcons(): array
+{
+    return [
+        'short_text' => 'short_text',
+        'long_text' => 'subject',
+        'single_choice' => 'radio_button_checked',
+        'multiple_choice' => 'check_box',
+        'dropdown' => 'arrow_drop_down_circle',
+        'date' => 'calendar_today',
+        'time' => 'schedule',
+        'email' => 'alternate_email',
+        'phone' => 'call',
+        'number' => 'pin',
     ];
 }
 
@@ -217,7 +242,7 @@ function formBuilderNormalizeField(mixed $field): ?array
         return null;
     }
 
-    $type = trim((string) ($field['type'] ?? 'short_text'));
+    $type = trim((string) ($field['type'] ?? 'single_choice'));
     $options = $field['options'] ?? [];
 
     if (is_string($options)) {
@@ -255,17 +280,17 @@ function formBuilderNormalizeField(mixed $field): ?array
 function formBuilderCreateField(string $type, array $fieldTypes): array
 {
     if (!array_key_exists($type, $fieldTypes)) {
-        $type = 'short_text';
+        $type = 'single_choice';
     }
 
     return [
         'id' => generateFormFieldId(),
         'type' => $type,
-        'label' => $fieldTypes[$type],
+        'label' => '',
         'placeholder' => '',
         'help_text' => '',
         'required' => false,
-        'options' => in_array($type, ['single_choice', 'multiple_choice'], true)
+        'options' => in_array($type, ['single_choice', 'multiple_choice', 'dropdown'], true)
             ? [
                 ['id' => 'option_' . bin2hex(random_bytes(4)), 'label' => 'Opcion 1', 'value' => 'Opcion 1'],
                 ['id' => 'option_' . bin2hex(random_bytes(4)), 'label' => 'Opcion 2', 'value' => 'Opcion 2'],
@@ -305,7 +330,7 @@ function formBuilderFieldsFromPost(array $post): array
     $fields = [];
 
     foreach ($ids as $index => $id) {
-        $type = trim((string) ($types[$index] ?? 'short_text'));
+        $type = trim((string) ($types[$index] ?? 'single_choice'));
         $optionLines = preg_split('/\R+/', (string) ($options[$index] ?? '')) ?: [];
 
         $fields[] = [
@@ -368,7 +393,7 @@ function formBuilderPayloadForSave(array $form, string $projectId, string $userI
             throw new InvalidArgumentException('Todos los campos necesitan una etiqueta visible.');
         }
 
-        if (in_array((string) ($field['type'] ?? ''), ['single_choice', 'multiple_choice'], true) && count((array) ($field['options'] ?? [])) < 2) {
+        if (in_array((string) ($field['type'] ?? ''), ['single_choice', 'multiple_choice', 'dropdown'], true) && count((array) ($field['options'] ?? [])) < 2) {
             throw new InvalidArgumentException('Los campos de opcion multiple necesitan al menos dos opciones.');
         }
     }
@@ -483,21 +508,33 @@ function formBuilderRenderList(array $forms, array $toolContext): string
     return (string) ob_get_clean();
 }
 
-function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolContext): string
+function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolContext, array $formInsights): string
 {
     $launch = rawurlencode((string) ($toolContext['launch_token'] ?? ''));
     $settings = is_array($form['settings'] ?? null) ? $form['settings'] : [];
     $publicId = (string) ($form['public_id'] ?? '');
     $shareUrl = $publicId !== '' ? formShareUrl($publicId) : '';
     $formStatus = (string) ($form['status'] ?? 'draft');
+    $apiUrl = 'tool-action.php?launch=' . $launch;
+    $canLoadStats = trim((string) ($form['id'] ?? '')) !== '';
+    $fieldTypeIcons = formBuilderFieldTypeIcons();
 
     ob_start();
     ?>
     <section class="form-builder-card form-builder-card--canvas">
-        <form method="post" action="tool.php?launch=<?= htmlspecialchars($launch, ENT_QUOTES, 'UTF-8'); ?>&builder=edit" class="form-builder-editor" data-form-builder>
+        <form
+            method="post"
+            action="tool.php?launch=<?= htmlspecialchars($launch, ENT_QUOTES, 'UTF-8'); ?>&builder=edit"
+            class="form-builder-editor"
+            data-form-builder
+            data-api-url="<?= htmlspecialchars($apiUrl, ENT_QUOTES, 'UTF-8'); ?>"
+            data-form-id="<?= htmlspecialchars((string) ($form['id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>"
+            data-can-load-stats="<?= $canLoadStats ? 'true' : 'false'; ?>"
+        >
             <input type="hidden" name="id" value="<?= htmlspecialchars((string) ($form['id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="status" value="<?= htmlspecialchars($formStatus, ENT_QUOTES, 'UTF-8'); ?>">
             <input type="hidden" name="public_id" value="<?= htmlspecialchars($publicId, ENT_QUOTES, 'UTF-8'); ?>">
+            <input type="hidden" name="new_field_type" value="single_choice">
 
             <div class="form-google-toolbar">
                 <div class="form-google-doc">
@@ -569,11 +606,9 @@ function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolCont
                     </div>
 
                     <div class="form-google-panel" data-form-panel="responses">
-                        <section class="form-google-empty-panel">
-                            <span class="material-symbols-rounded">query_stats</span>
-                            <h2><?= htmlspecialchars((string) ($form['response_count'] ?? 0), ENT_QUOTES, 'UTF-8'); ?> respuestas</h2>
-                            <p>Las respuestas ya se guardan en Supabase como un registro por envio. En una siguiente iteracion podemos agregar aqui tabla, filtros y exportacion.</p>
-                        </section>
+                        <div class="form-builder-responses-shell" data-form-responses-shell>
+                            <?= formBuilderRenderResponsesPanel($formInsights, $canLoadStats); ?>
+                        </div>
                     </div>
 
                     <div class="form-google-panel" data-form-panel="settings">
@@ -592,11 +627,6 @@ function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolCont
                 </div>
 
                 <aside class="form-google-side-tools" aria-label="Herramientas del formulario">
-                    <select name="new_field_type" aria-label="Tipo de campo nuevo" data-form-new-field-type>
-                        <?php foreach ($fieldTypes as $type => $label): ?>
-                            <option value="<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8'); ?>"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></option>
-                        <?php endforeach; ?>
-                    </select>
                     <button type="submit" name="builder_action" value="add_field" class="form-google-tool-button" data-form-add-field title="Agregar pregunta" aria-label="Agregar pregunta">
                         <span class="material-symbols-rounded">add_circle</span>
                     </button>
@@ -615,6 +645,8 @@ function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolCont
                 <button type="submit" name="builder_action" value="publish" class="form-builder-primary">Publicar</button>
             </div>
         </form>
+        <script type="application/json" data-form-responses-state><?= formBuilderJsonEncode($formInsights); ?></script>
+        <script type="application/json" data-form-field-types><?= formBuilderJsonEncode(formBuilderFieldTypeDefinitions($fieldTypes)); ?></script>
     </section>
     <script src="tool-asset.php?launch=<?= htmlspecialchars($launch, ENT_QUOTES, 'UTF-8'); ?>&asset=app.js"></script>
     <?php
@@ -652,35 +684,18 @@ function formBuilderRenderFieldEditor(array $field, int $index, array $fieldType
         <input type="hidden" name="field_id[<?= $index; ?>]" value="<?= htmlspecialchars((string) ($field['id'] ?? generateFormFieldId()), ENT_QUOTES, 'UTF-8'); ?>" data-form-field-input="id">
 
         <div class="form-builder-editor-grid">
-            <label class="form-builder-field form-builder-type-field">
-                <span>Tipo</span>
-                <select name="field_type[<?= $index; ?>]" data-form-field-input="type">
-                    <?php foreach ($fieldTypes as $value => $label): ?>
-                        <option value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>"<?= $value === $type ? ' selected' : ''; ?>><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </label>
+            <?= formBuilderRenderTypePicker($type, $index, $fieldTypes); ?>
 
             <label class="form-builder-field form-builder-question-label">
-                <span>Etiqueta</span>
-                <input type="text" name="field_label[<?= $index; ?>]" value="<?= htmlspecialchars((string) ($field['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="Nombre completo" data-form-field-input="label">
+                <span class="sr-only">Pregunta</span>
+                <input type="text" name="field_label[<?= $index; ?>]" value="<?= htmlspecialchars((string) ($field['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="Pregunta" data-form-field-input="label">
             </label>
 
-            <label class="form-builder-field form-builder-field--wide">
-                <span>Ayuda del campo</span>
-                <input type="text" name="field_help_text[<?= $index; ?>]" value="<?= htmlspecialchars((string) ($field['help_text'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="Opcional" data-form-field-input="help_text">
-            </label>
+            <?= formBuilderRenderOptionsEditor($type, $options, $index); ?>
+        </div>
 
-            <label class="form-builder-field form-builder-field--wide">
-                <span>Placeholder</span>
-                <input type="text" name="field_placeholder[<?= $index; ?>]" value="<?= htmlspecialchars((string) ($field['placeholder'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="Texto de ayuda dentro del campo" data-form-field-input="placeholder">
-            </label>
-
-            <label class="form-builder-field form-builder-field--wide form-builder-options-field" data-form-options-wrap>
-                <span>Opciones, una por linea</span>
-                <textarea name="field_options[<?= $index; ?>]" rows="4" placeholder="Opcion 1&#10;Opcion 2" data-form-field-input="options"><?= htmlspecialchars(implode("\n", $options), ENT_QUOTES, 'UTF-8'); ?></textarea>
-                <small>Solo se usan para campos de opcion multiple.</small>
-            </label>
+        <div class="form-builder-question-preview" data-form-question-preview>
+            <?= formBuilderRenderQuestionPreview($type, (string) ($field['label'] ?? ''), $options); ?>
         </div>
 
         <div class="form-builder-card-footer">
@@ -693,4 +708,373 @@ function formBuilderRenderFieldEditor(array $field, int $index, array $fieldType
     <?php
 
     return (string) ob_get_clean();
+}
+
+function formBuilderRenderTypePicker(string $type, int $index, array $fieldTypes): string
+{
+    $icons = formBuilderFieldTypeIcons();
+    $safeType = array_key_exists($type, $fieldTypes) ? $type : 'single_choice';
+
+    ob_start();
+    ?>
+    <div class="form-builder-field form-builder-type-field">
+        <span class="sr-only">Tipo</span>
+        <details class="form-builder-type-picker" data-form-type-picker>
+            <summary class="form-builder-type-summary">
+                <span class="material-symbols-rounded" data-form-type-icon><?= htmlspecialchars((string) ($icons[$safeType] ?? 'short_text'), ENT_QUOTES, 'UTF-8'); ?></span>
+                <span data-form-type-label><?= htmlspecialchars((string) ($fieldTypes[$safeType] ?? 'Varias opciones'), ENT_QUOTES, 'UTF-8'); ?></span>
+                <span class="material-symbols-rounded form-builder-type-chevron">expand_more</span>
+            </summary>
+
+            <div class="form-builder-type-menu">
+                <?php foreach ($fieldTypes as $value => $label): ?>
+                    <button
+                        type="button"
+                        class="form-builder-type-option<?= $value === $safeType ? ' is-active' : ''; ?>"
+                        data-form-type-option
+                        data-value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>"
+                        data-label="<?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?>"
+                        data-icon="<?= htmlspecialchars((string) ($icons[$value] ?? 'short_text'), ENT_QUOTES, 'UTF-8'); ?>"
+                    >
+                        <span class="material-symbols-rounded"><?= htmlspecialchars((string) ($icons[$value] ?? 'short_text'), ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8'); ?></span>
+                    </button>
+                <?php endforeach; ?>
+            </div>
+        </details>
+        <input type="hidden" name="field_type[<?= $index; ?>]" value="<?= htmlspecialchars($safeType, ENT_QUOTES, 'UTF-8'); ?>" data-form-field-input="type">
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderRenderOptionsEditor(string $type, array $options, int $index): string
+{
+    $normalizedOptions = $options !== [] ? $options : ['Opcion 1', 'Opcion 2'];
+
+    ob_start();
+    ?>
+    <label class="form-builder-field form-builder-field--wide form-builder-options-field" data-form-options-wrap>
+        <span class="sr-only">Opciones</span>
+        <div class="form-builder-option-list" data-form-option-items>
+            <?php foreach ($normalizedOptions as $optionIndex => $optionLabel): ?>
+                <?= formBuilderRenderOptionRow($type, $optionIndex, (string) $optionLabel); ?>
+            <?php endforeach; ?>
+        </div>
+        <button type="button" class="form-builder-option-add" data-form-option-add>
+            <span class="material-symbols-rounded">add</span>
+            <span>Anadir opcion</span>
+        </button>
+        <textarea name="field_options[<?= $index; ?>]" rows="4" class="form-builder-options-storage" data-form-field-input="options"><?= htmlspecialchars(implode("\n", $normalizedOptions), ENT_QUOTES, 'UTF-8'); ?></textarea>
+    </label>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderRenderOptionRow(string $type, int $index, string $value): string
+{
+    $decoratorIcon = match ($type) {
+        'multiple_choice' => 'check_box_outline_blank',
+        'dropdown' => 'arrow_drop_down',
+        default => 'radio_button_unchecked',
+    };
+
+    ob_start();
+    ?>
+    <div class="form-builder-option-row" data-form-option-row>
+        <span class="material-symbols-rounded form-builder-option-decorator" data-form-option-icon><?= htmlspecialchars($decoratorIcon, ENT_QUOTES, 'UTF-8'); ?></span>
+        <input type="text" value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8'); ?>" placeholder="Opcion <?= $index + 1; ?>" data-form-option-input>
+        <button type="button" class="form-builder-option-remove" data-form-option-remove aria-label="Eliminar opcion">
+            <span class="material-symbols-rounded">close</span>
+        </button>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderRenderQuestionPreview(string $type, string $label, array $options): string
+{
+    $title = trim($label) !== '' ? $label : 'Pregunta';
+
+    ob_start();
+    ?>
+    <div class="form-builder-preview-shell" data-form-preview-shell>
+        <div class="form-builder-preview-title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8'); ?></div>
+        <div class="form-builder-preview-body" data-form-preview-body>
+            <?= formBuilderRenderQuestionPreviewBody($type, $options); ?>
+        </div>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderRenderQuestionPreviewBody(string $type, array $options): string
+{
+    $normalizedOptions = $options !== [] ? $options : ['Opcion 1', 'Opcion 2'];
+    $decoratorIcon = match ($type) {
+        'multiple_choice' => 'check_box_outline_blank',
+        'dropdown' => 'arrow_drop_down',
+        default => 'radio_button_unchecked',
+    };
+
+    ob_start();
+
+    if (in_array($type, ['single_choice', 'multiple_choice'], true)) {
+        ?>
+        <div class="form-builder-preview-options">
+            <?php foreach ($normalizedOptions as $optionLabel): ?>
+                <div class="form-builder-preview-option">
+                    <span class="material-symbols-rounded"><?= htmlspecialchars($decoratorIcon, ENT_QUOTES, 'UTF-8'); ?></span>
+                    <span><?= htmlspecialchars((string) $optionLabel, ENT_QUOTES, 'UTF-8'); ?></span>
+                </div>
+            <?php endforeach; ?>
+        </div>
+        <?php
+
+        return (string) ob_get_clean();
+    }
+
+    if ($type === 'dropdown') {
+        ?>
+        <div class="form-builder-preview-input form-builder-preview-input--dropdown">
+            <span>Selecciona una opcion</span>
+            <span class="material-symbols-rounded">expand_more</span>
+        </div>
+        <?php
+
+        return (string) ob_get_clean();
+    }
+
+    if ($type === 'long_text') {
+        ?>
+        <div class="form-builder-preview-input form-builder-preview-input--textarea"></div>
+        <?php
+
+        return (string) ob_get_clean();
+    }
+
+    ?>
+    <div class="form-builder-preview-input"></div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderFieldTypeDefinitions(array $fieldTypes): array
+{
+    $icons = formBuilderFieldTypeIcons();
+
+    return array_values(array_map(static function (string $value) use ($fieldTypes, $icons): array {
+        return [
+            'value' => $value,
+            'label' => (string) ($fieldTypes[$value] ?? $value),
+            'icon' => (string) ($icons[$value] ?? 'short_text'),
+        ];
+    }, array_keys($fieldTypes)));
+}
+
+function formBuilderRenderResponsesPanel(array $summary, bool $canLoadStats): string
+{
+    $completedCount = (int) ($summary['completed_count'] ?? 0);
+    $visitsCount = (int) ($summary['visits_count'] ?? 0);
+    $startedCount = (int) ($summary['started_count'] ?? 0);
+    $abandonedCount = (int) ($summary['abandoned_count'] ?? 0);
+    $finishedCount = max($completedCount, (int) ($summary['completed_sessions_count'] ?? 0));
+
+    ob_start();
+    ?>
+    <div class="form-builder-responses">
+        <?php if (!$canLoadStats): ?>
+            <section class="form-google-empty-panel">
+                <span class="material-symbols-rounded">query_stats</span>
+                <h2>Guarda el formulario para ver resultados</h2>
+                <p>En cuanto exista el formulario, aqui veras respuestas completas, visitas y abandono en tiempo real.</p>
+            </section>
+        <?php else: ?>
+            <section class="form-builder-responses-kpis">
+                <article class="form-builder-response-card form-builder-response-card--primary">
+                    <span class="form-builder-response-label">Respuestas completas</span>
+                    <strong><?= htmlspecialchars((string) $completedCount, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    <small>Solo contamos formularios terminados.</small>
+                </article>
+
+                <article class="form-builder-response-card">
+                    <span class="form-builder-response-label">Visitas</span>
+                    <strong><?= htmlspecialchars((string) $visitsCount, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    <small>Se actualiza automaticamente con cada nueva entrada.</small>
+                </article>
+            </section>
+
+            <?php if (($summary['choice_questions'] ?? []) !== []): ?>
+                <section class="form-builder-analytics-section">
+                    <div class="form-builder-analytics-head">
+                        <h2>Preguntas cerradas</h2>
+                        <p>Cada grafica usa solo respuestas completas.</p>
+                    </div>
+
+                    <div class="form-builder-charts-grid">
+                        <?php foreach ((array) ($summary['choice_questions'] ?? []) as $question): ?>
+                            <?= formBuilderRenderChoiceQuestionCard(is_array($question) ? $question : []); ?>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+
+            <?php if (($summary['open_questions'] ?? []) !== []): ?>
+                <section class="form-builder-analytics-section">
+                    <div class="form-builder-analytics-head">
+                        <h2>Preguntas abiertas</h2>
+                        <p>Tabla viva con respuestas completas recibidas.</p>
+                    </div>
+
+                    <div class="form-builder-open-question-list">
+                        <?php foreach ((array) ($summary['open_questions'] ?? []) as $question): ?>
+                            <?= formBuilderRenderOpenQuestionTable(is_array($question) ? $question : []); ?>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+
+            <section class="form-builder-analytics-section">
+                <div class="form-builder-analytics-head">
+                    <h2>Embudo del formulario</h2>
+                    <p>Visitantes que llegaron, empezaron, terminaron o abandonaron a medias.</p>
+                </div>
+
+                <div class="form-builder-funnel-grid">
+                    <article class="form-builder-response-card">
+                        <span class="form-builder-response-label">Llegaron</span>
+                        <strong><?= htmlspecialchars((string) $visitsCount, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    </article>
+                    <article class="form-builder-response-card">
+                        <span class="form-builder-response-label">Empezaron</span>
+                        <strong><?= htmlspecialchars((string) $startedCount, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    </article>
+                    <article class="form-builder-response-card">
+                        <span class="form-builder-response-label">Terminaron</span>
+                        <strong><?= htmlspecialchars((string) $finishedCount, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    </article>
+                    <article class="form-builder-response-card">
+                        <span class="form-builder-response-label">Abandonaron a medias</span>
+                        <strong><?= htmlspecialchars((string) $abandonedCount, ENT_QUOTES, 'UTF-8'); ?></strong>
+                    </article>
+                </div>
+            </section>
+        <?php endif; ?>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderRenderChoiceQuestionCard(array $question): string
+{
+    $options = is_array($question['options'] ?? null) ? $question['options'] : [];
+    $segments = [];
+    $start = 0.0;
+
+    foreach ($options as $option) {
+        $percent = max(0, (float) ($option['percent'] ?? 0));
+        $end = min(100, $start + $percent);
+        $segments[] = 'var(--chart-color-' . ((count($segments) % 6) + 1) . ') ' . number_format($start, 2, '.', '') . '% ' . number_format($end, 2, '.', '') . '%';
+        $start = $end;
+    }
+
+    if ($segments === []) {
+        $segments[] = '#d7dbe0 0% 100%';
+    } elseif ($start < 100) {
+        $segments[] = '#eceff1 ' . number_format($start, 2, '.', '') . '% 100%';
+    }
+
+    ob_start();
+    ?>
+    <article class="form-builder-chart-card">
+        <div class="form-builder-chart-head">
+            <h3><?= htmlspecialchars((string) ($question['label'] ?? 'Pregunta'), ENT_QUOTES, 'UTF-8'); ?></h3>
+            <p><?= htmlspecialchars((string) ((int) ($question['answer_count'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?> respuestas completas</p>
+        </div>
+
+        <div class="form-builder-chart-body">
+            <div class="form-builder-pie-chart" style="--pie-chart: conic-gradient(<?= htmlspecialchars(implode(', ', $segments), ENT_QUOTES, 'UTF-8'); ?>);">
+                <span><?= htmlspecialchars((string) ((int) ($question['selection_count'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?></span>
+            </div>
+
+            <div class="form-builder-chart-legend">
+                <?php foreach ($options as $index => $option): ?>
+                    <div class="form-builder-chart-legend-item">
+                        <span class="form-builder-chart-swatch" style="background: var(--chart-color-<?= ($index % 6) + 1; ?>);"></span>
+                        <div>
+                            <strong><?= htmlspecialchars((string) ($option['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></strong>
+                            <small><?= htmlspecialchars((string) ((int) ($option['count'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?> respuestas • <?= htmlspecialchars(number_format((float) ($option['percent'] ?? 0), 1), ENT_QUOTES, 'UTF-8'); ?>%</small>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </article>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderRenderOpenQuestionTable(array $question): string
+{
+    $responses = is_array($question['responses'] ?? null) ? $question['responses'] : [];
+
+    ob_start();
+    ?>
+    <article class="form-builder-open-card">
+        <div class="form-builder-chart-head">
+            <h3><?= htmlspecialchars((string) ($question['label'] ?? 'Pregunta abierta'), ENT_QUOTES, 'UTF-8'); ?></h3>
+            <p><?= htmlspecialchars((string) count($responses), ENT_QUOTES, 'UTF-8'); ?> respuestas completas</p>
+        </div>
+
+        <?php if ($responses === []): ?>
+            <div class="form-builder-open-empty">
+                <span class="material-symbols-rounded">notes</span>
+                <p>Aun no hay respuestas completas para esta pregunta.</p>
+            </div>
+        <?php else: ?>
+            <div class="form-builder-open-table-wrap">
+                <table class="form-builder-open-table">
+                    <thead>
+                        <tr>
+                            <th>Respuesta</th>
+                            <th>Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($responses as $response): ?>
+                            <tr>
+                                <td><?= nl2br(htmlspecialchars((string) ($response['value'] ?? ''), ENT_QUOTES, 'UTF-8')); ?></td>
+                                <td><?= htmlspecialchars(formBuilderFormatDateTime((string) ($response['submitted_at'] ?? '')), ENT_QUOTES, 'UTF-8'); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </article>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderFormatDateTime(string $value): string
+{
+    if (trim($value) === '') {
+        return 'Sin fecha';
+    }
+
+    $timestamp = strtotime($value);
+
+    if ($timestamp === false) {
+        return $value;
+    }
+
+    return date('d/m/Y H:i', $timestamp);
 }

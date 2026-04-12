@@ -701,7 +701,11 @@ function mergeToolWithPrivateConfig(array $tool, ?array $privateConfig): array
 function normalizeToolSlug(string $value): string
 {
     $normalized = strtolower(trim($value));
-    $normalized = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalized) ?: $normalized;
+
+    if (function_exists('iconv')) {
+        $normalized = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalized) ?: $normalized;
+    }
+
     $normalized = preg_replace('/[^a-z0-9]+/', '-', $normalized) ?? '';
     $normalized = trim($normalized, '-');
 

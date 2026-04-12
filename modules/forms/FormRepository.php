@@ -143,4 +143,74 @@ final class FormRepository
 
         return is_array($data[0] ?? null) ? $data[0] : $data;
     }
+
+    public function trackPublicSession(
+        string $publicId,
+        string $sessionKey,
+        string $event,
+        ?int $answeredCount = null,
+        ?int $questionCount = null,
+        array $metadata = []
+    ): array {
+        $payload = [
+            'p_public_id' => $publicId,
+            'p_session_key' => $sessionKey,
+            'p_event' => $event,
+            'p_metadata' => $metadata,
+        ];
+
+        if ($answeredCount !== null) {
+            $payload['p_answered_count'] = max(0, $answeredCount);
+        }
+
+        if ($questionCount !== null) {
+            $payload['p_question_count'] = max(0, $questionCount);
+        }
+
+        $response = \supabaseRestRequest(
+            'POST',
+            'rpc/track_public_form_session',
+            $payload
+        );
+
+        $data = $response['data'] ?? null;
+
+        if (!is_array($data) || $data === []) {
+            throw new RuntimeException('No fue posible registrar la sesion del formulario.');
+        }
+
+        return is_array($data[0] ?? null) ? $data[0] : $data;
+    }
+
+    public function listFormResponses(string $accessToken, string $formId, string $projectId): array
+    {
+        $response = \supabaseRestRequest(
+            'GET',
+            'form_responses?select=id,form_id,answers,metadata,submitted_at&form_id=eq.'
+            . rawurlencode(trim($formId))
+            . '&project_id=eq.'
+            . rawurlencode(trim($projectId))
+            . '&order=submitted_at.desc',
+            [],
+            $accessToken
+        );
+
+        return is_array($response['data'] ?? null) ? $response['data'] : [];
+    }
+
+    public function listFormSessions(string $accessToken, string $formId, string $projectId): array
+    {
+        $response = \supabaseRestRequest(
+            'GET',
+            'form_sessions?select=id,form_id,session_key,status,visited_at,started_at,completed_at,abandoned_at,last_seen_at,question_count,answered_count,metadata&form_id=eq.'
+            . rawurlencode(trim($formId))
+            . '&project_id=eq.'
+            . rawurlencode(trim($projectId))
+            . '&order=visited_at.desc',
+            [],
+            $accessToken
+        );
+
+        return is_array($response['data'] ?? null) ? $response['data'] : [];
+    }
 }
