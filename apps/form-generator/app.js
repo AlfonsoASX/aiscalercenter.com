@@ -521,10 +521,34 @@
         const completedCount = Number(summary?.completed_count || 0);
         const visitsCount = Number(summary?.visits_count || 0);
         const startedCount = Number(summary?.started_count || 0);
-        const finishedCount = Math.max(completedCount, Number(summary?.completed_sessions_count || 0));
-        const abandonedCount = Number(summary?.abandoned_count || 0);
+        const finishedCount = Number(summary?.completed_sessions_count || completedCount);
+        const funnel = summary?.funnel && typeof summary.funnel === 'object' ? summary.funnel : {};
         const choiceQuestions = Array.isArray(summary?.choice_questions) ? summary.choice_questions : [];
         const openQuestions = Array.isArray(summary?.open_questions) ? summary.open_questions : [];
+
+        const renderLiteralFunnel = (funnelData) => {
+            const arrived = Math.max(0, Number(funnelData?.arrived || visitsCount));
+            const started = Math.min(arrived, Math.max(0, Number(funnelData?.started || startedCount)));
+            const completed = Math.min(started, Math.max(0, Number(funnelData?.completed || finishedCount)));
+            const base = Math.max(arrived, 1);
+            const stages = [
+                { label: 'Llegaron', count: arrived, width: 100, percent: 100, modifier: 1 },
+                { label: 'Empezaron', count: started, width: Math.max(52, Math.round(78 * Math.max(0, started / base))), percent: Math.round((started / base) * 100), modifier: 2 },
+                { label: 'Terminaron', count: completed, width: Math.max(34, Math.round(60 * Math.max(0, completed / base))), percent: Math.round((completed / base) * 100), modifier: 3 },
+            ];
+
+            return `
+                <div class="form-builder-funnel" aria-label="Embudo del formulario">
+                    ${stages.map((stage) => `
+                        <article class="form-builder-funnel-stage form-builder-funnel-stage--${stage.modifier}" style="--funnel-stage-width: ${stage.width}%;">
+                            <span class="form-builder-funnel-stage-label">${escapeHtml(stage.label)}</span>
+                            <strong>${escapeHtml(String(stage.count))}</strong>
+                            <small>${escapeHtml(String(stage.percent))}% del total</small>
+                        </article>
+                    `).join('')}
+                </div>
+            `;
+        };
 
         responsesShell.innerHTML = !canLoadStats
             ? `
@@ -581,25 +605,11 @@
                     <section class="form-builder-analytics-section">
                         <div class="form-builder-analytics-head">
                             <h2>Embudo del formulario</h2>
-                            <p>Visitantes que llegaron, empezaron, terminaron o abandonaron a medias.</p>
                         </div>
-                        <div class="form-builder-funnel-grid">
-                            <article class="form-builder-response-card">
-                                <span class="form-builder-response-label">Llegaron</span>
-                                <strong>${escapeHtml(String(visitsCount))}</strong>
-                            </article>
-                            <article class="form-builder-response-card">
-                                <span class="form-builder-response-label">Empezaron</span>
-                                <strong>${escapeHtml(String(startedCount))}</strong>
-                            </article>
-                            <article class="form-builder-response-card">
-                                <span class="form-builder-response-label">Terminaron</span>
-                                <strong>${escapeHtml(String(finishedCount))}</strong>
-                            </article>
-                            <article class="form-builder-response-card">
-                                <span class="form-builder-response-label">Abandonaron a medias</span>
-                                <strong>${escapeHtml(String(abandonedCount))}</strong>
-                            </article>
+                        <div class="form-builder-funnel-layout">
+                            <div class="form-builder-funnel-visual">
+                                ${renderLiteralFunnel(funnel)}
+                            </div>
                         </div>
                     </section>
                 </div>

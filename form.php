@@ -486,6 +486,7 @@ $initialAnsweredCount = formPublicCountAnswered($answers);
                 let currentStep = startStep;
                 let started = Number(form.dataset.initialAnswered || 0) > 0;
                 let completed = false;
+                let abandonmentSent = false;
 
                 if (sessionKeyInput instanceof HTMLInputElement && sessionKey !== '') {
                     sessionKeyInput.value = sessionKey;
@@ -639,6 +640,15 @@ $initialAnsweredCount = formPublicCountAnswered($answers);
                     }).catch(() => {});
                 };
 
+                const sendAbandonIfNeeded = (reason) => {
+                    if (abandonmentSent || completed || !started || answerCount() <= 0) {
+                        return;
+                    }
+
+                    abandonmentSent = true;
+                    track('abandon', { action: reason }, true);
+                };
+
                 const registerProgress = (metadata = {}) => {
                     if (!started && answerCount() > 0) {
                         started = true;
@@ -785,16 +795,19 @@ $initialAnsweredCount = formPublicCountAnswered($answers);
 
                     if (!(step instanceof HTMLElement) || validateStep(step)) {
                         completed = true;
+                        abandonmentSent = true;
                         return;
                     }
 
                     event.preventDefault();
                 });
 
+                window.addEventListener('beforeunload', () => {
+                    sendAbandonIfNeeded('beforeunload');
+                });
+
                 window.addEventListener('pagehide', () => {
-                    if (!completed && started && answerCount() > 0) {
-                        track('abandon', { action: 'pagehide' }, true);
-                    }
+                    sendAbandonIfNeeded('pagehide');
                 });
 
                 track('view', { action: 'view' });
@@ -1091,27 +1104,13 @@ function formPublicRenderStep(array $field, array $answers, int $index, int $tot
     return (string) ob_get_clean();
 }
 
-function formPublicSessionCookieName(string $publicId): string
-{
-    return 'ais_form_' . substr(hash('sha1', $publicId), 0, 12);
-}
-
 function formPublicResolveSessionKey(string $publicId, ?string $preferred = null): string
 {
-    $cookieName = formPublicSessionCookieName($publicId);
-    $candidate = trim((string) ($preferred ?? ($_COOKIE[$cookieName] ?? '')));
+    $candidate = trim((string) $preferred);
 
     if ($candidate === '') {
         $candidate = bin2hex(random_bytes(16));
     }
-
-    setcookie($cookieName, $candidate, [
-        'expires' => time() + (60 * 60 * 24 * 30),
-        'path' => '/',
-        'secure' => (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off'),
-        'httponly' => false,
-        'samesite' => 'Lax',
-    ]);
 
     return $candidate;
 }

@@ -121,6 +121,12 @@ function formBuilderEmptyInsightsSummary(): array
         'started_count' => 0,
         'completed_sessions_count' => 0,
         'abandoned_count' => 0,
+        'in_progress_count' => 0,
+        'funnel' => [
+            'arrived' => 0,
+            'started' => 0,
+            'completed' => 0,
+        ],
         'choice_questions' => [],
         'open_questions' => [],
         'updated_at' => gmdate('c'),
@@ -262,6 +268,23 @@ function formBuilderBuildInsightsSummary(array $form, array $responses, array $s
 
         return $status === 'abandoned' || ($lastSeenTs !== false && $lastSeenTs <= $staleBoundary);
     }));
+
+    $funnelCompleted = max($summary['completed_count'], $summary['completed_sessions_count']);
+    $funnelStarted = max($summary['started_count'], $funnelCompleted);
+    $funnelArrived = max($summary['visits_count'], $funnelStarted);
+    $funnelAbandoned = min(max(0, $summary['abandoned_count']), max(0, $funnelStarted - $funnelCompleted));
+    $inProgressCount = max(0, $funnelStarted - $funnelCompleted - $funnelAbandoned);
+
+    $summary['visits_count'] = $funnelArrived;
+    $summary['started_count'] = $funnelStarted;
+    $summary['completed_sessions_count'] = $funnelCompleted;
+    $summary['abandoned_count'] = $funnelAbandoned;
+    $summary['in_progress_count'] = $inProgressCount;
+    $summary['funnel'] = [
+        'arrived' => $funnelArrived,
+        'started' => $funnelStarted,
+        'completed' => $funnelCompleted,
+    ];
     $summary['updated_at'] = gmdate('c');
     $summary['choice_questions'] = array_values($summary['choice_questions']);
     $summary['open_questions'] = array_values($summary['open_questions']);

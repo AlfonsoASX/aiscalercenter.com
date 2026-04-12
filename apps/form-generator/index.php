@@ -882,8 +882,8 @@ function formBuilderRenderResponsesPanel(array $summary, bool $canLoadStats): st
     $completedCount = (int) ($summary['completed_count'] ?? 0);
     $visitsCount = (int) ($summary['visits_count'] ?? 0);
     $startedCount = (int) ($summary['started_count'] ?? 0);
-    $abandonedCount = (int) ($summary['abandoned_count'] ?? 0);
-    $finishedCount = max($completedCount, (int) ($summary['completed_sessions_count'] ?? 0));
+    $finishedCount = (int) ($summary['completed_sessions_count'] ?? max($completedCount, 0));
+    $funnel = is_array($summary['funnel'] ?? null) ? $summary['funnel'] : [];
 
     ob_start();
     ?>
@@ -942,26 +942,12 @@ function formBuilderRenderResponsesPanel(array $summary, bool $canLoadStats): st
             <section class="form-builder-analytics-section">
                 <div class="form-builder-analytics-head">
                     <h2>Embudo del formulario</h2>
-                    <p>Visitantes que llegaron, empezaron, terminaron o abandonaron a medias.</p>
                 </div>
 
-                <div class="form-builder-funnel-grid">
-                    <article class="form-builder-response-card">
-                        <span class="form-builder-response-label">Llegaron</span>
-                        <strong><?= htmlspecialchars((string) $visitsCount, ENT_QUOTES, 'UTF-8'); ?></strong>
-                    </article>
-                    <article class="form-builder-response-card">
-                        <span class="form-builder-response-label">Empezaron</span>
-                        <strong><?= htmlspecialchars((string) $startedCount, ENT_QUOTES, 'UTF-8'); ?></strong>
-                    </article>
-                    <article class="form-builder-response-card">
-                        <span class="form-builder-response-label">Terminaron</span>
-                        <strong><?= htmlspecialchars((string) $finishedCount, ENT_QUOTES, 'UTF-8'); ?></strong>
-                    </article>
-                    <article class="form-builder-response-card">
-                        <span class="form-builder-response-label">Abandonaron a medias</span>
-                        <strong><?= htmlspecialchars((string) $abandonedCount, ENT_QUOTES, 'UTF-8'); ?></strong>
-                    </article>
+                <div class="form-builder-funnel-layout">
+                    <div class="form-builder-funnel-visual">
+                        <?= formBuilderRenderLiteralFunnel($funnel); ?>
+                    </div>
                 </div>
             </section>
         <?php endif; ?>
@@ -1077,4 +1063,47 @@ function formBuilderFormatDateTime(string $value): string
     }
 
     return date('d/m/Y H:i', $timestamp);
+}
+
+function formBuilderRenderLiteralFunnel(array $funnel): string
+{
+    $arrived = max(0, (int) ($funnel['arrived'] ?? 0));
+    $started = min($arrived, max(0, (int) ($funnel['started'] ?? 0)));
+    $completed = min($started, max(0, (int) ($funnel['completed'] ?? 0)));
+    $base = max($arrived, 1);
+    $stages = [
+        [
+            'label' => 'Llegaron',
+            'count' => $arrived,
+            'width' => 100,
+            'percent' => 100,
+        ],
+        [
+            'label' => 'Empezaron',
+            'count' => $started,
+            'width' => max(52, (int) round(78 * max(0, $started / $base))),
+            'percent' => (int) round(($started / $base) * 100),
+        ],
+        [
+            'label' => 'Terminaron',
+            'count' => $completed,
+            'width' => max(34, (int) round(60 * max(0, $completed / $base))),
+            'percent' => (int) round(($completed / $base) * 100),
+        ],
+    ];
+
+    ob_start();
+    ?>
+    <div class="form-builder-funnel" aria-label="Embudo del formulario">
+        <?php foreach ($stages as $index => $stage): ?>
+            <article class="form-builder-funnel-stage form-builder-funnel-stage--<?= $index + 1; ?>" style="--funnel-stage-width: <?= htmlspecialchars((string) $stage['width'], ENT_QUOTES, 'UTF-8'); ?>%;">
+                <span class="form-builder-funnel-stage-label"><?= htmlspecialchars((string) $stage['label'], ENT_QUOTES, 'UTF-8'); ?></span>
+                <strong><?= htmlspecialchars((string) $stage['count'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                <small><?= htmlspecialchars((string) $stage['percent'], ENT_QUOTES, 'UTF-8'); ?>% del total</small>
+            </article>
+        <?php endforeach; ?>
+    </div>
+    <?php
+
+    return (string) ob_get_clean();
 }

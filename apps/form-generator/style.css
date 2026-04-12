@@ -972,8 +972,7 @@
     gap: 1rem;
 }
 
-.form-builder-responses-kpis,
-.form-builder-funnel-grid {
+.form-builder-responses-kpis {
     display: grid;
     gap: 1rem;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1017,6 +1016,68 @@
 .form-builder-analytics-section {
     display: grid;
     gap: 0.9rem;
+}
+
+.form-builder-funnel-layout {
+    display: block;
+}
+
+.form-builder-funnel-visual {
+    display: grid;
+}
+
+.form-builder-funnel {
+    display: grid;
+    gap: 1.15rem;
+    justify-items: center;
+    padding: 1.4rem 0.8rem 1.55rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.form-builder-funnel-stage {
+    width: var(--funnel-stage-width);
+    min-width: 15rem;
+    max-width: 100%;
+    display: grid;
+    gap: 0.3rem;
+    justify-items: center;
+    padding: 1.3rem 1.5rem 1.5rem;
+    color: #202124;
+    clip-path: polygon(0 0, 100% 0, 91% 100%, 9% 100%);
+    box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+.form-builder-funnel-stage--1 {
+    background: linear-gradient(135deg, #d5dbe0, #c4ccd2);
+}
+
+.form-builder-funnel-stage--2 {
+    background: linear-gradient(135deg, #c9d0d6, #b8c1c9);
+}
+
+.form-builder-funnel-stage--3 {
+    background: linear-gradient(135deg, #bcc5cc, #aeb8c0);
+}
+
+.form-builder-funnel-stage-label {
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.form-builder-funnel-stage strong {
+    font-size: clamp(1.8rem, 3vw, 2.6rem);
+    line-height: 1;
+}
+
+.form-builder-funnel-stage small {
+    color: #5f6368;
+    font-size: 0.82rem;
+    font-weight: 700;
 }
 
 .form-builder-analytics-head {
@@ -1191,7 +1252,7 @@
     }
 
     .form-builder-responses-kpis,
-    .form-builder-funnel-grid,
+    .form-builder-funnel-layout,
     .form-builder-chart-body {
         grid-template-columns: 1fr;
     }
