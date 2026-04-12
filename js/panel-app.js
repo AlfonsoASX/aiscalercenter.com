@@ -185,9 +185,9 @@ function observePanelAuthState() {
         }
 
         if (event === 'SIGNED_OUT' && !state.intentionalLogout) {
-            void clearToolsPhpSession();
-            setFlash('Inicia sesion para entrar al panel.');
-            window.location.href = authConfig.loginUrl;
+            window.setTimeout(() => {
+                void handleUnexpectedSignedOut();
+            }, 0);
         }
     });
 }
@@ -206,6 +206,20 @@ async function bootPanelApp() {
 
     await syncToolsPhpSession(session.access_token);
     renderAppSession(session);
+}
+
+async function handleUnexpectedSignedOut() {
+    const session = await getCurrentSession();
+
+    if (session) {
+        await syncToolsPhpSession(session.access_token);
+        renderAppSession(session);
+        return;
+    }
+
+    await clearToolsPhpSession();
+    setFlash('Tu sesion expiro. Inicia sesion de nuevo para continuar en el panel.');
+    window.location.href = authConfig.loginUrl;
 }
 
 function handlePanelClick(event) {

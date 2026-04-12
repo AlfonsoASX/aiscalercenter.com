@@ -425,8 +425,10 @@ export function createProjectsModule({
 
     async function saveProject(form) {
         const currentUser = getCurrentUser();
+        const fallbackUserId = String(currentUser?.id ?? '').trim();
+        const requiresLogoUpload = state.logoFile instanceof File;
 
-        if (!currentUser?.id) {
+        if (!fallbackUserId) {
             showModuleNotice('error', 'No encontramos tu usuario activo.');
             return;
         }
@@ -443,18 +445,32 @@ export function createProjectsModule({
             return;
         }
 
+        if (currentProject && !hasPendingProjectChanges(currentProject, {
+            name,
+            description,
+            companyType,
+            companyGoal,
+        })) {
+            showModuleNotice('info', 'No hay cambios pendientes en este proyecto.');
+            return;
+        }
+
         state.saving = true;
         renderModalIntoDom();
 
         try {
+            const currentUserId = requiresLogoUpload
+                ? await resolveCurrentSessionUserId(fallbackUserId)
+                : fallbackUserId;
+
             const logo = state.logoFile instanceof File
-                ? await uploadProjectLogo(currentUser.id, state.logoFile)
+                ? await uploadProjectLogo(currentUserId, state.logoFile)
                 : {
                     url: currentProject?.logo_url ?? '',
                     path: currentProject?.logo_storage_path ?? '',
                 };
             const payload = {
-                owner_user_id: currentProject?.owner_user_id || currentUser.id,
+                owner_user_id: currentProject?.owner_user_id || currentUserId,
                 name,
                 logo_url: logo.url,
                 logo_storage_path: logo.path,
@@ -479,6 +495,37 @@ export function createProjectsModule({
             state.saving = false;
             renderModalIntoDom();
         }
+    }
+
+    async function resolveCurrentSessionUserId(fallbackUserId) {
+        const fallback = String(fallbackUserId ?? '').trim();
+        const {
+            data: { session },
+            error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+            throw error;
+        }
+
+        const userId = String(session?.user?.id ?? fallback).trim();
+
+        if (userId === '') {
+            throw new Error('auth session missing');
+        }
+
+        return userId;
+    }
+
+    function hasPendingProjectChanges(currentProject, draft) {
+        if (state.logoFile instanceof File) {
+            return true;
+        }
+
+        return normalizeComparableField(draft.name) !== normalizeComparableField(currentProject?.name)
+            || normalizeComparableField(draft.description) !== normalizeComparableField(currentProject?.description)
+            || normalizeComparableField(draft.companyType) !== normalizeComparableField(currentProject?.company_type)
+            || normalizeComparableField(draft.companyGoal) !== normalizeComparableField(currentProject?.company_goal);
     }
 
     async function upsertProject(projectId, payload) {
@@ -692,6 +739,15 @@ export function createProjectsModule({
             return 'La base de datos bloqueo la creacion del proyecto por politicas internas. Ejecuta de nuevo supabase/projects_schema.sql y recarga el panel.';
         }
 
+        if (
+            normalized.includes('auth session missing')
+            || normalized.includes('refresh token')
+            || normalized.includes('jwt expired')
+            || (normalized.includes('session') && normalized.includes('expired'))
+        ) {
+            return 'Tu sesion expiro mientras intentabamos guardar. Inicia sesion de nuevo y vuelve a guardar el proyecto.';
+        }
+
         if (normalized.includes('bucket') || normalized.includes('storage')) {
             return 'Falta configurar el almacenamiento central. Ejecuta supabase/user_files_storage_setup.sql en Supabase.';
         }
@@ -758,6 +814,10 @@ function cryptoRandomId() {
     }
 
     return `project_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeComparableField(value) {
+    return String(value ?? '').trim();
 }
 
 function formatProjectDate(value) {

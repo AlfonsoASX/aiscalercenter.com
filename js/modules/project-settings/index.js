@@ -750,17 +750,21 @@ export function createProjectSettingsModule({
     }
 
     async function saveProjectSettings() {
-        const currentUser = getCurrentUser?.();
-
-        if (!currentUser?.id || !state.project) {
+        if (!state.project) {
             setModuleNotice('error', 'No encontramos el proyecto activo para guardar.');
             return;
         }
 
         const name = String(state.projectDraft.name ?? '').trim();
+        const requiresAssetUpload = state.logoFile instanceof File || state.coverFile instanceof File;
 
         if (name === '') {
             setModuleNotice('error', 'El proyecto necesita un nombre.');
+            return;
+        }
+
+        if (!hasPendingProjectSettingsChanges()) {
+            setModuleNotice('info', 'No hay cambios pendientes en la configuracion del proyecto.');
             return;
         }
 
@@ -768,11 +772,15 @@ export function createProjectSettingsModule({
         renderGeneralPane();
 
         try {
-            const logoAsset = await resolveProjectAssetUpload(currentUser.id, 'logo', state.logoFile, state.clearLogo, {
+            const currentUserId = requiresAssetUpload
+                ? await resolveCurrentSessionUserId(String(getCurrentUser?.()?.id ?? '').trim())
+                : '';
+
+            const logoAsset = await resolveProjectAssetUpload(currentUserId, 'logo', state.logoFile, state.clearLogo, {
                 url: state.project.logo_url,
                 path: state.project.logo_storage_path,
             });
-            const coverAsset = await resolveProjectAssetUpload(currentUser.id, 'cover', state.coverFile, state.clearCover, {
+            const coverAsset = await resolveProjectAssetUpload(currentUserId, 'cover', state.coverFile, state.clearCover, {
                 url: state.project.cover_image_url,
                 path: state.project.cover_image_storage_path,
             });
@@ -838,6 +846,44 @@ export function createProjectSettingsModule({
             state.savingProject = false;
             renderGeneralPane();
         }
+    }
+
+    async function resolveCurrentSessionUserId(fallbackUserId) {
+        const fallback = String(fallbackUserId ?? '').trim();
+        const {
+            data: { session },
+            error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+            throw error;
+        }
+
+        const userId = String(session?.user?.id ?? fallback).trim();
+
+        if (userId === '') {
+            throw new Error('auth session missing');
+        }
+
+        return userId;
+    }
+
+    function hasPendingProjectSettingsChanges() {
+        if (!state.project) {
+            return false;
+        }
+
+        if (state.logoFile instanceof File || state.coverFile instanceof File || state.clearLogo || state.clearCover) {
+            return true;
+        }
+
+        return normalizeOptionalField(state.projectDraft.name) !== normalizeOptionalField(state.project.name)
+            || normalizeOptionalField(state.projectDraft.description) !== normalizeOptionalField(state.project.description)
+            || normalizeOptionalField(state.projectDraft.company_type) !== normalizeOptionalField(state.project.company_type)
+            || normalizeOptionalField(state.projectDraft.company_goal) !== normalizeOptionalField(state.project.company_goal)
+            || normalizeOptionalField(state.projectDraft.website_url) !== normalizeOptionalField(state.project.metadata?.website_url)
+            || normalizeOptionalField(state.projectDraft.internal_notes) !== normalizeOptionalField(state.project.metadata?.internal_notes)
+            || (state.projectDraft.status === 'archived' ? 'archived' : 'active') !== String(state.project.status ?? 'active');
     }
 
     async function searchRegisteredUser(form) {
@@ -1335,6 +1381,15 @@ export function createProjectSettingsModule({
 
         if (normalized.includes('duplicate key value') || normalized.includes('project_members_project_user_unique') || normalized.includes('project_members_project_email_unique')) {
             return 'Ese usuario ya tiene acceso a este proyecto.';
+        }
+
+        if (
+            normalized.includes('auth session missing')
+            || normalized.includes('refresh token')
+            || normalized.includes('jwt expired')
+            || (normalized.includes('session') && normalized.includes('expired'))
+        ) {
+            return 'Tu sesion expiro mientras intentabamos guardar. Inicia sesion de nuevo y vuelve a guardar el proyecto.';
         }
 
         if (normalized.includes('bucket') || normalized.includes('storage') || normalized.includes('storage.objects')) {
