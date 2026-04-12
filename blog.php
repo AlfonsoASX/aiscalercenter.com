@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/lib/pwa.php';
+
 $supabaseConfig = require __DIR__ . '/config/supabase.php';
 $projectUrl = trim((string) ($supabaseConfig['project_url'] ?? ''));
 $publishableKey = trim((string) ($supabaseConfig['publishable_key'] ?? ''));
@@ -14,6 +16,10 @@ $slug = trim((string) ($_GET['slug'] ?? ''));
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Articulo - AiScaler Center</title>
+    <?= renderPwaHead([
+        'description' => 'Lee articulos y recursos publicados en AiScaler Center.',
+        'background_color' => '#f5f7fb',
+    ]); ?>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {

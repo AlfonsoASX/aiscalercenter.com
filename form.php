@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use AiScaler\Forms\FormRepository;
 
+require_once __DIR__ . '/lib/pwa.php';
 require_once __DIR__ . '/modules/forms/bootstrap.php';
 
 $repository = new FormRepository();
@@ -57,6 +58,10 @@ $pageTitle = is_array($form) ? (string) ($form['title'] ?? 'Formulario') : 'Form
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($pageTitle, ENT_QUOTES, 'UTF-8'); ?> - AiScaler Center</title>
+    <?= renderPwaHead([
+        'description' => 'Completa este formulario de AiScaler Center desde cualquier dispositivo.',
+        'background_color' => '#eef4ff',
+    ]); ?>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
     <style>

@@ -16,6 +16,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
+    flex-wrap: wrap;
 }
 
 .project-settings-head h2,
@@ -99,6 +100,14 @@
     align-items: start;
 }
 
+.project-settings-layout > *,
+.project-settings-media-grid > *,
+.project-settings-grid > *,
+.project-settings-member-grid > *,
+.project-settings-danger-grid > * {
+    min-width: 0;
+}
+
 .project-settings-card {
     padding: 1.2rem;
     border: 1px solid rgba(19, 42, 74, 0.08);
@@ -133,12 +142,12 @@
 }
 
 .project-settings-media-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
 }
 
 .project-settings-grid,
 .project-settings-member-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
 }
 
 .project-settings-grid-span {
@@ -172,7 +181,7 @@
 
 .project-settings-cover-preview {
     width: min(100%, 18rem);
-    min-width: 15rem;
+    min-width: min(100%, 15rem);
     aspect-ratio: 16 / 9;
 }
 
@@ -193,11 +202,19 @@
     align-content: start;
     gap: 0.5rem;
     flex: 1 1 auto;
+    min-width: 0;
+}
+
+.project-settings-upload-actions input[type="file"] {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .project-settings-helper {
     color: #6b7280;
     line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .project-settings-link {
@@ -239,6 +256,7 @@
 }
 
 .project-settings-member-head {
+    justify-content: flex-start;
     align-items: center;
 }
 
@@ -264,6 +282,7 @@
 .project-settings-member-copy {
     display: grid;
     gap: 0.18rem;
+    min-width: 0;
 }
 
 .project-settings-member-copy strong {
@@ -275,6 +294,7 @@
 .project-settings-member-detail {
     color: #5f6368;
     line-height: 1.55;
+    overflow-wrap: anywhere;
 }
 
 .project-settings-chip-row {
@@ -303,13 +323,30 @@
     flex-wrap: wrap;
 }
 
+.project-settings-member-actions > * {
+    flex: 1 1 13rem;
+}
+
 .project-settings-danger-grid {
-    grid-template-columns: repeat(2, minmax(0, max-content));
-    justify-content: start;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    justify-content: stretch;
 }
 
 .project-settings-danger-button {
     min-height: 2.9rem;
+}
+
+.project-settings-head > *:first-child,
+.project-settings-card-head > *:first-child {
+    flex: 1 1 18rem;
+    min-width: 0;
+}
+
+.project-settings-updated,
+.project-settings-counter {
+    max-width: 100%;
+    overflow-wrap: anywhere;
 }
 
 .project-settings-empty,
@@ -337,13 +374,13 @@
     }
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1280px) {
     .project-settings-layout {
         grid-template-columns: 1fr;
     }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 960px) {
     .project-settings-head,
     .project-settings-card-head,
     .project-settings-upload-card,

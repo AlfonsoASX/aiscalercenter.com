@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use AiScaler\LandingPages\LandingPageRepository;
 
+require_once __DIR__ . '/lib/pwa.php';
 require_once __DIR__ . '/modules/landing-pages/bootstrap.php';
 
 $repository = new LandingPageRepository();
@@ -52,6 +53,10 @@ $canonicalUrl = trim((string) ($settings['canonical_url'] ?? ''));
         <link rel="canonical" href="<?= htmlspecialchars($canonicalUrl, ENT_QUOTES, 'UTF-8'); ?>">
         <meta property="og:url" content="<?= htmlspecialchars($canonicalUrl, ENT_QUOTES, 'UTF-8'); ?>">
     <?php endif; ?>
+    <?= renderPwaHead([
+        'theme_color' => (string) ($settings['primary_color'] ?? '#2f7cef'),
+        'background_color' => (string) ($settings['background_color'] ?? '#f5f7fb'),
+    ]); ?>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
     <style>

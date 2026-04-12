@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/lib/pwa.php';
+
 $supabaseConfig = require __DIR__ . '/config/supabase.php';
 $panelConfig = require __DIR__ . '/config/panel.php';
 
@@ -49,6 +51,10 @@ function appAssetUrl(string $path): string
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= $showAppView ? 'AiScaler Center - Panel de control' : ($showLoginView ? 'AiScaler Center - Acceso' : 'AiScaler Center - Transforma tu Futuro Profesional'); ?></title>
+    <?= renderPwaHead([
+        'description' => 'Plataforma de AiScaler Center para aprender, ejecutar proyectos y operar herramientas de IA desde cualquier dispositivo.',
+        'background_color' => '#f5f7fb',
+    ]); ?>
 
     <script src="https://cdn.tailwindcss.com"></script>
 

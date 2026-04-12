@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/lib/pwa.php';
 require_once __DIR__ . '/modules/tools/bootstrap.php';
 
 function toolAssetUrl(string $path): string
@@ -175,6 +176,10 @@ if ($launchMode === 'php_folder') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($toolTitle, ENT_QUOTES, 'UTF-8'); ?> - AiScaler Center</title>
+    <?= renderPwaHead([
+        'description' => $toolDescription !== '' ? $toolDescription : 'Herramienta de AiScaler Center disponible en modo instalable.',
+        'background_color' => '#f5f7fb',
+    ]); ?>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
     <link rel="stylesheet" href="<?= htmlspecialchars(toolAssetUrl('css/tool-panel-shell.css'), ENT_QUOTES, 'UTF-8'); ?>">
@@ -198,6 +203,10 @@ if ($launchMode === 'php_folder') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars($toolTitle, ENT_QUOTES, 'UTF-8'); ?> - AiScaler Center</title>
+    <?= renderPwaHead([
+        'description' => $toolDescription !== '' ? $toolDescription : 'Herramienta de AiScaler Center disponible en modo instalable.',
+        'background_color' => '#f5f7fb',
+    ]); ?>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
     <link rel="stylesheet" href="<?= htmlspecialchars(toolAssetUrl('css/tool-panel-shell.css'), ENT_QUOTES, 'UTF-8'); ?>">
@@ -488,6 +497,10 @@ $moduleStylesheet = match ($panelModuleKey) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars((string) ($tool['title'] ?? 'Herramienta'), ENT_QUOTES, 'UTF-8'); ?> - AiScaler Center</title>
+    <?= renderPwaHead([
+        'description' => $toolDescription !== '' ? $toolDescription : 'Herramienta de AiScaler Center disponible en modo instalable.',
+        'background_color' => '#f5f7fb',
+    ]); ?>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
     <?php if ($moduleStylesheet !== null): ?>

@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/lib/pwa.php';
 require_once __DIR__ . '/lib/supabase_api.php';
 require_once __DIR__ . '/modules/tools/bootstrap.php';
 
@@ -120,6 +121,10 @@ if ($isPartial) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= htmlspecialchars((string) ($category['label'] ?? 'Herramientas'), ENT_QUOTES, 'UTF-8'); ?></title>
+    <?= renderPwaHead([
+        'description' => 'Explora las herramientas activas de AiScaler Center desde una experiencia instalable.',
+        'background_color' => '#f6f8fc',
+    ]); ?>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
     <link rel="stylesheet" href="css/modules/tools-catalog.css">
