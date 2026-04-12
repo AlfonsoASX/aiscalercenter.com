@@ -159,7 +159,7 @@ export function createProjectsModule({
 
         if (notice) {
             notice.className = `projects-notice ${state.notice ? `projects-notice--${state.notice.type}` : 'hidden'}`;
-            notice.textContent = state.notice?.message ?? '';
+            notice.innerHTML = state.notice ? renderModuleNotice(state.notice.message) : '';
         }
 
         shell.innerHTML = state.loading ? renderLoadingState() : renderProjectsGrid();
@@ -313,6 +313,16 @@ export function createProjectsModule({
 
         if (!(target instanceof HTMLElement)) {
             return;
+        }
+
+        if (target.closest('[data-project-notice-dismiss]')) {
+            event.preventDefault();
+            clearNotice();
+            return;
+        }
+
+        if (state.notice && !target.closest('#projects-module-notice')) {
+            clearNotice();
         }
 
         if (target.closest('[data-project-create]')) {
@@ -632,7 +642,26 @@ export function createProjectsModule({
     function showModuleNotice(type, message) {
         state.notice = { type, message };
         renderShell();
-        showNotice?.(type, message);
+    }
+
+    function clearNotice() {
+        if (!state.notice) {
+            return;
+        }
+
+        state.notice = null;
+        renderShell();
+    }
+
+    function renderModuleNotice(message) {
+        return `
+            <div class="projects-notice__content">
+                <button type="button" class="projects-notice__dismiss" data-project-notice-dismiss aria-label="Cerrar notificacion">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
+                <span class="projects-notice__message">${escapeHtml(message)}</span>
+            </div>
+        `;
     }
 
     function humanizeProjectError(error) {
@@ -699,6 +728,7 @@ export function createProjectsModule({
     return {
         renderSection,
         bind,
+        clearNotice,
         loadProjects,
     };
 }

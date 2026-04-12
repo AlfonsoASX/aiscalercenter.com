@@ -52,6 +52,42 @@
     color: #8b1e1e;
 }
 
+.project-settings-notice.hidden {
+    display: none;
+}
+
+.project-settings-notice__content {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.project-settings-notice__dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.project-settings-notice__dismiss:hover,
+.project-settings-notice__dismiss:focus-visible {
+    background: rgba(15, 23, 42, 0.08);
+    outline: none;
+}
+
+.project-settings-notice__message {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.6;
+    padding-top: 0.2rem;
+}
+
 .project-settings-inline-notice--info {
     border-color: rgba(47, 124, 239, 0.16);
     background: rgba(47, 124, 239, 0.08);

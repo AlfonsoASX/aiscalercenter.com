@@ -1,3 +1,5 @@
+let noticeBindingsReady = false;
+
 export function bindForm(formId, handler) {
     const form = document.getElementById(formId);
 
@@ -36,21 +38,31 @@ export function showNotice(view, type, message) {
     }
 
     const appPalettes = {
-        success: 'workspace-notice mb-4 border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-900 dark:text-emerald-100',
-        error: 'workspace-notice mb-4 border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-900 dark:text-red-100',
-        info: 'workspace-notice mb-4 border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-900 dark:text-sky-100',
+        success: 'workspace-notice workspace-notice-shell mb-4 border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-900 dark:text-emerald-100',
+        error: 'workspace-notice workspace-notice-shell mb-4 border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-900 dark:text-red-100',
+        info: 'workspace-notice workspace-notice-shell mb-4 border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-900 dark:text-sky-100',
     };
     const authPalettes = {
-        success: 'mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100',
-        error: 'mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-100',
-        info: 'mb-6 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100',
+        success: 'workspace-notice-shell mb-6 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-100',
+        error: 'workspace-notice-shell mb-6 rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-100',
+        info: 'workspace-notice-shell mb-6 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100',
     };
     const palettes = view === 'app' ? appPalettes : authPalettes;
     const normalizedMessage = describeErrorMessage(message, 'Ocurrio un problema inesperado.');
 
+    ensureNoticeBindings();
     notice.className = palettes[type] ?? palettes.info;
-    notice.textContent = normalizedMessage;
+    notice.dataset.dismissibleNotice = 'true';
+    notice.innerHTML = buildNoticeMarkup(normalizedMessage);
     notice.classList.remove('hidden');
+}
+
+export function hideNotice(view) {
+    const notice = view === 'app'
+        ? document.getElementById('app-notice')
+        : document.getElementById('auth-notice');
+
+    clearNoticeElement(notice);
 }
 
 export function setFlash(message, type = 'success') {
@@ -69,6 +81,63 @@ export function consumeFlash(view) {
     sessionStorage.removeItem('aiscaler_flash');
     sessionStorage.removeItem('aiscaler_flash_type');
     showNotice(view, type, flash);
+}
+
+function ensureNoticeBindings() {
+    if (noticeBindingsReady || typeof document === 'undefined') {
+        return;
+    }
+
+    noticeBindingsReady = true;
+    document.addEventListener('click', handleNoticeInteraction);
+}
+
+function handleNoticeInteraction(event) {
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement)) {
+        return;
+    }
+
+    const dismissButton = target.closest('[data-notice-dismiss="true"]');
+
+    if (dismissButton instanceof HTMLElement) {
+        clearNoticeElement(dismissButton.closest('[data-dismissible-notice="true"]'));
+        return;
+    }
+
+    getVisibleNotices().forEach((notice) => {
+        if (!notice.contains(target)) {
+            clearNoticeElement(notice);
+        }
+    });
+}
+
+function getVisibleNotices() {
+    return ['app-notice', 'auth-notice']
+        .map((id) => document.getElementById(id))
+        .filter((notice) => notice instanceof HTMLElement && !notice.classList.contains('hidden'));
+}
+
+function clearNoticeElement(notice) {
+    if (!(notice instanceof HTMLElement)) {
+        return;
+    }
+
+    notice.classList.add('hidden');
+    notice.innerHTML = '';
+    delete notice.dataset.dismissibleNotice;
+}
+
+function buildNoticeMarkup(message) {
+    return `
+        <div class="workspace-dismissible-notice-content" data-dismissible-notice="true">
+            <button type="button" class="workspace-notice-dismiss" data-notice-dismiss="true" aria-label="Cerrar notificacion">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+            <span class="workspace-notice-message">${escapeHtml(message)}</span>
+        </div>
+    `;
 }
 
 export function cleanupAuthHash() {

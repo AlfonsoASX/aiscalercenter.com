@@ -261,7 +261,7 @@ export function createProjectSettingsModule({
         }
 
         notice.className = `project-settings-notice ${state.notice ? `project-settings-notice--${state.notice.type}` : 'hidden'}`;
-        notice.textContent = state.notice?.message ?? '';
+        notice.innerHTML = state.notice ? renderNoticeContent(state.notice.message) : '';
     }
 
     function renderGeneralPane() {
@@ -598,6 +598,16 @@ export function createProjectSettingsModule({
 
         if (!(target instanceof HTMLElement)) {
             return;
+        }
+
+        if (target.closest('[data-project-settings-notice-dismiss]')) {
+            event.preventDefault();
+            clearNotice();
+            return;
+        }
+
+        if (state.notice && !target.closest('#project-settings-notice')) {
+            clearNotice();
         }
 
         if (target.closest('[data-project-settings-refresh]')) {
@@ -1203,7 +1213,26 @@ export function createProjectSettingsModule({
     function setModuleNotice(type, message) {
         state.notice = { type, message };
         renderNotice();
-        showNotice?.(type, message);
+    }
+
+    function clearNotice() {
+        if (!state.notice) {
+            return;
+        }
+
+        state.notice = null;
+        renderNotice();
+    }
+
+    function renderNoticeContent(message) {
+        return `
+            <div class="project-settings-notice__content">
+                <button type="button" class="project-settings-notice__dismiss" data-project-settings-notice-dismiss aria-label="Cerrar notificacion">
+                    <span class="material-symbols-rounded">close</span>
+                </button>
+                <span class="project-settings-notice__message">${escapeHtml(message)}</span>
+            </div>
+        `;
     }
 
     function syncDraftWithProject(project) {
@@ -1322,6 +1351,7 @@ export function createProjectSettingsModule({
     return {
         renderSection,
         bind,
+        clearNotice,
         setProject,
         reload: loadProjectSettings,
     };

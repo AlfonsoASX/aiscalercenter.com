@@ -1306,6 +1306,47 @@ function appAssetUrl(string $path): string
             border-radius: 1rem;
         }
 
+        .workspace-notice-shell {
+            position: relative;
+        }
+
+        .workspace-dismissible-notice-content {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .workspace-notice-dismiss {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            width: 2rem;
+            height: 2rem;
+            margin-top: -0.1rem;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            opacity: 0.82;
+            transition: background-color 160ms ease, opacity 160ms ease;
+        }
+
+        .workspace-notice-dismiss:hover,
+        .workspace-notice-dismiss:focus-visible {
+            background: rgba(15, 23, 42, 0.08);
+            opacity: 1;
+            outline: none;
+        }
+
+        .workspace-notice-message {
+            flex: 1;
+            min-width: 0;
+            padding-top: 0.22rem;
+            line-height: 1.6;
+        }
+
         .workspace-loading,
         .workspace-section-card {
             border: 1px solid rgba(19, 42, 74, 0.08);

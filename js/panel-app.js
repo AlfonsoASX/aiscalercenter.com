@@ -22,6 +22,7 @@ import {
     cleanupAuthHash,
     consumeFlash,
     escapeHtml,
+    hideNotice,
     normalizeEmail,
     setButtonBusy,
     setFlash,
@@ -131,6 +132,12 @@ function initPanelApp() {
 
 function notify(type, message) {
     showNotice(view, type, message);
+}
+
+function clearTransientNotices() {
+    hideNotice(view);
+    projectsModule.clearNotice?.();
+    projectSettingsModule.clearNotice?.();
 }
 
 async function getAccessToken() {
@@ -624,6 +631,8 @@ function selectMenu(menuId) {
 
         return;
     }
+
+    clearTransientNotices();
 
     if (state.activeMenuId === menuId && selectedItem.tool_category_key) {
         toolsCatalogModule.resetView(menuId);
