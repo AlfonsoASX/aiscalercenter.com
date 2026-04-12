@@ -20,6 +20,42 @@
     color: var(--task-copy);
 }
 
+.workspace-tool-body.task-boards-board-mode .workspace-breadcrumb-shell {
+    display: none;
+}
+
+.workspace-tool-body.task-boards-board-mode .workspace-content {
+    padding: 0;
+}
+
+.workspace-tool-body.task-boards-board-mode .workspace-tool-content {
+    min-height: calc(100vh - 5.25rem);
+}
+
+.workspace-tool-body.task-boards-board-mode .task-boards-page {
+    min-height: calc(100vh - 5.25rem);
+    gap: 0;
+}
+
+.workspace-tool-body.task-boards-board-mode .task-boards-context-bar {
+    display: none;
+}
+
+.workspace-tool-body.task-boards-board-mode .task-boards-shell {
+    min-height: calc(100vh - 5.25rem);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.workspace-tool-body.task-boards-board-mode .task-boards-dashboard {
+    min-height: calc(100vh - 5.25rem);
+}
+
+.workspace-tool-body.task-boards-board-mode .task-boards-dashboard-main--board {
+    padding: 0;
+}
+
 .task-boards-page .hidden {
     display: none !important;
 }
@@ -274,13 +310,17 @@
 }
 
 .task-boards-board-switcher {
-    padding: 1rem 1rem 0;
+    padding: 0;
 }
 
 .task-boards-dashboard {
     display: grid;
     grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
     min-height: calc(100vh - 14rem);
+}
+
+.task-boards-dashboard--board {
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .task-boards-dashboard-sidebar {
@@ -656,7 +696,6 @@
     grid-auto-flow: column;
     align-items: center;
     white-space: nowrap;
-    border-style: dashed;
 }
 
 .task-boards-workbench {
@@ -1283,15 +1322,17 @@
     line-height: 1.5;
 }
 
-/* Trello-like board and task detail overrides */
 .task-boards-workbench--board {
     min-height: calc(100vh - 16rem);
-    border-radius: 1.6rem;
-    background:
-        linear-gradient(180deg, rgba(124, 145, 166, 0.3), rgba(124, 145, 166, 0.08)),
-        var(--task-board-image),
-        radial-gradient(circle at top, rgba(255, 255, 255, 0.18), transparent 34%),
-        linear-gradient(135deg, color-mix(in srgb, var(--task-board-accent) 28%, #11304a), #10324e 54%, #264f73 100%);
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.workspace-tool-body.task-boards-board-mode .task-boards-workbench--board {
+    min-height: calc(100vh - 5.25rem);
+    padding: 1.25rem;
+    border-radius: 0;
 }
 
 .task-boards-workbench--board .task-boards-board-switcher,
@@ -1304,64 +1345,87 @@
 .task-boards-workbench--board .task-boards-toolbar-copy h2,
 .task-boards-workbench--board .task-boards-toolbar-copy p:not(.task-boards-eyebrow),
 .task-boards-workbench--board .task-boards-eyebrow {
-    color: #ffffff;
-}
-
-.task-boards-workbench--board .task-boards-search-shell,
-.task-boards-workbench--board .task-boards-secondary,
-.task-boards-workbench--board .task-boards-board-tab {
-    background: rgba(255, 255, 255, 0.16);
-    border-color: rgba(255, 255, 255, 0.16);
-    color: #ffffff;
-    backdrop-filter: blur(14px);
+    color: inherit;
 }
 
 .task-boards-workbench--board .task-boards-board-tab span,
 .task-boards-workbench--board .task-boards-board-tab strong,
 .task-boards-workbench--board .task-boards-search-shell input,
 .task-boards-workbench--board .task-boards-search-shell input::placeholder {
-    color: #ffffff;
+    color: inherit;
 }
 
-.task-boards-workbench--board .task-boards-board-tab.is-active {
-    background: rgba(255, 255, 255, 0.94);
+.task-boards-workbench--board .task-boards-board-switcher {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
 }
 
-.task-boards-workbench--board .task-boards-board-tab.is-active strong,
-.task-boards-workbench--board .task-boards-board-tab.is-active span {
+.task-boards-workbench--board .task-boards-board-tab--back {
+    min-height: 2.9rem;
+    min-width: auto;
+    padding: 0 1rem;
+    border-color: rgba(19, 42, 74, 0.1);
+    border-radius: 999px;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.task-boards-workbench--board .task-boards-toolbar {
+    padding: 1.35rem 1.4rem;
+    border: 1px solid rgba(19, 42, 74, 0.08);
+    border-radius: 1.5rem;
+    background: #ffffff;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.task-boards-workbench--board .task-boards-toolbar-copy h2 {
     color: #202124;
 }
 
+.task-boards-workbench--board .task-boards-toolbar-copy p:not(.task-boards-eyebrow) {
+    color: #5f6368;
+}
+
+.task-boards-workbench--board .task-boards-eyebrow {
+    color: var(--task-accent);
+}
+
 .task-boards-workbench--board .task-boards-canvas-shell {
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    overflow: visible;
+    border: 1px solid rgba(19, 42, 74, 0.08);
+    border-radius: 1.5rem;
+    background: #f8fafc;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+    overflow: auto;
 }
 
 .task-boards-lane-switcher {
     display: flex;
     gap: 0.65rem;
     flex-wrap: wrap;
-    padding: 0 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid rgba(19, 42, 74, 0.08);
+    border-radius: 1.35rem;
+    background: #ffffff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
 }
 
 .task-boards-lane-pill {
     min-height: 2.5rem;
     padding: 0 0.9rem;
-    border: 1px solid rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(19, 42, 74, 0.1);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.14);
-    color: #f8fafc;
+    background: #ffffff;
+    color: #3c4043;
     font: inherit;
     font-weight: 700;
-    backdrop-filter: blur(14px);
     cursor: pointer;
 }
 
 .task-boards-lane-pill.is-active {
-    background: rgba(255, 255, 255, 0.96);
-    color: #111827;
+    background: rgba(26, 115, 232, 0.12);
+    border-color: rgba(26, 115, 232, 0.18);
+    color: #174ea6;
 }
 
 .task-boards-board-scroll {
@@ -1370,7 +1434,7 @@
     grid-auto-columns: minmax(18.75rem, 18.75rem);
     gap: 1rem;
     min-width: max-content;
-    padding: 0.35rem 1rem 1rem;
+    padding: 1rem;
     align-items: start;
 }
 

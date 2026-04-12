@@ -5,7 +5,7 @@ return [
     'id' => '',
     'slug' => 'tableros-tareas',
     'category_key' => 'disenar',
-    'title' => 'Tableros de tareas',
+    'title' => 'Tableros',
     'description' => 'Crea tableros Kanban colaborativos con columnas, carriles, tareas, subtareas, comentarios y limites WIP.',
     'image_url' => '',
     'tutorial_youtube_url' => '',
@@ -15,4 +15,5 @@ return [
     'launch_mode' => 'php_folder',
     'panel_module_key' => '',
     'entry_file' => 'index.php',
+    'hide_sidebar' => true,
 ];

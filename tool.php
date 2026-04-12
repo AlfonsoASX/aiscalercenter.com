@@ -158,7 +158,12 @@ if ($launchMode === 'php_folder') {
     ];
     $toolSlug = (string) ($tool['slug'] ?? '');
     $builderMode = trim((string) ($_GET['builder'] ?? ''));
-    $hideToolChrome = $toolSlug === 'creador-landing-pages' && in_array($builderMode, ['new', 'edit'], true);
+    $hideToolChrome = (bool) ($tool['hide_tool_chrome'] ?? false);
+
+    if (!$hideToolChrome && $toolSlug === 'creador-landing-pages' && in_array($builderMode, ['new', 'edit'], true)) {
+        $hideToolChrome = true;
+    }
+
     $hideSidebar = (bool) ($tool['hide_sidebar'] ?? false);
     $appStyleHref = is_file($appDirectory . DIRECTORY_SEPARATOR . 'style.css')
         ? 'tool-asset.php?launch=' . rawurlencode($launchToken) . '&asset=style.css'

@@ -605,6 +605,7 @@ function normalizeAppToolDefinition(array $definition, string $appDirectory): ?a
         'app_folder' => $appFolder,
         'entry_file' => $entryFile,
         'hide_sidebar' => filter_var($definition['hide_sidebar'] ?? false, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
+        'hide_tool_chrome' => filter_var($definition['hide_tool_chrome'] ?? false, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? false,
     ];
 }
 
@@ -680,6 +681,7 @@ function sanitizeToolForLaunch(array $tool, string $returnUrl, array $sourceSect
         'app_folder' => (string) ($tool['app_folder'] ?? ''),
         'entry_file' => (string) ($tool['entry_file'] ?? 'index.php'),
         'hide_sidebar' => (bool) ($tool['hide_sidebar'] ?? false),
+        'hide_tool_chrome' => (bool) ($tool['hide_tool_chrome'] ?? false),
         'return_url' => $returnUrl,
         'source_section_id' => (string) ($sourceSection['id'] ?? ''),
         'source_section_label' => (string) ($sourceSection['label'] ?? ''),
@@ -695,6 +697,7 @@ function mergeToolWithPrivateConfig(array $tool, ?array $privateConfig): array
         'app_folder' => (string) ($privateConfig['app_folder'] ?? ''),
         'entry_file' => (string) ($privateConfig['entry_file'] ?? 'index.php'),
         'hide_sidebar' => (bool) ($privateConfig['hide_sidebar'] ?? false),
+        'hide_tool_chrome' => (bool) ($privateConfig['hide_tool_chrome'] ?? false),
     ];
 }
 
@@ -813,5 +816,6 @@ function getToolLaunchConfig(string $slug): ?array
         'app_folder' => (string) ($tool['app_folder'] ?? ''),
         'entry_file' => (string) ($tool['entry_file'] ?? 'index.php'),
         'hide_sidebar' => (bool) ($tool['hide_sidebar'] ?? false),
+        'hide_tool_chrome' => (bool) ($tool['hide_tool_chrome'] ?? false),
     ];
 }

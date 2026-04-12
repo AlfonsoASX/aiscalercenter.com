@@ -87,7 +87,7 @@ $initialState = [
     <header class="task-boards-context-bar">
         <div class="task-boards-context-copy">
             <p class="task-boards-eyebrow">Diseñar</p>
-            <h1>Tableros de tareas</h1>
+            <h1>Tableros</h1>
             <p>Proyecto activo: <?= htmlspecialchars((string) ($project['name'] ?? 'Proyecto'), ENT_QUOTES, 'UTF-8'); ?></p>
         </div>
 

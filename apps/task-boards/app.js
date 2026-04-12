@@ -492,7 +492,13 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
     function render() {
         renderNotice();
+        syncViewportMode();
         shell.innerHTML = renderShell();
+    }
+
+    function syncViewportMode() {
+        const isBoardScreen = state.screen === 'board' && Boolean(state.activeBoard);
+        document.body.classList.toggle('task-boards-board-mode', isBoardScreen);
     }
 
     function renderNotice() {
@@ -501,11 +507,13 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     }
 
     function renderShell() {
+        const isBoardScreen = state.screen === 'board' && Boolean(state.activeBoard);
+
         return `
-            <section class="task-boards-dashboard ${state.screen === 'board' ? 'task-boards-dashboard--board' : ''}">
-                ${renderDashboardSidebar()}
-                <div class="task-boards-dashboard-main ${state.screen === 'board' ? 'task-boards-dashboard-main--board' : ''}">
-                    ${state.screen === 'board' && state.activeBoard ? renderActiveBoard() : renderDashboardMain()}
+            <section class="task-boards-dashboard ${isBoardScreen ? 'task-boards-dashboard--board' : ''}">
+                ${isBoardScreen ? '' : renderDashboardSidebar()}
+                <div class="task-boards-dashboard-main ${isBoardScreen ? 'task-boards-dashboard-main--board' : ''}">
+                    ${isBoardScreen ? renderActiveBoard() : renderDashboardMain()}
                 </div>
             </section>
 
@@ -536,17 +544,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                     ${renderDashboardNavItem('templates', 'library_add', 'Plantillas', section === 'templates')}
                     ${renderDashboardNavItem('home', 'bolt', 'Inicio', section === 'home')}
                 </nav>
-
-                <section class="task-boards-sidebar-project">
-                    <p class="task-boards-sidebar-label">Espacio de trabajo</p>
-                    <div class="task-boards-sidebar-project-card">
-                        ${renderWorkspaceBadge()}
-                        <div>
-                            <strong>${escapeHtml(state.project.name || 'Proyecto')}</strong>
-                            <span>${state.boards.length} ${state.boards.length === 1 ? 'tablero' : 'tableros'}</span>
-                        </div>
-                    </div>
-                </section>
             </aside>
         `;
     }
@@ -578,14 +575,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 ${state.boards.length > 0 ? renderRecentBoards() : ''}
                 <section class="task-boards-workspace-section">
                     <header class="task-boards-section-head">
-                        <div class="task-boards-section-copy">
-                            <p class="task-boards-section-kicker">Tus espacios de trabajo</p>
-                            <div class="task-boards-workspace-title">
-                                ${renderWorkspaceBadge()}
-                                <strong>${escapeHtml(state.project.name || 'Proyecto')}</strong>
-                            </div>
-                        </div>
-
                         <div class="task-boards-workspace-tabs">
                             <span class="task-boards-workspace-pill is-active">
                                 <span class="material-symbols-rounded">dashboard</span>
@@ -786,18 +775,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         return `<span class="task-boards-workspace-badge">${escapeHtml(initial)}</span>`;
     }
 
-    function renderBoardTab(board) {
-        const activeBoardId = String(state.activeBoard?.board?.id || '');
-        const isActive = String(board.id || '') === activeBoardId;
-
-        return `
-            <button type="button" class="task-boards-board-tab ${isActive ? 'is-active' : ''}" data-task-board-select="${escapeHtml(board.id)}">
-                <strong>${escapeHtml(board.title || 'Tablero')}</strong>
-                <span>${escapeHtml(board.description || 'Tablero listo para organizar tareas.')}</span>
-            </button>
-        `;
-    }
-
     function renderActiveBoard() {
         const board = state.activeBoard?.board ?? null;
 
@@ -805,26 +782,15 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             return '';
         }
 
-        const visual = resolveBoardVisual(board);
         const visibleSwimlaneId = resolveVisibleSwimlaneId(state.activeBoard, state.activeSwimlaneId);
 
         return `
-            <section
-                class="task-boards-workbench task-boards-workbench--board"
-                style="--task-board-accent:${escapeHtml(visual.accent)}; --task-board-accent-soft:${escapeHtml(visual.soft)}; --task-board-image:${escapeHtml(visual.image)};"
-            >
+            <section class="task-boards-workbench task-boards-workbench--board">
                 <section class="task-boards-board-switcher">
-                    <div class="task-boards-board-strip">
-                        <button type="button" class="task-boards-board-tab task-boards-board-tab--back" data-task-view-home>
-                            <span class="material-symbols-rounded">arrow_back</span>
-                            <span>Todos los tableros</span>
-                        </button>
-                        ${state.boards.map((item) => renderBoardTab(item)).join('')}
-                        <button type="button" class="task-boards-board-tab task-boards-board-tab--create" data-task-board-create>
-                            <span class="material-symbols-rounded">add</span>
-                            <span>Nuevo</span>
-                        </button>
-                    </div>
+                    <button type="button" class="task-boards-board-tab task-boards-board-tab--back" data-task-view-home>
+                        <span class="material-symbols-rounded">arrow_back</span>
+                        <span>Todos los tableros</span>
+                    </button>
                 </section>
 
                 <header class="task-boards-toolbar">
