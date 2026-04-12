@@ -18,11 +18,11 @@ $repository = new TaskBoardRepository();
 
 try {
     if ($accessToken === '' || $userId === '') {
-        throw new RuntimeException('No encontramos la sesion segura de Tableros de tareas.');
+        throw new RuntimeException('No encontramos la sesion segura de Tableros.');
     }
 
     if ($activeProjectId === '') {
-        throw new RuntimeException('Selecciona un proyecto antes de usar Tableros de tareas.');
+        throw new RuntimeException('Selecciona un proyecto antes de usar Tableros.');
     }
 
     $project = $repository->findProject($accessToken, $activeProjectId);
@@ -30,6 +30,8 @@ try {
     if (!is_array($project)) {
         throw new RuntimeException('No encontramos el proyecto activo de los tableros.');
     }
+
+    taskBoardsRunProjectAutomation($repository, $accessToken, $activeProjectId);
 
     if ($action === 'bootstrap') {
         $requestedBoardId = trim((string) ($_GET['board_id'] ?? ($_POST['board_id'] ?? '')));
@@ -124,7 +126,6 @@ try {
         $payload = taskBoardsReadJsonPayload();
         $boardId = trim((string) ($payload['board_id'] ?? ''));
         $columns = taskBoardsNormalizeStructurePayload($payload['columns'] ?? [], 'columns');
-        $swimlanes = taskBoardsNormalizeStructurePayload($payload['swimlanes'] ?? [], 'swimlanes');
         $labels = taskBoardsNormalizeStructurePayload($payload['labels'] ?? [], 'labels');
 
         if ($boardId === '') {
@@ -135,20 +136,15 @@ try {
             throw new InvalidArgumentException('El tablero necesita al menos una columna.');
         }
 
-        if ($swimlanes === []) {
-            throw new InvalidArgumentException('El tablero necesita al menos un carril.');
-        }
-
-        $repository->saveStructure($accessToken, $boardId, $columns, $swimlanes, $labels);
+        $repository->saveStructure($accessToken, $boardId, $columns, $labels);
         $repository->addActivity($accessToken, [
             'board_id' => $boardId,
             'event_type' => 'board_structure_updated',
-            'description' => 'Actualizo columnas, carriles o etiquetas del tablero.',
+            'description' => 'Actualizo columnas o etiquetas del tablero.',
             'actor_user_id' => $userId,
             'actor_email' => $userEmail,
             'payload' => [
                 'columns' => count($columns),
-                'swimlanes' => count($swimlanes),
                 'labels' => count($labels),
             ],
         ]);
@@ -156,7 +152,7 @@ try {
         taskBoardsSendJson([
             'success' => true,
             'message' => 'Estructura del tablero actualizada.',
-            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId),
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
         ]);
     }
 
@@ -168,19 +164,18 @@ try {
         $title = trim((string) ($payload['title'] ?? ''));
 
         if ($boardId === '') {
-            throw new InvalidArgumentException('No encontramos el tablero de la tarea.');
+            throw new InvalidArgumentException('No encontramos el tablero de la ficha.');
         }
 
         if ($title === '') {
-            throw new InvalidArgumentException('La tarea necesita un titulo.');
+            throw new InvalidArgumentException('La ficha necesita un titulo.');
         }
 
-        $boardPayload = taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId);
+        $boardPayload = taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId);
         $existingCard = $cardId !== '' ? $repository->findCard($accessToken, $boardId, $cardId) : null;
-        [$defaultColumnId, $defaultSwimlaneId, $defaultSortOrder] = taskBoardsResolveCardPlacement(
+        [$defaultColumnId, $defaultSortOrder] = taskBoardsResolveCardPlacement(
             $boardPayload,
             trim((string) ($payload['column_id'] ?? '')),
-            trim((string) ($payload['swimlane_id'] ?? '')),
             $existingCard
         );
 
@@ -188,7 +183,6 @@ try {
             'id' => $cardId,
             'board_id' => $boardId,
             'column_id' => $defaultColumnId,
-            'swimlane_id' => $defaultSwimlaneId,
             'title' => $title,
             'description_markdown' => trim((string) ($payload['description_markdown'] ?? '')),
             'priority' => taskBoardsResolvePriority((string) ($payload['priority'] ?? 'medium')),
@@ -203,24 +197,36 @@ try {
             'created_by_email' => trim((string) ($existingCard['created_by_email'] ?? $userEmail)),
         ]);
 
+        taskBoardsHandleColumnEntry(
+            $repository,
+            $accessToken,
+            $activeProjectId,
+            $project,
+            $boardPayload,
+            $savedCard,
+            $defaultColumnId,
+            $userId,
+            $userEmail,
+            $cardId === '' || trim((string) ($existingCard['column_id'] ?? '')) !== $defaultColumnId
+        );
+
         $repository->addActivity($accessToken, [
             'board_id' => $boardId,
             'card_id' => (string) ($savedCard['id'] ?? ''),
             'event_type' => $cardId === '' ? 'card_created' : 'card_updated',
-            'description' => $cardId === '' ? 'Creo la tarea "' . $title . '".' : 'Actualizo la tarea "' . $title . '".',
+            'description' => $cardId === '' ? 'Creo la ficha "' . $title . '".' : 'Actualizo la ficha "' . $title . '".',
             'actor_user_id' => $userId,
             'actor_email' => $userEmail,
             'payload' => [
                 'column_id' => $defaultColumnId,
-                'swimlane_id' => $defaultSwimlaneId,
             ],
         ]);
 
         taskBoardsSendJson([
             'success' => true,
-            'message' => $cardId === '' ? 'Tarea creada correctamente.' : 'Tarea actualizada correctamente.',
+            'message' => $cardId === '' ? 'Ficha creada correctamente.' : 'Ficha actualizada correctamente.',
             'saved_card_id' => (string) ($savedCard['id'] ?? ''),
-            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId),
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
         ]);
     }
 
@@ -230,39 +236,331 @@ try {
         $boardId = trim((string) ($payload['board_id'] ?? ''));
         $cardId = trim((string) ($payload['card_id'] ?? ''));
         $columnId = trim((string) ($payload['column_id'] ?? ''));
-        $swimlaneId = trim((string) ($payload['swimlane_id'] ?? ''));
         $sortOrder = is_numeric($payload['sort_order'] ?? null) ? (float) $payload['sort_order'] : 0;
         $existingCard = $repository->findCard($accessToken, $boardId, $cardId);
 
-        if ($boardId === '' || $cardId === '' || $columnId === '' || $swimlaneId === '') {
-            throw new InvalidArgumentException('No encontramos los datos necesarios para mover la tarea.');
+        if ($boardId === '' || $cardId === '' || $columnId === '') {
+            throw new InvalidArgumentException('No encontramos los datos necesarios para mover la ficha.');
         }
 
         if (!is_array($existingCard)) {
-            throw new RuntimeException('No encontramos la tarea que intentas mover.');
+            throw new RuntimeException('No encontramos la ficha que intentas mover.');
         }
 
-        $movedCard = $repository->moveCard($accessToken, $boardId, $cardId, $columnId, $swimlaneId, $sortOrder);
+        $movedCard = $repository->moveCard($accessToken, $boardId, $cardId, $columnId, $sortOrder);
+        taskBoardsHandleColumnEntry(
+            $repository,
+            $accessToken,
+            $activeProjectId,
+            $project,
+            taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+            $movedCard,
+            $columnId,
+            $userId,
+            $userEmail,
+            trim((string) ($existingCard['column_id'] ?? '')) !== $columnId
+        );
         $repository->addActivity($accessToken, [
             'board_id' => $boardId,
             'card_id' => $cardId,
             'event_type' => 'card_moved',
-            'description' => 'Movio la tarea "' . trim((string) ($existingCard['title'] ?? 'Tarea')) . '" dentro del tablero.',
+            'description' => 'Movio la ficha "' . trim((string) ($existingCard['title'] ?? 'Ficha')) . '" dentro del tablero.',
             'actor_user_id' => $userId,
             'actor_email' => $userEmail,
             'payload' => [
                 'from_column_id' => (string) ($existingCard['column_id'] ?? ''),
                 'to_column_id' => $columnId,
-                'from_swimlane_id' => (string) ($existingCard['swimlane_id'] ?? ''),
-                'to_swimlane_id' => $swimlaneId,
             ],
         ]);
 
         taskBoardsSendJson([
             'success' => true,
-            'message' => 'Tarea movida correctamente.',
+            'message' => 'Ficha movida correctamente.',
             'data' => [
                 'card' => $movedCard,
+            ],
+        ]);
+    }
+
+    if ($action === 'save-column') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $columnId = trim((string) ($payload['column_id'] ?? ''));
+        $title = trim((string) ($payload['title'] ?? ''));
+        $boardPayload = taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId);
+
+        if ($boardId === '' || $columnId === '') {
+            throw new InvalidArgumentException('No encontramos la columna que intentas editar.');
+        }
+
+        if ($title === '') {
+            throw new InvalidArgumentException('La columna necesita un nombre.');
+        }
+
+        $column = $repository->updateColumn($accessToken, $boardId, $columnId, [
+            'title' => $title,
+            'accent_color' => trim((string) ($payload['accent_color'] ?? '#1A73E8')) ?: '#1A73E8',
+            'responsible_member_id' => trim((string) ($payload['responsible_member_id'] ?? '')) ?: null,
+            'wip_limit' => ($payload['wip_limit'] ?? '') === '' ? null : (int) ($payload['wip_limit'] ?? 0),
+            'is_archived' => filter_var($payload['is_archived'] ?? false, FILTER_VALIDATE_BOOL),
+        ]);
+
+        taskBoardsRepositionColumn($repository, $accessToken, $boardId, $columnId, (int) ($payload['position'] ?? 0), $boardPayload);
+
+        $repository->addActivity($accessToken, [
+            'board_id' => $boardId,
+            'event_type' => 'column_updated',
+            'description' => 'Actualizo la columna "' . trim((string) ($column['title'] ?? $title)) . '".',
+            'actor_user_id' => $userId,
+            'actor_email' => $userEmail,
+            'payload' => [
+                'column_id' => $columnId,
+            ],
+        ]);
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => 'Columna actualizada correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'duplicate-column') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $columnId = trim((string) ($payload['column_id'] ?? ''));
+        $sourceColumn = $repository->findColumn($accessToken, $boardId, $columnId);
+
+        if (!is_array($sourceColumn)) {
+            throw new InvalidArgumentException('No encontramos la columna que intentas copiar.');
+        }
+
+        $columns = $repository->listColumns($accessToken, $boardId);
+        $lastSort = $columns === [] ? 0 : max(array_map(static fn (array $column): int => (int) ($column['sort_order'] ?? 0), $columns));
+        $newColumn = $repository->createColumn($accessToken, [
+            'board_id' => $boardId,
+            'title' => trim((string) ($sourceColumn['title'] ?? 'Columna')) . ' (copia)',
+            'accent_color' => trim((string) ($sourceColumn['accent_color'] ?? '#1A73E8')) ?: '#1A73E8',
+            'responsible_member_id' => trim((string) ($sourceColumn['responsible_member_id'] ?? '')) ?: null,
+            'wip_limit' => ($sourceColumn['wip_limit'] ?? null) === null ? null : (int) ($sourceColumn['wip_limit'] ?? 0),
+            'sort_order' => $lastSort + 10,
+            'is_archived' => false,
+        ]);
+
+        foreach ($repository->listCardsForColumn($accessToken, $boardId, $columnId) as $index => $card) {
+            if (!is_array($card)) {
+                continue;
+            }
+
+            $repository->saveCard($accessToken, [
+                'board_id' => $boardId,
+                'column_id' => (string) ($newColumn['id'] ?? ''),
+                'title' => trim((string) ($card['title'] ?? 'Ficha')),
+                'description_markdown' => trim((string) ($card['description_markdown'] ?? '')),
+                'priority' => taskBoardsResolvePriority((string) ($card['priority'] ?? 'medium')),
+                'start_date' => taskBoardsNormalizeDateValue($card['start_date'] ?? null),
+                'due_date' => taskBoardsNormalizeDateValue($card['due_date'] ?? null),
+                'assigned_member_ids' => taskBoardsNormalizeStringArray($card['assigned_member_ids'] ?? []),
+                'label_ids' => taskBoardsNormalizeStringArray($card['label_ids'] ?? []),
+                'checklist' => taskBoardsNormalizeChecklist($card['checklist'] ?? []),
+                'metadata' => is_array($card['metadata'] ?? null) ? $card['metadata'] : [],
+                'sort_order' => $index * 1024,
+                'created_by' => $userId,
+                'created_by_email' => $userEmail,
+            ]);
+        }
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => 'Lista copiada correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'move-column-cards') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $fromColumnId = trim((string) ($payload['from_column_id'] ?? ''));
+        $toColumnId = trim((string) ($payload['to_column_id'] ?? ''));
+
+        if ($boardId === '' || $fromColumnId === '' || $toColumnId === '' || $fromColumnId === $toColumnId) {
+            throw new InvalidArgumentException('Selecciona una columna destino valida.');
+        }
+
+        $cards = $repository->listCardsForColumn($accessToken, $boardId, $fromColumnId);
+        $boardPayload = taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId);
+        $baseSortOrder = taskBoardsAppendCardSortOrder($boardPayload['cards'] ?? [], $toColumnId);
+
+        foreach ($cards as $index => $card) {
+            if (!is_array($card) || trim((string) ($card['id'] ?? '')) === '') {
+                continue;
+            }
+
+            $repository->moveCard(
+                $accessToken,
+                $boardId,
+                (string) $card['id'],
+                $toColumnId,
+                $baseSortOrder + (($index + 1) * 1024)
+            );
+        }
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => 'Las fichas se movieron correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'sort-column') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $columnId = trim((string) ($payload['column_id'] ?? ''));
+        $sortKey = trim((string) ($payload['sort_key'] ?? 'due_date'));
+        $direction = trim((string) ($payload['direction'] ?? 'asc'));
+
+        taskBoardsSortColumnCards($repository, $accessToken, $boardId, $columnId, $sortKey, $direction);
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => 'La lista se ordenó correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'toggle-column-follow') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $columnId = trim((string) ($payload['column_id'] ?? ''));
+        $shouldFollow = filter_var($payload['follow'] ?? false, FILTER_VALIDATE_BOOL);
+
+        if ($shouldFollow) {
+            $repository->followColumn($accessToken, [
+                'board_id' => $boardId,
+                'column_id' => $columnId,
+                'user_id' => $userId,
+                'user_email' => $userEmail,
+            ]);
+        } else {
+            $repository->unfollowColumn($accessToken, $boardId, $columnId, $userId);
+        }
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => $shouldFollow ? 'Ahora sigues esta lista.' : 'Dejaste de seguir esta lista.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'save-column-rule') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $columnId = trim((string) ($payload['column_id'] ?? ''));
+
+        if ($boardId === '' || $columnId === '') {
+            throw new InvalidArgumentException('No encontramos la regla que intentas guardar.');
+        }
+
+        $repository->saveColumnRule($accessToken, [
+            'id' => trim((string) ($payload['id'] ?? '')),
+            'board_id' => $boardId,
+            'column_id' => $columnId,
+            'title' => trim((string) ($payload['title'] ?? '')) ?: 'Regla de columna',
+            'trigger_type' => taskBoardsNormalizeRuleTrigger((string) ($payload['trigger_type'] ?? 'card_added')),
+            'action_type' => taskBoardsNormalizeRuleAction((string) ($payload['action_type'] ?? 'sort_list')),
+            'config' => is_array($payload['config'] ?? null) ? $payload['config'] : [],
+            'is_active' => filter_var($payload['is_active'] ?? true, FILTER_VALIDATE_BOOL),
+            'created_by' => $userId,
+            'created_by_email' => $userEmail,
+        ]);
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => 'Regla guardada correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'delete-column-rule') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $ruleId = trim((string) ($payload['rule_id'] ?? ''));
+
+        $repository->deleteColumnRule($accessToken, $boardId, $ruleId);
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => 'Regla eliminada correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'archive-column') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $columnId = trim((string) ($payload['column_id'] ?? ''));
+        $archived = filter_var($payload['archived'] ?? true, FILTER_VALIDATE_BOOL);
+
+        $repository->updateColumn($accessToken, $boardId, $columnId, [
+            'is_archived' => $archived,
+        ]);
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => $archived ? 'Lista archivada correctamente.' : 'Lista restaurada correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'archive-column-cards') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $columnId = trim((string) ($payload['column_id'] ?? ''));
+        $archived = filter_var($payload['archived'] ?? true, FILTER_VALIDATE_BOOL);
+
+        $repository->archiveColumnCards($accessToken, $boardId, $columnId, $archived);
+
+        taskBoardsSendJson([
+            'success' => true,
+            'message' => $archived ? 'Las fichas de la lista se archivaron correctamente.' : 'Las fichas de la lista se restauraron correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
+        ]);
+    }
+
+    if ($action === 'notifications') {
+        taskBoardsAssertMethod('POST');
+
+        taskBoardsSendJson([
+            'success' => true,
+            'data' => [
+                'notifications' => taskBoardsNormalizeNotifications(
+                    $repository->listNotifications($accessToken, $userId, $activeProjectId)
+                ),
+            ],
+        ]);
+    }
+
+    if ($action === 'notifications-read') {
+        taskBoardsAssertMethod('POST');
+        $payload = taskBoardsReadJsonPayload();
+        $ids = taskBoardsNormalizeStringArray($payload['ids'] ?? []);
+        $repository->markNotificationsRead($accessToken, $userId, $ids);
+
+        taskBoardsSendJson([
+            'success' => true,
+            'data' => [
+                'notifications' => taskBoardsNormalizeNotifications(
+                    $repository->listNotifications($accessToken, $userId, $activeProjectId)
+                ),
             ],
         ]);
     }
@@ -275,18 +573,18 @@ try {
         $existingCard = $repository->findCard($accessToken, $boardId, $cardId);
 
         if ($boardId === '' || $cardId === '') {
-            throw new InvalidArgumentException('No encontramos la tarea que intentas eliminar.');
+            throw new InvalidArgumentException('No encontramos la ficha que intentas eliminar.');
         }
 
         if (!is_array($existingCard)) {
-            throw new RuntimeException('La tarea ya no existe.');
+            throw new RuntimeException('La ficha ya no existe.');
         }
 
         $repository->addActivity($accessToken, [
             'board_id' => $boardId,
             'card_id' => $cardId,
             'event_type' => 'card_deleted',
-            'description' => 'Elimino la tarea "' . trim((string) ($existingCard['title'] ?? 'Tarea')) . '".',
+            'description' => 'Elimino la ficha "' . trim((string) ($existingCard['title'] ?? 'Ficha')) . '".',
             'actor_user_id' => $userId,
             'actor_email' => $userEmail,
             'payload' => new stdClass(),
@@ -295,8 +593,8 @@ try {
 
         taskBoardsSendJson([
             'success' => true,
-            'message' => 'Tarea eliminada correctamente.',
-            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId),
+            'message' => 'Ficha eliminada correctamente.',
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
         ]);
     }
 
@@ -309,7 +607,7 @@ try {
         $card = $repository->findCard($accessToken, $boardId, $cardId);
 
         if ($boardId === '' || $cardId === '') {
-            throw new InvalidArgumentException('No encontramos la tarea para comentar.');
+            throw new InvalidArgumentException('No encontramos la ficha para comentar.');
         }
 
         if ($bodyMarkdown === '') {
@@ -317,7 +615,7 @@ try {
         }
 
         if (!is_array($card)) {
-            throw new RuntimeException('No encontramos la tarea para guardar el comentario.');
+            throw new RuntimeException('No encontramos la ficha para guardar el comentario.');
         }
 
         $comment = $repository->saveComment($accessToken, [
@@ -331,7 +629,7 @@ try {
             'board_id' => $boardId,
             'card_id' => $cardId,
             'event_type' => 'comment_added',
-            'description' => 'Comento la tarea "' . trim((string) ($card['title'] ?? 'Tarea')) . '".',
+            'description' => 'Comento la ficha "' . trim((string) ($card['title'] ?? 'Ficha')) . '".',
             'actor_user_id' => $userId,
             'actor_email' => $userEmail,
             'payload' => [
@@ -342,11 +640,11 @@ try {
         taskBoardsSendJson([
             'success' => true,
             'message' => 'Comentario guardado.',
-            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId),
+            'data' => taskBoardsBuildBoardPayload($repository, $accessToken, $activeProjectId, $boardId, $userId),
         ]);
     }
 
-    throw new InvalidArgumentException('Accion no soportada por Tableros de tareas.');
+    throw new InvalidArgumentException('Accion no soportada por Tableros.');
 } catch (InvalidArgumentException $exception) {
     taskBoardsSendJson([
         'success' => false,
@@ -393,7 +691,7 @@ function taskBoardsBuildBootstrapPayload(
         'boards' => $boards,
         'members' => $members,
         'active_board' => $resolvedBoardId !== ''
-            ? taskBoardsBuildBoardPayload($repository, $accessToken, $projectId, $resolvedBoardId)
+            ? taskBoardsBuildBoardPayload($repository, $accessToken, $projectId, $resolvedBoardId, $currentUserId)
             : null,
         'realtime' => [
             'supabase_url' => supabaseProjectUrl(),
@@ -407,30 +705,29 @@ function taskBoardsBuildBoardPayload(
     TaskBoardRepository $repository,
     string $accessToken,
     string $projectId,
-    string $boardId
+    string $boardId,
+    string $currentUserId = ''
 ): array {
-    return taskBoardsNormalizeBoardState($repository->getBoardState($accessToken, $projectId, $boardId));
+    return taskBoardsNormalizeBoardState($repository->getBoardState($accessToken, $projectId, $boardId, $currentUserId));
 }
 
-function taskBoardsResolveCardPlacement(array $boardPayload, string $columnId, string $swimlaneId, ?array $existingCard): array
+function taskBoardsResolveCardPlacement(array $boardPayload, string $columnId, ?array $existingCard): array
 {
     $columns = is_array($boardPayload['columns'] ?? null) ? $boardPayload['columns'] : [];
-    $swimlanes = is_array($boardPayload['swimlanes'] ?? null) ? $boardPayload['swimlanes'] : [];
     $cards = is_array($boardPayload['cards'] ?? null) ? $boardPayload['cards'] : [];
     $resolvedColumnId = $columnId !== '' ? $columnId : trim((string) ($existingCard['column_id'] ?? (string) ($columns[0]['id'] ?? '')));
-    $resolvedSwimlaneId = $swimlaneId !== '' ? $swimlaneId : trim((string) ($existingCard['swimlane_id'] ?? (string) ($swimlanes[0]['id'] ?? '')));
     $sortOrder = is_array($existingCard)
         ? (float) ($existingCard['sort_order'] ?? 0)
-        : taskBoardsNextCardSortOrder($cards, $resolvedColumnId, $resolvedSwimlaneId);
+        : taskBoardsNextCardSortOrder($cards, $resolvedColumnId);
 
-    if ($resolvedColumnId === '' || $resolvedSwimlaneId === '') {
-        throw new RuntimeException('El tablero necesita al menos una columna y un carril para crear tareas.');
+    if ($resolvedColumnId === '') {
+        throw new RuntimeException('El tablero necesita al menos una columna para crear fichas.');
     }
 
-    return [$resolvedColumnId, $resolvedSwimlaneId, $sortOrder];
+    return [$resolvedColumnId, $sortOrder];
 }
 
-function taskBoardsNextCardSortOrder(array $cards, string $columnId, string $swimlaneId): float
+function taskBoardsNextCardSortOrder(array $cards, string $columnId): float
 {
     $minimum = null;
 
@@ -439,7 +736,7 @@ function taskBoardsNextCardSortOrder(array $cards, string $columnId, string $swi
             continue;
         }
 
-        if (trim((string) ($card['column_id'] ?? '')) !== $columnId || trim((string) ($card['swimlane_id'] ?? '')) !== $swimlaneId) {
+        if (trim((string) ($card['column_id'] ?? '')) !== $columnId) {
             continue;
         }
 
@@ -448,6 +745,26 @@ function taskBoardsNextCardSortOrder(array $cards, string $columnId, string $swi
     }
 
     return $minimum === null ? 0 : $minimum - 1024;
+}
+
+function taskBoardsAppendCardSortOrder(array $cards, string $columnId): float
+{
+    $maximum = null;
+
+    foreach ($cards as $card) {
+        if (!is_array($card)) {
+            continue;
+        }
+
+        if (trim((string) ($card['column_id'] ?? '')) !== $columnId) {
+            continue;
+        }
+
+        $current = (float) ($card['sort_order'] ?? 0);
+        $maximum = $maximum === null ? $current : max($maximum, $current);
+    }
+
+    return $maximum === null ? 0 : $maximum;
 }
 
 function taskBoardsResolvePriority(string $priority): string
@@ -518,23 +835,25 @@ function taskBoardsNormalizeStructurePayload(mixed $items, string $mode): array
 
         $title = trim((string) ($item['title'] ?? ''));
 
-        if ($title === '') {
+        if ($mode !== 'labels' && $title === '') {
             continue;
         }
 
-        $color = trim((string) ($item['color'] ?? ($mode === 'columns'
-            ? '#1A73E8'
-            : ($mode === 'swimlanes' ? '#EEF3FB' : '#2F7CEF'))));
+        $color = trim((string) ($item['color'] ?? ($mode === 'columns' ? '#1A73E8' : '#2F7CEF')));
 
         $normalized[] = [
             'id' => trim((string) ($item['id'] ?? '')),
             'title' => $title,
-            'color' => $color !== '' ? $color : ($mode === 'columns'
-                ? '#1A73E8'
-                : ($mode === 'swimlanes' ? '#EEF3FB' : '#2F7CEF')),
+            'color' => $color !== '' ? $color : ($mode === 'columns' ? '#1A73E8' : '#2F7CEF'),
+            'responsible_member_id' => $mode === 'columns'
+                ? trim((string) ($item['responsible_member_id'] ?? ''))
+                : '',
             'wip_limit' => $mode === 'columns'
                 ? trim((string) ($item['wip_limit'] ?? ''))
                 : '',
+            'is_archived' => $mode === 'columns'
+                ? filter_var($item['is_archived'] ?? false, FILTER_VALIDATE_BOOL)
+                : false,
             'sort_order' => $index * 10 + 10,
         ];
     }
@@ -567,4 +886,463 @@ function taskBoardsSendJson(array $payload, int $status = 200): never
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+function taskBoardsNormalizeRuleTrigger(string $trigger): string
+{
+    $normalized = trim(strtolower($trigger));
+
+    return in_array($normalized, ['card_added', 'daily', 'weekly_monday'], true)
+        ? $normalized
+        : 'card_added';
+}
+
+function taskBoardsNormalizeRuleAction(string $action): string
+{
+    $normalized = trim(strtolower($action));
+
+    return in_array($normalized, ['sort_list', 'assign_responsible', 'create_notification'], true)
+        ? $normalized
+        : 'sort_list';
+}
+
+function taskBoardsNormalizeNotifications(array $notifications): array
+{
+    return array_values(array_filter(array_map(static function ($item): ?array {
+        if (!is_array($item)) {
+            return null;
+        }
+
+        return [
+            'id' => (string) ($item['id'] ?? ''),
+            'title' => (string) ($item['title'] ?? ''),
+            'body' => (string) ($item['body'] ?? ''),
+            'is_read' => filter_var($item['is_read'] ?? false, FILTER_VALIDATE_BOOL),
+            'created_at' => (string) ($item['created_at'] ?? ''),
+            'destination' => is_array($item['destination'] ?? null) ? $item['destination'] : [],
+            'payload' => is_array($item['payload'] ?? null) ? $item['payload'] : [],
+        ];
+    }, $notifications)));
+}
+
+function taskBoardsRepositionColumn(
+    TaskBoardRepository $repository,
+    string $accessToken,
+    string $boardId,
+    string $columnId,
+    int $position,
+    array $boardPayload
+): void {
+    $columns = array_values(array_filter(is_array($boardPayload['columns'] ?? null) ? $boardPayload['columns'] : [], static fn ($column): bool => is_array($column)));
+    $orderedIds = array_values(array_map(static fn (array $column): string => trim((string) ($column['id'] ?? '')), $columns));
+    $orderedIds = array_values(array_filter($orderedIds, static fn (string $value): bool => $value !== ''));
+    $currentIndex = array_search($columnId, $orderedIds, true);
+
+    if ($currentIndex === false) {
+        return;
+    }
+
+    array_splice($orderedIds, (int) $currentIndex, 1);
+    $targetIndex = max(0, min($position, count($orderedIds)));
+    array_splice($orderedIds, $targetIndex, 0, [$columnId]);
+    $repository->updateColumnSortOrders($accessToken, $boardId, $orderedIds);
+}
+
+function taskBoardsSortColumnCards(
+    TaskBoardRepository $repository,
+    string $accessToken,
+    string $boardId,
+    string $columnId,
+    string $sortKey,
+    string $direction
+): void {
+    $cards = $repository->listCardsForColumn($accessToken, $boardId, $columnId);
+    $normalizedDirection = trim(strtolower($direction)) === 'desc' ? 'desc' : 'asc';
+    $normalizedSortKey = in_array($sortKey, ['due_date', 'created_at', 'title', 'priority'], true) ? $sortKey : 'due_date';
+    $priorityOrder = ['urgent' => 0, 'high' => 1, 'medium' => 2, 'low' => 3];
+
+    usort($cards, static function (array $left, array $right) use ($normalizedSortKey, $normalizedDirection, $priorityOrder): int {
+        $compare = 0;
+
+        if ($normalizedSortKey === 'priority') {
+            $compare = ($priorityOrder[trim((string) ($left['priority'] ?? 'medium'))] ?? 9)
+                <=> ($priorityOrder[trim((string) ($right['priority'] ?? 'medium'))] ?? 9);
+        } else {
+            $leftValue = trim((string) ($left[$normalizedSortKey] ?? ''));
+            $rightValue = trim((string) ($right[$normalizedSortKey] ?? ''));
+
+            if ($leftValue === '' && $rightValue !== '') {
+                $compare = 1;
+            } elseif ($leftValue !== '' && $rightValue === '') {
+                $compare = -1;
+            } else {
+                $compare = $leftValue <=> $rightValue;
+            }
+        }
+
+        if ($compare === 0) {
+            $compare = trim((string) ($left['id'] ?? '')) <=> trim((string) ($right['id'] ?? ''));
+        }
+
+        return $normalizedDirection === 'desc' ? ($compare * -1) : $compare;
+    });
+
+    foreach ($cards as $index => $card) {
+        $cardId = trim((string) ($card['id'] ?? ''));
+
+        if ($cardId === '') {
+            continue;
+        }
+
+        $repository->updateCard($accessToken, $boardId, $cardId, [
+            'sort_order' => ($index + 1) * 1024,
+        ]);
+    }
+}
+
+function taskBoardsRunProjectAutomation(
+    TaskBoardRepository $repository,
+    string $accessToken,
+    string $projectId
+): void {
+    $boards = taskBoardsNormalizeBoards($repository->listBoards($accessToken, $projectId));
+    $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+    $weekday = (int) $now->format('N');
+
+    foreach ($boards as $board) {
+        $boardId = trim((string) ($board['id'] ?? ''));
+
+        if ($boardId === '') {
+            continue;
+        }
+
+        foreach ($repository->listColumnRules($accessToken, $boardId) as $rule) {
+            if (!is_array($rule) || !filter_var($rule['is_active'] ?? true, FILTER_VALIDATE_BOOL)) {
+                continue;
+            }
+
+            $triggerType = taskBoardsNormalizeRuleTrigger((string) ($rule['trigger_type'] ?? 'card_added'));
+
+            if ($triggerType === 'card_added') {
+                continue;
+            }
+
+            $lastRunAt = trim((string) ($rule['last_run_at'] ?? ''));
+            $shouldRun = false;
+
+            if ($triggerType === 'daily') {
+                $shouldRun = $lastRunAt === '' || substr($lastRunAt, 0, 10) !== $now->format('Y-m-d');
+            } elseif ($triggerType === 'weekly_monday') {
+                $shouldRun = $weekday === 1 && ($lastRunAt === '' || substr($lastRunAt, 0, 10) !== $now->format('Y-m-d'));
+            }
+
+            if (!$shouldRun) {
+                continue;
+            }
+
+            taskBoardsExecuteRule($repository, $accessToken, $projectId, $boardId, $rule, null);
+        }
+    }
+}
+
+function taskBoardsHandleColumnEntry(
+    TaskBoardRepository $repository,
+    string $accessToken,
+    string $projectId,
+    array $project,
+    array $boardPayload,
+    array $card,
+    string $columnId,
+    string $actorUserId,
+    string $actorEmail,
+    bool $shouldNotify
+): void {
+    if (!$shouldNotify) {
+        return;
+    }
+
+    $columns = is_array($boardPayload['columns'] ?? null) ? $boardPayload['columns'] : [];
+    $column = null;
+
+    foreach ($columns as $candidate) {
+        if (is_array($candidate) && trim((string) ($candidate['id'] ?? '')) === $columnId) {
+            $column = $candidate;
+            break;
+        }
+    }
+
+    if (!is_array($column)) {
+        return;
+    }
+
+    $projectMembers = $repository->listProjectMembers($accessToken, $projectId);
+    $notifications = taskBoardsBuildColumnNotifications(
+        $repository,
+        $accessToken,
+        $projectId,
+        $projectMembers,
+        $boardPayload,
+        $column,
+        $card,
+        $actorUserId,
+        $actorEmail
+    );
+
+    if ($notifications !== []) {
+        $repository->createNotifications($accessToken, $notifications);
+    }
+
+    foreach ($repository->listColumnRules($accessToken, trim((string) ($boardPayload['board']['id'] ?? ''))) as $rule) {
+        if (!is_array($rule) || trim((string) ($rule['column_id'] ?? '')) !== $columnId) {
+            continue;
+        }
+
+        if (taskBoardsNormalizeRuleTrigger((string) ($rule['trigger_type'] ?? 'card_added')) !== 'card_added') {
+            continue;
+        }
+
+        taskBoardsExecuteRule($repository, $accessToken, $projectId, trim((string) ($boardPayload['board']['id'] ?? '')), $rule, $card);
+    }
+}
+
+function taskBoardsBuildColumnNotifications(
+    TaskBoardRepository $repository,
+    string $accessToken,
+    string $projectId,
+    array $projectMembers,
+    array $boardPayload,
+    array $column,
+    array $card,
+    string $actorUserId,
+    string $actorEmail
+): array {
+    $memberMap = [];
+
+    foreach ($projectMembers as $member) {
+        if (!is_array($member)) {
+            continue;
+        }
+
+        $memberMap[trim((string) ($member['id'] ?? ''))] = $member;
+    }
+
+    $recipientRows = [];
+    $responsibleMemberId = trim((string) ($column['responsible_member_id'] ?? ''));
+    $responsibleMember = $responsibleMemberId !== '' ? ($memberMap[$responsibleMemberId] ?? null) : null;
+    $followers = $repository->listColumnFollowers($accessToken, trim((string) ($boardPayload['board']['id'] ?? '')), trim((string) ($column['id'] ?? '')));
+    $recipients = [];
+
+    if (is_array($responsibleMember) && trim((string) ($responsibleMember['user_id'] ?? '')) !== '') {
+        $recipients[trim((string) ($responsibleMember['user_id'] ?? ''))] = [
+            'user_id' => trim((string) ($responsibleMember['user_id'] ?? '')),
+            'email' => strtolower(trim((string) ($responsibleMember['invited_email'] ?? ''))),
+        ];
+    }
+
+    foreach ($followers as $follow) {
+        if (!is_array($follow)) {
+            continue;
+        }
+
+        $followUserId = trim((string) ($follow['user_id'] ?? ''));
+
+        if ($followUserId === '') {
+            continue;
+        }
+
+        $recipients[$followUserId] = [
+            'user_id' => $followUserId,
+            'email' => strtolower(trim((string) ($follow['user_email'] ?? ''))),
+        ];
+    }
+
+    $boardId = trim((string) ($boardPayload['board']['id'] ?? ''));
+    $cardTitle = trim((string) ($card['title'] ?? 'Ficha'));
+    $columnTitle = trim((string) ($column['title'] ?? 'Lista'));
+
+    foreach ($recipients as $recipientUserId => $recipient) {
+        if ($recipientUserId === '' || $recipientUserId === $actorUserId) {
+            continue;
+        }
+
+        $recipientRows[] = [
+            'user_id' => $recipientUserId,
+            'project_id' => $projectId,
+            'source_tool_slug' => 'task-boards',
+            'source_type' => 'column_card_entry',
+            'title' => 'Nueva ficha en ' . $columnTitle,
+            'body' => $cardTitle . ' entro en ' . $columnTitle . '.',
+            'destination' => [
+                'board_id' => $boardId,
+                'card_id' => trim((string) ($card['id'] ?? '')),
+                'column_id' => trim((string) ($column['id'] ?? '')),
+            ],
+            'payload' => [
+                'actor_email' => $actorEmail,
+            ],
+        ];
+    }
+
+    $cards = is_array($boardPayload['cards'] ?? null) ? $boardPayload['cards'] : [];
+    $cardId = trim((string) ($card['id'] ?? ''));
+
+    if ($cardId !== '') {
+        $seen = false;
+
+        foreach ($cards as $candidate) {
+            if (is_array($candidate) && trim((string) ($candidate['id'] ?? '')) === $cardId) {
+                $seen = true;
+                break;
+            }
+        }
+
+        if (!$seen) {
+            $cards[] = $card;
+        }
+    }
+
+    $cardsInColumn = array_values(array_filter($cards, static function ($candidate) use ($column): bool {
+        return is_array($candidate) && trim((string) ($candidate['column_id'] ?? '')) === trim((string) ($column['id'] ?? ''));
+    }));
+    $limit = is_numeric($column['wip_limit'] ?? null) ? (int) ($column['wip_limit'] ?? 0) : null;
+
+    if ($limit !== null && count($cardsInColumn) > $limit) {
+        foreach ($recipients as $recipientUserId => $recipient) {
+            if ($recipientUserId === '') {
+                continue;
+            }
+
+            $recipientRows[] = [
+                'user_id' => $recipientUserId,
+                'project_id' => $projectId,
+                'source_tool_slug' => 'task-boards',
+                'source_type' => 'column_over_limit',
+                'title' => $columnTitle . ' superó su límite de fichas',
+                'body' => 'La lista tiene ' . count($cardsInColumn) . ' fichas activas y su límite es ' . $limit . '.',
+                'destination' => [
+                    'board_id' => $boardId,
+                    'column_id' => trim((string) ($column['id'] ?? '')),
+                ],
+                'payload' => [
+                    'limit' => $limit,
+                    'current_count' => count($cardsInColumn),
+                ],
+            ];
+        }
+    }
+
+    return $recipientRows;
+}
+
+function taskBoardsExecuteRule(
+    TaskBoardRepository $repository,
+    string $accessToken,
+    string $projectId,
+    string $boardId,
+    array $rule,
+    ?array $card
+): void {
+    $columnId = trim((string) ($rule['column_id'] ?? ''));
+    $actionType = taskBoardsNormalizeRuleAction((string) ($rule['action_type'] ?? 'sort_list'));
+    $config = is_array($rule['config'] ?? null) ? $rule['config'] : [];
+
+    if ($columnId === '') {
+        return;
+    }
+
+    if ($actionType === 'sort_list') {
+        taskBoardsSortColumnCards(
+            $repository,
+            $accessToken,
+            $boardId,
+            $columnId,
+            trim((string) ($config['sort_key'] ?? 'due_date')),
+            trim((string) ($config['direction'] ?? 'asc'))
+        );
+
+        $recipientIds = [];
+        $creatorId = trim((string) ($rule['created_by'] ?? ''));
+
+        if ($creatorId !== '') {
+            $recipientIds[$creatorId] = true;
+        }
+
+        foreach ($repository->listColumnFollowers($accessToken, $boardId, $columnId) as $follow) {
+            if (!is_array($follow)) {
+                continue;
+            }
+
+            $followUserId = trim((string) ($follow['user_id'] ?? ''));
+
+            if ($followUserId !== '') {
+                $recipientIds[$followUserId] = true;
+            }
+        }
+
+        if ($recipientIds !== []) {
+            $repository->createNotifications($accessToken, array_map(static function (string $recipientUserId) use ($projectId, $boardId, $columnId, $rule): array {
+                return [
+                    'user_id' => $recipientUserId,
+                    'project_id' => $projectId,
+                    'source_tool_slug' => 'task-boards',
+                    'source_type' => 'column_rule_sorted',
+                    'title' => 'La automatizacion reordeno una lista',
+                    'body' => 'Se ejecuto la regla "' . trim((string) ($rule['title'] ?? 'Regla de columna')) . '".',
+                    'destination' => [
+                        'board_id' => $boardId,
+                        'column_id' => $columnId,
+                    ],
+                    'payload' => [
+                        'rule_id' => trim((string) ($rule['id'] ?? '')),
+                    ],
+                ];
+            }, array_keys($recipientIds)));
+        }
+    } elseif ($actionType === 'assign_responsible' && is_array($card)) {
+        $column = $repository->findColumn($accessToken, $boardId, $columnId);
+        $memberId = trim((string) ($column['responsible_member_id'] ?? ''));
+        $assigned = taskBoardsNormalizeStringArray($card['assigned_member_ids'] ?? []);
+
+        if ($memberId !== '' && !in_array($memberId, $assigned, true)) {
+            $assigned[] = $memberId;
+            $repository->updateCard($accessToken, $boardId, trim((string) ($card['id'] ?? '')), [
+                'assigned_member_ids' => array_values($assigned),
+            ]);
+        }
+    } elseif ($actionType === 'create_notification') {
+        $recipientUserId = trim((string) ($rule['created_by'] ?? ''));
+
+        if ($recipientUserId !== '') {
+            $repository->createNotifications($accessToken, [[
+                'user_id' => $recipientUserId,
+                'project_id' => $projectId,
+                'source_tool_slug' => 'task-boards',
+                'source_type' => 'column_rule',
+                'title' => trim((string) ($config['title'] ?? ($rule['title'] ?? 'Regla ejecutada'))),
+                'body' => trim((string) ($config['body'] ?? 'Se ejecuto una regla de columna.')),
+                'destination' => [
+                    'board_id' => $boardId,
+                    'column_id' => $columnId,
+                    'card_id' => is_array($card) ? trim((string) ($card['id'] ?? '')) : '',
+                ],
+                'payload' => [
+                    'rule_id' => trim((string) ($rule['id'] ?? '')),
+                ],
+            ]]);
+        }
+    }
+
+    $repository->saveColumnRule($accessToken, [
+        'id' => trim((string) ($rule['id'] ?? '')),
+        'board_id' => $boardId,
+        'column_id' => $columnId,
+        'title' => trim((string) ($rule['title'] ?? 'Regla de columna')),
+        'trigger_type' => taskBoardsNormalizeRuleTrigger((string) ($rule['trigger_type'] ?? 'card_added')),
+        'action_type' => $actionType,
+        'config' => $config,
+        'is_active' => filter_var($rule['is_active'] ?? true, FILTER_VALIDATE_BOOL),
+        'created_by' => trim((string) ($rule['created_by'] ?? '')) ?: null,
+        'created_by_email' => trim((string) ($rule['created_by_email'] ?? '')),
+        'last_run_at' => gmdate('c'),
+    ]);
 }

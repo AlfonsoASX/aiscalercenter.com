@@ -292,6 +292,8 @@ if ($launchMode === 'php_folder') {
                     <input class="workspace-search-input" type="search" placeholder="Buscar en AiScaler" aria-label="Buscar en AiScaler">
                 </div>
 
+                <?= isset($workspaceHeaderActionsHtml) ? (string) $workspaceHeaderActionsHtml : ''; ?>
+
                 <div class="workspace-user-menu">
                     <button id="user-menu-toggle" type="button" class="workspace-user-button" aria-haspopup="menu" aria-expanded="false">
                         <span class="workspace-user-name"><?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8'); ?></span>

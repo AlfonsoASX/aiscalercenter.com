@@ -6,7 +6,7 @@ return [
     'slug' => 'tableros-tareas',
     'category_key' => 'disenar',
     'title' => 'Tableros',
-    'description' => 'Crea tableros Kanban colaborativos con columnas, carriles, tareas, subtareas, comentarios y limites WIP.',
+    'description' => 'Crea tableros Kanban colaborativos con columnas, tareas, subtareas, comentarios y limites WIP.',
     'image_url' => '',
     'tutorial_youtube_url' => '',
     'sort_order' => 15,

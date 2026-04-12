@@ -22,7 +22,7 @@ $apiUrl = 'tool-action.php?launch=' . $launchToken;
 
 try {
     if ($accessToken === '' || $userId === '') {
-        throw new RuntimeException('No encontramos la sesion segura para abrir Tableros de tareas. Vuelve a abrir la herramienta desde el panel.');
+        throw new RuntimeException('No encontramos la sesión segura para abrir Tableros. Vuelve a abrir la herramienta desde el panel.');
     }
 
     if ($activeProjectId === '') {
@@ -51,7 +51,7 @@ try {
 
         if ($selectedBoardId !== '') {
             $activeBoard = taskBoardsNormalizeBoardState(
-                $repository->getBoardState($accessToken, $activeProjectId, $selectedBoardId)
+                $repository->getBoardState($accessToken, $activeProjectId, $selectedBoardId, $userId)
             );
         }
     }
@@ -78,6 +78,44 @@ $initialState = [
         'access_token' => $accessToken,
     ],
 ];
+
+$workspaceHeaderActionsHtml = '';
+
+if ($error === null) {
+    ob_start();
+    ?>
+    <div class="workspace-header-actions">
+        <div class="workspace-notifications" data-task-header-notifications="true">
+            <button
+                type="button"
+                class="workspace-notifications-button"
+                data-task-header-notifications-toggle
+                aria-haspopup="dialog"
+                aria-expanded="false"
+                aria-label="Abrir notificaciones de Tableros"
+            >
+                <span class="material-symbols-rounded">notifications</span>
+                <span class="workspace-notifications-badge hidden" data-task-header-notifications-count>0</span>
+            </button>
+
+            <div class="workspace-notifications-panel hidden" data-task-header-notifications-panel>
+                <div class="workspace-notifications-head">
+                    <div>
+                        <strong>Inbox</strong>
+                        <span>Notificaciones internas de Tableros</span>
+                    </div>
+                    <button type="button" class="workspace-notifications-link" data-task-header-notifications-read-all>Marcar todo</button>
+                </div>
+
+                <div class="workspace-notifications-list" data-task-header-notifications-list>
+                    <div class="workspace-notifications-empty">Cargando notificaciones...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php
+    $workspaceHeaderActionsHtml = (string) ob_get_clean();
+}
 ?>
 <div
     class="task-boards-page"

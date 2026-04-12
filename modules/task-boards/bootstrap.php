@@ -115,10 +115,11 @@ function taskBoardsNormalizeBoardState(array $state): array
     return [
         'board' => is_array($state['board'] ?? null) ? $state['board'] : null,
         'columns' => array_values(is_array($state['columns'] ?? null) ? $state['columns'] : []),
-        'swimlanes' => array_values(is_array($state['swimlanes'] ?? null) ? $state['swimlanes'] : []),
         'labels' => array_values(is_array($state['labels'] ?? null) ? $state['labels'] : []),
         'cards' => array_values(is_array($state['cards'] ?? null) ? $state['cards'] : []),
         'comments' => array_values(is_array($state['comments'] ?? null) ? $state['comments'] : []),
         'activity' => array_values(is_array($state['activity'] ?? null) ? $state['activity'] : []),
+        'rules' => array_values(is_array($state['rules'] ?? null) ? $state['rules'] : []),
+        'viewer_column_follows' => array_values(is_array($state['viewer_column_follows'] ?? null) ? $state['viewer_column_follows'] : []),
     ];
 }

@@ -13,7 +13,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     const stateNode = document.getElementById('task-boards-state');
 
     if (!(shell instanceof HTMLElement) || !(notice instanceof HTMLElement) || !(stateNode instanceof HTMLScriptElement) || apiUrl === '') {
-        throw new Error('No fue posible iniciar Tableros de tareas.');
+        throw new Error('No fue posible iniciar Tableros.');
     }
 
     const initialState = normalizeBootstrap(parseJson(stateNode.textContent || '{}'));
@@ -26,7 +26,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         activeBoard: initialState.active_board,
         screen: 'overview',
         dashboardSection: 'boards',
-        activeSwimlaneId: String(initialState.active_board?.swimlanes?.[0]?.id || ''),
         searchQuery: '',
         notice: null,
         boardModal: {
@@ -39,10 +38,25 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             mode: 'columns',
             draft: [],
         },
+        columnMenu: {
+            columnId: '',
+        },
+        columnDialog: {
+            open: false,
+            mode: 'properties',
+            columnId: '',
+            draft: createColumnDialogDraft(),
+        },
         cardPanel: {
             open: false,
             draft: createCardDraft(),
             dirty: false,
+        },
+        notifications: {
+            items: [],
+            unreadCount: 0,
+            open: false,
+            loading: false,
         },
         realtime: initialState.realtime,
     };
@@ -52,11 +66,13 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     let boardChannel = null;
     let refreshTimeout = 0;
     let draggingCardId = '';
+    let pendingCardPanelRestore = null;
 
     root.addEventListener('click', handleClick);
     root.addEventListener('input', handleInput);
     root.addEventListener('change', handleChange);
     root.addEventListener('submit', handleSubmit);
+    document.addEventListener('click', handleDocumentClick);
     root.addEventListener('dragstart', handleDragStart);
     root.addEventListener('dragend', handleDragEnd);
     root.addEventListener('dragover', handleDragOver);
@@ -65,6 +81,11 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
     render();
     subscribeRealtime();
+    void refreshNotifications();
+
+    if (state.activeBoard?.board?.id) {
+        void reloadBootstrap(String(state.activeBoard.board.id || ''));
+    }
 
     function handleClick(event) {
         const target = event.target;
@@ -113,15 +134,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         if (target.closest('[data-task-view-home]')) {
             event.preventDefault();
             state.screen = 'overview';
-            render();
-            return;
-        }
-
-        const laneSelect = target.closest('[data-task-lane-select]');
-
-        if (laneSelect instanceof HTMLElement) {
-            event.preventDefault();
-            state.activeSwimlaneId = String(laneSelect.dataset.taskLaneSelect || '');
             render();
             return;
         }
@@ -177,11 +189,83 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 [state.structureModal.draft[index - 1], state.structureModal.draft[index]] = [state.structureModal.draft[index], state.structureModal.draft[index - 1]];
             } else if (action === 'down' && index < state.structureModal.draft.length - 1) {
                 [state.structureModal.draft[index + 1], state.structureModal.draft[index]] = [state.structureModal.draft[index], state.structureModal.draft[index + 1]];
+            } else if (action === 'archive') {
+                const current = state.structureModal.draft[index];
+
+                if (current) {
+                    current.is_archived = !Boolean(current.is_archived);
+                }
             } else if (action === 'delete') {
                 state.structureModal.draft.splice(index, 1);
             }
 
             render();
+            return;
+        }
+
+        const columnMenuToggle = target.closest('[data-task-column-menu-toggle]');
+
+        if (columnMenuToggle instanceof HTMLElement) {
+            event.preventDefault();
+            const columnId = String(columnMenuToggle.dataset.columnId || '');
+            state.columnMenu.columnId = state.columnMenu.columnId === columnId ? '' : columnId;
+            render();
+            return;
+        }
+
+        const columnAction = target.closest('[data-task-column-action]');
+
+        if (columnAction instanceof HTMLElement) {
+            event.preventDefault();
+            const action = String(columnAction.dataset.taskColumnAction || '');
+            const columnId = String(columnAction.dataset.columnId || '');
+            const ruleTrigger = String(columnAction.dataset.ruleTrigger || '');
+            const ruleId = String(columnAction.dataset.ruleId || '');
+            state.columnMenu.columnId = '';
+
+            if (action === 'new-card') {
+                openNewCard(columnId);
+            } else if (action === 'properties') {
+                openColumnDialog(columnId, 'properties');
+            } else if (action === 'move') {
+                openColumnDialog(columnId, 'move');
+            } else if (action === 'duplicate') {
+                void duplicateColumn(columnId);
+            } else if (action === 'move-cards') {
+                openColumnDialog(columnId, 'move-cards');
+            } else if (action === 'sort') {
+                openColumnDialog(columnId, 'sort');
+            } else if (action === 'toggle-follow') {
+                void toggleColumnFollow(columnId);
+            } else if (action === 'change-color') {
+                openColumnDialog(columnId, 'properties');
+            } else if (action === 'rule') {
+                openColumnDialog(columnId, 'rule', { trigger_type: ruleTrigger || 'card_added', rule_id: ruleId });
+            } else if (action === 'archive-column') {
+                void archiveColumn(columnId, true);
+            } else if (action === 'archive-cards') {
+                void archiveColumnCards(columnId, true);
+            }
+
+            return;
+        }
+
+        if (target.closest('[data-task-column-dialog-close]')) {
+            event.preventDefault();
+            state.columnDialog.open = false;
+            render();
+            return;
+        }
+
+        if (target.closest('[data-task-column-rule-delete]')) {
+            event.preventDefault();
+            const button = target.closest('[data-task-column-rule-delete]');
+            const ruleId = button instanceof HTMLElement ? String(button.dataset.ruleId || '') : '';
+
+            if (ruleId !== '') {
+                void deleteColumnRule(ruleId);
+            }
+
             return;
         }
 
@@ -216,10 +300,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
         if (newCardTrigger instanceof HTMLElement) {
             event.preventDefault();
-            openNewCard(
-                String(newCardTrigger.dataset.columnId || ''),
-                String(newCardTrigger.dataset.swimlaneId || '')
-            );
+            openNewCard(String(newCardTrigger.dataset.columnId || ''));
             return;
         }
 
@@ -247,6 +328,9 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             event.preventDefault();
             syncCardDraftFromDom();
             state.cardPanel.draft.checklist.push(createChecklistItem());
+            rememberCardPanelState({
+                focusChecklistIndex: Math.max(state.cardPanel.draft.checklist.length - 1, 0),
+            });
             render();
             return;
         }
@@ -265,16 +349,79 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             syncCardDraftFromDom();
 
             if (action === 'delete') {
+                const nextChecklistIndex = state.cardPanel.draft.checklist.length > 1
+                    ? Math.min(index, state.cardPanel.draft.checklist.length - 2)
+                    : null;
                 state.cardPanel.draft.checklist.splice(index, 1);
+                rememberCardPanelState({
+                    focusChecklistIndex: nextChecklistIndex,
+                    fallbackSelector: '[data-task-checklist-add]',
+                });
             } else if (action === 'toggle') {
                 const item = state.cardPanel.draft.checklist[index];
 
                 if (item) {
                     item.is_done = !item.is_done;
                 }
+
+                rememberCardPanelState();
             }
 
             state.cardPanel.dirty = true;
+            render();
+        }
+    }
+
+    function handleDocumentClick(event) {
+        const target = event.target;
+
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+
+        if (target.closest('[data-task-header-notifications-toggle]')) {
+            event.preventDefault();
+            state.notifications.open = !state.notifications.open;
+            syncHeaderNotifications();
+            return;
+        }
+
+        if (target.closest('[data-task-header-notifications-read-all]')) {
+            event.preventDefault();
+            void markNotificationsRead([]);
+            return;
+        }
+
+        const notificationItem = target.closest('[data-task-header-notification-item]');
+
+        if (notificationItem instanceof HTMLElement) {
+            event.preventDefault();
+            const notificationId = String(notificationItem.dataset.notificationId || '');
+            const boardId = String(notificationItem.dataset.boardId || '');
+            const cardId = String(notificationItem.dataset.cardId || '');
+
+            void markNotificationsRead(notificationId !== '' ? [notificationId] : []);
+
+            if (boardId !== '') {
+                void openBoard(boardId).then(() => {
+                    if (cardId !== '') {
+                        openExistingCard(cardId);
+                    }
+                });
+            }
+
+            state.notifications.open = false;
+            syncHeaderNotifications();
+            return;
+        }
+
+        if (state.notifications.open && !target.closest('[data-task-header-notifications="true"]')) {
+            state.notifications.open = false;
+            syncHeaderNotifications();
+        }
+
+        if (state.columnMenu.columnId !== '' && !target.closest('[data-task-column-menu]') && !target.closest('[data-task-column-menu-toggle]')) {
+            state.columnMenu.columnId = '';
             render();
         }
     }
@@ -352,6 +499,11 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             event.preventDefault();
             void saveCard();
             return;
+        }
+
+        if (form.matches('[data-task-column-dialog-form]')) {
+            event.preventDefault();
+            void saveColumnDialog(form);
         }
     }
 
@@ -446,9 +598,8 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         event.preventDefault();
 
         const columnId = String(list.dataset.columnId || '').trim();
-        const swimlaneId = String(list.dataset.swimlaneId || '').trim();
 
-        if (columnId === '' || swimlaneId === '') {
+        if (columnId === '') {
             handleDragEnd();
             return;
         }
@@ -461,12 +612,10 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         }
 
         const previousColumnId = String(card.column_id || '');
-        const previousSwimlaneId = String(card.swimlane_id || '');
         const previousSortOrder = Number(card.sort_order || 0);
         const sortOrder = resolveDroppedSortOrder(list, draggingCardId);
 
         card.column_id = columnId;
-        card.swimlane_id = swimlaneId;
         card.sort_order = sortOrder;
         render();
 
@@ -475,13 +624,11 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 board_id: String(state.activeBoard.board.id || ''),
                 card_id: draggingCardId,
                 column_id: columnId,
-                swimlane_id: swimlaneId,
                 sort_order: sortOrder,
             });
             scheduleRealtimeRefresh(true);
         } catch (error) {
             card.column_id = previousColumnId;
-            card.swimlane_id = previousSwimlaneId;
             card.sort_order = previousSortOrder;
             showNotice('error', humanizeError(error));
             render();
@@ -494,6 +641,8 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         renderNotice();
         syncViewportMode();
         shell.innerHTML = renderShell();
+        restoreCardPanelState();
+        syncHeaderNotifications();
     }
 
     function syncViewportMode() {
@@ -519,6 +668,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
             ${renderBoardModal()}
             ${renderStructureModal()}
+            ${renderColumnDialog()}
             ${renderCardPanel()}
         `;
     }
@@ -597,7 +747,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                             <section class="task-boards-empty-state task-boards-empty-state--embedded">
                                 <span class="material-symbols-rounded">view_kanban</span>
                                 <h2>Empieza con tu primer tablero</h2>
-                                <p>Crea un tablero por proyecto, define columnas, carriles y comienza a mover trabajo en tiempo real con tu equipo.</p>
+                                <p>Crea un tablero por proyecto, define columnas y comienza a mover trabajo en tiempo real con tu equipo.</p>
                                 <button type="button" class="task-boards-primary" data-task-board-create>
                                     <span class="material-symbols-rounded">add_circle</span>
                                     <span>Crear tablero</span>
@@ -636,7 +786,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             {
                 id: 'template-sprint',
                 title: 'Sprint semanal',
-                description: 'Planea pendientes, trabajo en curso, revision y cierre semanal con limites WIP.',
+                description: 'Planea pendientes, trabajo en curso, revisión y cierre semanal con límite de fichas.',
                 accent: '#1a73e8',
             },
             {
@@ -648,7 +798,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             {
                 id: 'template-ops',
                 title: 'Operacion diaria',
-                description: 'Da seguimiento a tareas operativas, urgencias y entregables recurrentes del proyecto.',
+                description: 'Da seguimiento a fichas operativas, urgencias y entregables recurrentes del proyecto.',
                 accent: '#188038',
             },
         ];
@@ -660,7 +810,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                         <div class="task-boards-section-copy">
                             <p class="task-boards-section-kicker">Plantillas</p>
                             <h2>Empieza mas rapido</h2>
-                            <p>Usa una estructura sugerida y luego ajusta columnas, carriles y etiquetas a tu proceso.</p>
+                            <p>Usa una estructura sugerida y luego ajusta columnas y etiquetas a tu proceso.</p>
                         </div>
                     </header>
 
@@ -702,7 +852,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                     <div class="task-boards-home-grid">
                         ${renderHomeMetric('Tableros', String(state.boards.length), 'view_kanban')}
                         ${renderHomeMetric('Miembros', String(state.members.length), 'group')}
-                        ${renderHomeMetric('Tareas visibles', String(totalCards), 'task')}
+                        ${renderHomeMetric('Fichas visibles', String(totalCards), 'task')}
                         ${renderHomeMetric('Atrasadas', String(overdueCards), 'alarm')}
                     </div>
 
@@ -742,7 +892,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                     <strong>${escapeHtml(board.title || 'Tablero')}</strong>
                     ${compact
                         ? `<span>${escapeHtml(board.description || 'Listo para retomar trabajo.')}</span>`
-                        : `<p>${escapeHtml(board.description || 'Organiza tareas, subtareas y responsables en un solo lugar.')}</p>`}
+                        : `<p>${escapeHtml(board.description || 'Organiza fichas, subtareas y responsables en un solo lugar.')}</p>`}
                 </div>
             </button>
         `;
@@ -782,56 +932,40 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             return '';
         }
 
-        const visibleSwimlaneId = resolveVisibleSwimlaneId(state.activeBoard, state.activeSwimlaneId);
-
         return `
             <section class="task-boards-workbench task-boards-workbench--board">
-                <section class="task-boards-board-switcher">
-                    <button type="button" class="task-boards-board-tab task-boards-board-tab--back" data-task-view-home>
-                        <span class="material-symbols-rounded">arrow_back</span>
-                        <span>Todos los tableros</span>
-                    </button>
-                </section>
-
-                <header class="task-boards-toolbar">
-                    <div class="task-boards-toolbar-copy">
-                        <p class="task-boards-eyebrow">Tablero activo</p>
-                        <h2>${escapeHtml(board.title || 'Tablero')}</h2>
-                        <p>${escapeHtml(board.description || 'Organiza tareas, limita trabajo en curso y da seguimiento a tu equipo sin salir del proyecto.')}</p>
+                <header class="task-boards-topbar">
+                    <div class="task-boards-doc">
+                        <button type="button" class="task-boards-icon-button task-boards-doc-back" data-task-view-home aria-label="Volver a todos los tableros">
+                            <span class="material-symbols-rounded">arrow_back</span>
+                        </button>
+                        <div class="task-boards-doc-copy">
+                            <strong>${escapeHtml(board.title || 'Tablero')}</strong>
+                            <small>${escapeHtml(board.description || 'Tablero activo')}</small>
+                        </div>
                     </div>
 
-                    <div class="task-boards-toolbar-actions">
-                        <label class="task-boards-search-shell">
-                            <span class="material-symbols-rounded">search</span>
-                            <input type="search" value="${escapeHtml(state.searchQuery)}" placeholder="Buscar tareas, etiquetas o responsables" data-task-board-search>
-                        </label>
-
-                        <div class="task-boards-toolbar-buttons">
+                    <div class="task-boards-top-actions">
+                        <div class="task-boards-top-controls">
+                            <label class="task-boards-search-shell">
+                                <span class="material-symbols-rounded">search</span>
+                                <input type="search" value="${escapeHtml(state.searchQuery)}" placeholder="Buscar fichas, etiquetas o responsables" data-task-board-search>
+                            </label>
                             <button type="button" class="task-boards-secondary" data-task-board-edit>
                                 <span class="material-symbols-rounded">edit</span>
-                                <span>Tablero</span>
                             </button>
                             <button type="button" class="task-boards-secondary" data-task-structure-open="columns">
                                 <span class="material-symbols-rounded">table_rows</span>
-                                <span>Columnas</span>
-                            </button>
-                            <button type="button" class="task-boards-secondary" data-task-structure-open="swimlanes">
-                                <span class="material-symbols-rounded">view_week</span>
-                                <span>Carriles</span>
                             </button>
                             <button type="button" class="task-boards-secondary" data-task-structure-open="labels">
                                 <span class="material-symbols-rounded">sell</span>
-                                <span>Etiquetas</span>
                             </button>
-                            <button type="button" class="task-boards-primary" data-task-card-new data-column-id="${escapeHtml(String(state.activeBoard.columns[0]?.id || ''))}" data-swimlane-id="${escapeHtml(visibleSwimlaneId)}">
+                            <button type="button" class="task-boards-primary" data-task-card-new data-column-id="${escapeHtml(String(getActiveColumns()[0]?.id || ''))}">
                                 <span class="material-symbols-rounded">add_task</span>
-                                <span>Nueva tarea</span>
                             </button>
                         </div>
                     </div>
                 </header>
-
-                ${renderLaneTabs()}
 
                 <section class="task-boards-canvas-shell">
                     ${renderBoardCanvas()}
@@ -841,15 +975,13 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     }
 
     function renderBoardCanvas() {
-        const columns = state.activeBoard?.columns ?? [];
-        const visibleSwimlaneId = resolveVisibleSwimlaneId(state.activeBoard, state.activeSwimlaneId);
-        const visibleSwimlane = (state.activeBoard?.swimlanes ?? []).find((swimlane) => String(swimlane.id || '') === visibleSwimlaneId) ?? null;
-        const columnCounts = countCardsByColumn(state.activeBoard?.cards ?? [], visibleSwimlaneId);
+        const columns = getActiveColumns();
+        const columnCounts = countCardsByColumn(state.activeBoard?.cards ?? []);
 
         return `
             <div class="task-boards-canvas-scroll">
                 <div class="task-boards-board-scroll" style="--task-board-column-count:${Math.max(columns.length, 1)};">
-                    ${columns.map((column) => renderBoardList(column, visibleSwimlane, columnCounts[column.id] ?? 0)).join('')}
+                    ${columns.map((column) => renderBoardList(column, columnCounts[column.id] ?? 0)).join('')}
                     <button type="button" class="task-boards-add-list" data-task-structure-open="columns">
                         <span class="material-symbols-rounded">add</span>
                         <span>Añade otra lista</span>
@@ -859,58 +991,80 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         `;
     }
 
-    function renderLaneTabs() {
-        const swimlanes = state.activeBoard?.swimlanes ?? [];
-
-        if (swimlanes.length <= 1) {
-            return '';
-        }
-
-        const visibleSwimlaneId = resolveVisibleSwimlaneId(state.activeBoard, state.activeSwimlaneId);
-
-        return `
-            <section class="task-boards-lane-switcher">
-                ${swimlanes.map((swimlane) => `
-                    <button type="button" class="task-boards-lane-pill ${String(swimlane.id || '') === visibleSwimlaneId ? 'is-active' : ''}" data-task-lane-select="${escapeHtml(String(swimlane.id || ''))}">
-                        ${escapeHtml(String(swimlane.title || 'Carril'))}
-                    </button>
-                `).join('')}
-            </section>
-        `;
-    }
-
-    function renderBoardList(column, swimlane, count) {
-        const swimlaneId = String(swimlane?.id || '');
-        const cards = getCardsForCell(String(column.id || ''), swimlaneId);
+    function renderBoardList(column, count) {
+        const cards = getCardsForColumn(String(column.id || ''));
         const limit = normalizeNumber(column.wip_limit);
         const isOverLimit = limit !== null && count > limit;
+        const responsible = getColumnResponsible(column);
+        const isFollowing = isFollowingColumn(String(column.id || ''));
 
         return `
             <section class="task-boards-list ${isOverLimit ? 'is-over-limit' : ''}">
                 <div class="task-boards-column-head ${isOverLimit ? 'is-over-limit' : ''}">
-                    <div>
+                    <div class="task-boards-column-head-copy">
                         <h3>${escapeHtml(column.title || 'Columna')}</h3>
-                        <p>${count} ${count === 1 ? 'tarea' : 'tareas'}${limit !== null ? ` / WIP ${limit}` : ''}</p>
+                        <div class="task-boards-column-meta">
+                            ${responsible ? `<span class="task-boards-column-meta-pill"><span class="material-symbols-rounded">person</span>${escapeHtml(responsible.label)}</span>` : ''}
+                            ${isFollowing ? '<span class="task-boards-column-meta-pill"><span class="material-symbols-rounded">notifications_active</span>Siguiendo</span>' : ''}
+                        </div>
                     </div>
-                    <button type="button" class="task-boards-icon-button task-boards-icon-button--ghost" data-task-structure-open="columns" aria-label="Configurar listas">
+                    <div class="task-boards-column-menu-shell" data-task-column-menu="true">
+                    <button type="button" class="task-boards-icon-button task-boards-icon-button--ghost" data-task-column-menu-toggle data-column-id="${escapeHtml(String(column.id || ''))}" aria-label="Configurar lista">
                         <span class="material-symbols-rounded">more_horiz</span>
                     </button>
+                    ${state.columnMenu.columnId === String(column.id || '') ? renderColumnMenu(column) : ''}
+                    </div>
                 </div>
                 <div class="task-boards-cell-head">
-                    ${limit !== null ? `<span class="task-boards-column-limit ${isOverLimit ? 'is-over-limit' : ''}">WIP ${limit}</span>` : '<span class="task-boards-list-caption">Listo para mover tarjetas</span>'}
+                    ${limit !== null ? `<span class="task-boards-column-limit ${isOverLimit ? 'is-over-limit' : ''}">Límite de fichas ${limit}</span>` : '<span class="task-boards-list-caption">Sin límite de fichas</span>'}
                 </div>
-                <div class="task-boards-card-list" data-task-cell-list="true" data-column-id="${escapeHtml(String(column.id || ''))}" data-swimlane-id="${escapeHtml(swimlaneId)}">
+                <div class="task-boards-card-list" data-task-cell-list="true" data-column-id="${escapeHtml(String(column.id || ''))}">
                     ${cards.length > 0
                         ? cards.map((card) => renderCard(card)).join('')
                         : '<div class="task-boards-cell-empty">Arrastra o crea una tarjeta aquí.</div>'}
                 </div>
                 <div class="task-boards-cell-head task-boards-cell-head--footer">
-                    <button type="button" class="task-boards-link-button" data-task-card-new data-column-id="${escapeHtml(String(column.id || ''))}" data-swimlane-id="${escapeHtml(swimlaneId)}">
+                    <button type="button" class="task-boards-link-button" data-task-card-new data-column-id="${escapeHtml(String(column.id || ''))}">
                         <span class="material-symbols-rounded">add</span>
                         <span>Añade una tarjeta</span>
                     </button>
                 </div>
             </section>
+        `;
+    }
+
+    function renderColumnMenu(column) {
+        const columnId = String(column.id || '');
+        const rules = getRulesForColumn(columnId);
+        const isFollowing = isFollowingColumn(columnId);
+
+        return `
+            <div class="task-boards-column-menu">
+                <button type="button" class="task-boards-column-menu-item" data-task-column-action="properties" data-column-id="${escapeHtml(columnId)}">Propiedades de la lista</button>
+                <button type="button" class="task-boards-column-menu-item" data-task-column-action="new-card" data-column-id="${escapeHtml(columnId)}">Añadir tarjeta</button>
+                <button type="button" class="task-boards-column-menu-item" data-task-column-action="duplicate" data-column-id="${escapeHtml(columnId)}">Copiar lista</button>
+                <button type="button" class="task-boards-column-menu-item" data-task-column-action="move" data-column-id="${escapeHtml(columnId)}">Mover lista</button>
+                <button type="button" class="task-boards-column-menu-item" data-task-column-action="move-cards" data-column-id="${escapeHtml(columnId)}">Mover todas las tarjetas de esta lista</button>
+                <button type="button" class="task-boards-column-menu-item" data-task-column-action="sort" data-column-id="${escapeHtml(columnId)}">Ordenar por...</button>
+                <button type="button" class="task-boards-column-menu-item" data-task-column-action="toggle-follow" data-column-id="${escapeHtml(columnId)}">${isFollowing ? 'Dejar de seguir' : 'Seguir'}</button>
+
+                <div class="task-boards-column-menu-divider"></div>
+                <button type="button" class="task-boards-column-menu-item" data-task-column-action="change-color" data-column-id="${escapeHtml(columnId)}">Cambiar color de lista</button>
+
+                <div class="task-boards-column-menu-divider"></div>
+                <div class="task-boards-column-menu-section">
+                    <strong>Automatización</strong>
+                    <button type="button" class="task-boards-column-menu-item" data-task-column-action="rule" data-column-id="${escapeHtml(columnId)}" data-rule-trigger="card_added">Cuando se añada una tarjeta a la lista...</button>
+                    <button type="button" class="task-boards-column-menu-item" data-task-column-action="rule" data-column-id="${escapeHtml(columnId)}" data-rule-trigger="daily">Todos los días, ordenar la lista por...</button>
+                    <button type="button" class="task-boards-column-menu-item" data-task-column-action="rule" data-column-id="${escapeHtml(columnId)}" data-rule-trigger="weekly_monday">Todos los lunes, ordenar la lista por...</button>
+                    <button type="button" class="task-boards-column-menu-item" data-task-column-action="rule" data-column-id="${escapeHtml(columnId)}">Crear una regla</button>
+                    ${rules.length > 0 ? `<div class="task-boards-column-menu-rules">${rules.map((rule) => `<span>${escapeHtml(rule.title || 'Regla activa')}</span>`).join('')}</div>` : ''}
+                </div>
+
+                <div class="task-boards-column-menu-divider"></div>
+                <button type="button" class="task-boards-column-menu-item task-boards-column-menu-item--danger" data-task-column-action="archive-column" data-column-id="${escapeHtml(columnId)}">Archivar esta lista</button>
+                <button type="button" class="task-boards-column-menu-item task-boards-column-menu-item--danger" data-task-column-action="archive-cards" data-column-id="${escapeHtml(columnId)}">Archivar todas las tarjetas de esta lista</button>
+            </div>
         `;
     }
 
@@ -932,7 +1086,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 data-task-sort-order="${escapeHtml(String(card.sort_order || 0))}"
             >
                 <div class="task-boards-card-top">
-                    <strong>${escapeHtml(card.title || 'Tarea')}</strong>
+                    <strong>${escapeHtml(card.title || 'Ficha')}</strong>
                     <span class="material-symbols-rounded">drag_indicator</span>
                 </div>
 
@@ -959,7 +1113,9 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     }
 
     function renderLabelChip(label) {
-        return `<span class="task-boards-label-chip" style="--task-label-color:${escapeHtml(String(label.color || '#2F7CEF'))};">${escapeHtml(label.title || 'Etiqueta')}</span>`;
+        const title = String(label.title || '').trim();
+        const swatchOnly = title === '' ? ' task-boards-label-chip--swatch-only' : '';
+        return `<span class="task-boards-label-chip${swatchOnly}" style="--task-label-color:${escapeHtml(String(label.color || '#2F7CEF'))};">${title !== '' ? escapeHtml(title) : ''}</span>`;
     }
 
     function renderMemberBadge(member) {
@@ -992,7 +1148,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                     <input type="hidden" name="id" value="${escapeHtml(draft.id)}">
 
                     <label class="task-boards-field">
-                        <span>Titulo</span>
+                        <span>Título</span>
                         <input type="text" name="title" value="${escapeHtml(draft.title)}" placeholder="Nombre del tablero" required>
                     </label>
 
@@ -1025,9 +1181,8 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
         const mode = state.structureModal.mode;
         const titleMap = {
-            columns: ['Columnas', 'Define el flujo, orden y limite WIP por columna.'],
-            swimlanes: ['Carriles', 'Separa trabajos especiales o urgentes sin duplicar tableros.'],
-            labels: ['Etiquetas', 'Crea categorias visuales para priorizar y filtrar tareas.'],
+            columns: ['Columnas', 'Define el flujo, orden y límite de fichas por columna.'],
+            labels: ['Etiquetas', 'Crea colores o nombres para clasificar tus fichas.'],
         };
         const [title, subtitle] = titleMap[mode] ?? titleMap.columns;
 
@@ -1053,9 +1208,9 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                     <div class="task-boards-structure-actions">
                         <button type="button" class="task-boards-secondary" data-task-structure-action="add">
                             <span class="material-symbols-rounded">add</span>
-                            <span>Agregar ${mode === 'columns' ? 'columna' : mode === 'swimlanes' ? 'carril' : 'etiqueta'}</span>
+                            <span>Agregar ${mode === 'columns' ? 'columna' : 'etiqueta'}</span>
                         </button>
-                        <span class="task-boards-helper">${mode === 'swimlanes' ? 'El primer carril se toma como carril principal.' : 'Puedes reordenar usando las flechas.'}</span>
+                        <span class="task-boards-helper">Puedes reordenar usando las flechas.</span>
                     </div>
 
                     <div class="task-boards-dialog-footer">
@@ -1075,8 +1230,8 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             <div class="task-boards-structure-row">
                 <input type="hidden" name="draft_id" value="${escapeHtml(item.id)}" data-task-structure-field="id" data-index="${index}">
                 <label class="task-boards-field">
-                    <span>Nombre</span>
-                    <input type="text" value="${escapeHtml(item.title)}" data-task-structure-field="title" data-index="${index}" placeholder="${mode === 'columns' ? 'Nueva columna' : mode === 'swimlanes' ? 'Nuevo carril' : 'Nueva etiqueta'}">
+                    <span>${mode === 'columns' ? 'Nombre' : 'Nombre opcional'}</span>
+                    <input type="text" value="${escapeHtml(item.title)}" data-task-structure-field="title" data-index="${index}" placeholder="${mode === 'columns' ? 'Nueva columna' : 'Nombre opcional'}">
                 </label>
 
                 <label class="task-boards-field task-boards-field--compact">
@@ -1087,13 +1242,18 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 ${mode === 'columns'
                     ? `
                         <label class="task-boards-field task-boards-field--compact">
-                            <span>WIP</span>
-                            <input type="number" min="0" value="${escapeHtml(item.wip_limit)}" data-task-structure-field="wip_limit" data-index="${index}" placeholder="Sin limite">
+                            <span>Límite de fichas</span>
+                            <input type="number" min="0" value="${escapeHtml(item.wip_limit)}" data-task-structure-field="wip_limit" data-index="${index}" placeholder="Sin límite">
                         </label>
                     `
                     : ''}
 
                 <div class="task-boards-structure-buttons">
+                    ${mode === 'columns' ? `
+                        <button type="button" class="task-boards-icon-button" data-task-structure-action="archive" data-index="${index}" aria-label="${item.is_archived ? 'Restaurar' : 'Archivar'}">
+                            <span class="material-symbols-rounded">${item.is_archived ? 'unarchive' : 'archive'}</span>
+                        </button>
+                    ` : ''}
                     <button type="button" class="task-boards-icon-button" data-task-structure-action="up" data-index="${index}" aria-label="Subir">
                         <span class="material-symbols-rounded">arrow_upward</span>
                     </button>
@@ -1104,7 +1264,327 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                         <span class="material-symbols-rounded">delete</span>
                     </button>
                 </div>
+                ${mode === 'columns' && item.is_archived ? '<div class="task-boards-structure-status">Archivada</div>' : ''}
             </div>
+        `;
+    }
+
+    function renderColumnDialog() {
+        if (!state.columnDialog.open) {
+            return '';
+        }
+
+        const draft = state.columnDialog.draft;
+        const mode = state.columnDialog.mode;
+        const column = getColumnById(state.columnDialog.columnId);
+
+        if (!column) {
+            return '';
+        }
+
+        if (mode === 'move-cards') {
+            return `
+                <div class="task-boards-overlay" data-task-column-dialog-close></div>
+                <section class="task-boards-dialog" aria-modal="true" role="dialog">
+                    <form class="task-boards-dialog-card" data-task-column-dialog-form>
+                        <div class="task-boards-dialog-head">
+                            <div>
+                                <p class="task-boards-eyebrow">Lista</p>
+                                <h3>Mover todas las fichas</h3>
+                                <p>Elige la lista destino para las fichas activas de ${escapeHtml(column.title || 'esta lista')}.</p>
+                            </div>
+                            <button type="button" class="task-boards-icon-button" data-task-column-dialog-close aria-label="Cerrar">
+                                <span class="material-symbols-rounded">close</span>
+                            </button>
+                        </div>
+
+                        <label class="task-boards-field">
+                            <span>Lista destino</span>
+                            <select name="target_column_id">
+                                ${getActiveColumns().filter((item) => String(item.id || '') !== String(column.id || '')).map((item) => `
+                                    <option value="${escapeHtml(String(item.id || ''))}" ${String(draft.target_column_id || '') === String(item.id || '') ? 'selected' : ''}>
+                                        ${escapeHtml(item.title || 'Columna')}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </label>
+
+                        <div class="task-boards-dialog-footer">
+                            <button type="button" class="task-boards-secondary" data-task-column-dialog-close>Cancelar</button>
+                            <button type="submit" class="task-boards-primary">
+                                <span class="material-symbols-rounded">move_down</span>
+                                <span>Mover fichas</span>
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            `;
+        }
+
+        if (mode === 'move') {
+            return `
+                <div class="task-boards-overlay" data-task-column-dialog-close></div>
+                <section class="task-boards-dialog" aria-modal="true" role="dialog">
+                    <form class="task-boards-dialog-card" data-task-column-dialog-form>
+                        <div class="task-boards-dialog-head">
+                            <div>
+                                <p class="task-boards-eyebrow">Lista</p>
+                                <h3>Mover lista</h3>
+                                <p>Reubica ${escapeHtml(column.title || 'esta lista')} dentro del tablero.</p>
+                            </div>
+                            <button type="button" class="task-boards-icon-button" data-task-column-dialog-close aria-label="Cerrar">
+                                <span class="material-symbols-rounded">close</span>
+                            </button>
+                        </div>
+
+                        <label class="task-boards-field">
+                            <span>Posición</span>
+                            <select name="position">
+                                ${getActiveColumns().map((item, index) => `
+                                    <option value="${index}" ${Number(draft.position) === index ? 'selected' : ''}>
+                                        ${index + 1}. ${escapeHtml(item.title || 'Columna')}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </label>
+
+                        <div class="task-boards-dialog-footer">
+                            <button type="button" class="task-boards-secondary" data-task-column-dialog-close>Cancelar</button>
+                            <button type="submit" class="task-boards-primary">
+                                <span class="material-symbols-rounded">swap_vert</span>
+                                <span>Mover lista</span>
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            `;
+        }
+
+        if (mode === 'sort') {
+            return `
+                <div class="task-boards-overlay" data-task-column-dialog-close></div>
+                <section class="task-boards-dialog" aria-modal="true" role="dialog">
+                    <form class="task-boards-dialog-card" data-task-column-dialog-form>
+                        <div class="task-boards-dialog-head">
+                            <div>
+                                <p class="task-boards-eyebrow">Lista</p>
+                                <h3>Ordenar lista</h3>
+                                <p>Reordena las fichas activas de ${escapeHtml(column.title || 'esta lista')}.</p>
+                            </div>
+                            <button type="button" class="task-boards-icon-button" data-task-column-dialog-close aria-label="Cerrar">
+                                <span class="material-symbols-rounded">close</span>
+                            </button>
+                        </div>
+
+                        <label class="task-boards-field">
+                            <span>Ordenar por</span>
+                            <select name="sort_key">
+                                ${[
+                                    ['due_date', 'Fecha de vencimiento'],
+                                    ['created_at', 'Fecha de creación'],
+                                    ['title', 'Título'],
+                                    ['priority', 'Prioridad'],
+                                ].map(([value, label]) => `<option value="${value}" ${draft.sort_key === value ? 'selected' : ''}>${label}</option>`).join('')}
+                            </select>
+                        </label>
+
+                        <label class="task-boards-field">
+                            <span>Dirección</span>
+                            <select name="direction">
+                                <option value="asc" ${draft.direction === 'asc' ? 'selected' : ''}>Ascendente</option>
+                                <option value="desc" ${draft.direction === 'desc' ? 'selected' : ''}>Descendente</option>
+                            </select>
+                        </label>
+
+                        <div class="task-boards-dialog-footer">
+                            <button type="button" class="task-boards-secondary" data-task-column-dialog-close>Cancelar</button>
+                            <button type="submit" class="task-boards-primary">
+                                <span class="material-symbols-rounded">swap_vert</span>
+                                <span>Ordenar lista</span>
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            `;
+        }
+
+        if (mode === 'rule') {
+            return `
+                <div class="task-boards-overlay" data-task-column-dialog-close></div>
+                <section class="task-boards-dialog task-boards-dialog--wide" aria-modal="true" role="dialog">
+                    <form class="task-boards-dialog-card" data-task-column-dialog-form>
+                        <div class="task-boards-dialog-head">
+                            <div>
+                                <p class="task-boards-eyebrow">Automatización</p>
+                                <h3>Regla de columna</h3>
+                                <p>Configura una regla para ${escapeHtml(column.title || 'esta lista')}.</p>
+                            </div>
+                            <button type="button" class="task-boards-icon-button" data-task-column-dialog-close aria-label="Cerrar">
+                                <span class="material-symbols-rounded">close</span>
+                            </button>
+                        </div>
+
+                        <div class="task-boards-column-dialog-grid">
+                            <label class="task-boards-field">
+                                <span>Nombre de la regla</span>
+                                <input type="text" name="title" value="${escapeHtml(draft.rule_title)}" placeholder="Regla de columna">
+                            </label>
+
+                            <label class="task-boards-field">
+                                <span>Disparador</span>
+                                <select name="trigger_type">
+                                    <option value="card_added" ${draft.trigger_type === 'card_added' ? 'selected' : ''}>Al agregar ficha</option>
+                                    <option value="daily" ${draft.trigger_type === 'daily' ? 'selected' : ''}>Todos los días</option>
+                                    <option value="weekly_monday" ${draft.trigger_type === 'weekly_monday' ? 'selected' : ''}>Todos los lunes</option>
+                                </select>
+                            </label>
+
+                            <label class="task-boards-field">
+                                <span>Acción</span>
+                                <select name="action_type">
+                                    <option value="sort_list" ${draft.action_type === 'sort_list' ? 'selected' : ''}>Ordenar lista</option>
+                                    <option value="assign_responsible" ${draft.action_type === 'assign_responsible' ? 'selected' : ''}>Asignar responsable de la columna</option>
+                                    <option value="create_notification" ${draft.action_type === 'create_notification' ? 'selected' : ''}>Crear notificación</option>
+                                </select>
+                            </label>
+
+                            ${draft.action_type === 'sort_list' ? `
+                                <label class="task-boards-field">
+                                    <span>Ordenar por</span>
+                                    <select name="rule_sort_key">
+                                        ${[
+                                            ['due_date', 'Fecha de vencimiento'],
+                                            ['created_at', 'Fecha de creación'],
+                                            ['title', 'Título'],
+                                            ['priority', 'Prioridad'],
+                                        ].map(([value, label]) => `<option value="${value}" ${draft.rule_sort_key === value ? 'selected' : ''}>${label}</option>`).join('')}
+                                    </select>
+                                </label>
+
+                                <label class="task-boards-field">
+                                    <span>Dirección</span>
+                                    <select name="rule_direction">
+                                        <option value="asc" ${draft.rule_direction === 'asc' ? 'selected' : ''}>Ascendente</option>
+                                        <option value="desc" ${draft.rule_direction === 'desc' ? 'selected' : ''}>Descendente</option>
+                                    </select>
+                                </label>
+                            ` : ''}
+
+                            ${draft.action_type === 'create_notification' ? `
+                                <label class="task-boards-field">
+                                    <span>Título de notificación</span>
+                                    <input type="text" name="rule_notification_title" value="${escapeHtml(draft.rule_notification_title)}" placeholder="Regla ejecutada">
+                                </label>
+
+                                <label class="task-boards-field">
+                                    <span>Mensaje</span>
+                                    <textarea name="rule_notification_body" rows="4" placeholder="Mensaje interno de la regla">${escapeHtml(draft.rule_notification_body)}</textarea>
+                                </label>
+                            ` : ''}
+                        </div>
+
+                        <div class="task-boards-dialog-footer">
+                            <button type="button" class="task-boards-secondary" data-task-column-dialog-close>Cancelar</button>
+                            <button type="submit" class="task-boards-primary">
+                                <span class="material-symbols-rounded">save</span>
+                                <span>Guardar regla</span>
+                            </button>
+                        </div>
+                    </form>
+                </section>
+            `;
+        }
+
+        return `
+            <div class="task-boards-overlay" data-task-column-dialog-close></div>
+            <section class="task-boards-dialog task-boards-dialog--wide" aria-modal="true" role="dialog">
+                <form class="task-boards-dialog-card" data-task-column-dialog-form>
+                    <div class="task-boards-dialog-head">
+                        <div>
+                            <p class="task-boards-eyebrow">Propiedades</p>
+                            <h3>${escapeHtml(column.title || 'Lista')}</h3>
+                            <p>Edita nombre, responsable, color y límite de fichas.</p>
+                        </div>
+                        <button type="button" class="task-boards-icon-button" data-task-column-dialog-close aria-label="Cerrar">
+                            <span class="material-symbols-rounded">close</span>
+                        </button>
+                    </div>
+
+                    <div class="task-boards-column-dialog-grid">
+                        <label class="task-boards-field">
+                            <span>Nombre</span>
+                            <input type="text" name="title" value="${escapeHtml(draft.title)}" placeholder="Nombre de la lista" required>
+                        </label>
+
+                        <label class="task-boards-field">
+                            <span>Responsable</span>
+                            <select name="responsible_member_id">
+                                <option value="">Sin responsable</option>
+                                ${state.members.map((member) => `
+                                    <option value="${escapeHtml(member.id)}" ${draft.responsible_member_id === member.id ? 'selected' : ''}>
+                                        ${escapeHtml(member.label)}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </label>
+
+                        <label class="task-boards-field">
+                            <span>Color</span>
+                            <input type="color" name="accent_color" value="${escapeHtml(draft.accent_color)}">
+                        </label>
+
+                        <label class="task-boards-field">
+                            <span>Límite de fichas</span>
+                            <input type="number" name="wip_limit" min="0" value="${escapeHtml(draft.wip_limit)}" placeholder="Sin límite">
+                        </label>
+
+                        <label class="task-boards-field">
+                            <span>Posición</span>
+                            <select name="position">
+                                ${getActiveColumns().map((item, index) => `
+                                    <option value="${index}" ${Number(draft.position) === index ? 'selected' : ''}>
+                                        ${index + 1}. ${escapeHtml(item.title || 'Columna')}
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </label>
+
+                        <label class="task-boards-field task-boards-field--inline">
+                            <span>Seguir esta lista</span>
+                            <input type="checkbox" name="follow" value="1" ${draft.follow ? 'checked' : ''}>
+                        </label>
+                    </div>
+
+                    <div class="task-boards-column-dialog-rules">
+                        <div class="task-boards-meta-head">
+                            <strong>Reglas activas</strong>
+                            <span>Puedes editar o eliminar las reglas de esta lista.</span>
+                        </div>
+                        ${getRulesForColumn(String(column.id || '')).length > 0
+                            ? getRulesForColumn(String(column.id || '')).map((rule) => `
+                                <div class="task-boards-column-rule-row">
+                                    <div>
+                                        <strong>${escapeHtml(rule.title || 'Regla')}</strong>
+                                        <span>${escapeHtml(humanizeRule(rule))}</span>
+                                    </div>
+                                    <div class="task-boards-column-rule-actions">
+                                        <button type="button" class="task-boards-secondary" data-task-column-action="rule" data-column-id="${escapeHtml(String(column.id || ''))}" data-rule-trigger="${escapeHtml(String(rule.trigger_type || 'card_added'))}" data-rule-id="${escapeHtml(String(rule.id || ''))}">Editar</button>
+                                        <button type="button" class="task-boards-danger" data-task-column-rule-delete data-rule-id="${escapeHtml(String(rule.id || ''))}">Eliminar</button>
+                                    </div>
+                                </div>
+                            `).join('')
+                            : '<div class="task-boards-muted-box">Todavia no hay reglas para esta lista.</div>'}
+                    </div>
+
+                    <div class="task-boards-dialog-footer">
+                        <button type="button" class="task-boards-secondary" data-task-column-dialog-close>Cancelar</button>
+                        <button type="submit" class="task-boards-primary">
+                            <span class="material-symbols-rounded">save</span>
+                            <span>Guardar propiedades</span>
+                        </button>
+                    </div>
+                </form>
+            </section>
         `;
     }
 
@@ -1117,8 +1597,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         const comments = getCommentsForCard(String(draft.id || ''));
         const activity = getActivityForCard(String(draft.id || ''));
         const columnLabel = (state.activeBoard?.columns ?? []).find((column) => String(column.id || '') === draft.column_id)?.title || 'Lista';
-        const swimlaneLabel = (state.activeBoard?.swimlanes ?? []).find((swimlane) => String(swimlane.id || '') === draft.swimlane_id)?.title || 'Carril';
-
         return `
             <div class="task-boards-overlay task-boards-overlay--panel" data-task-card-close></div>
             <section class="task-boards-panel" aria-modal="true" role="dialog">
@@ -1129,20 +1607,9 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                                 <label class="task-boards-inline-select">
                                     <span>Lista</span>
                                     <select name="column_id">
-                                        ${(state.activeBoard?.columns ?? []).map((column) => `
+                                        ${getActiveColumns().map((column) => `
                                             <option value="${escapeHtml(String(column.id || ''))}" ${String(column.id || '') === draft.column_id ? 'selected' : ''}>
                                                 ${escapeHtml(String(column.title || ''))}
-                                            </option>
-                                        `).join('')}
-                                    </select>
-                                </label>
-
-                                <label class="task-boards-inline-select">
-                                    <span>Carril</span>
-                                    <select name="swimlane_id">
-                                        ${(state.activeBoard?.swimlanes ?? []).map((swimlane) => `
-                                            <option value="${escapeHtml(String(swimlane.id || ''))}" ${String(swimlane.id || '') === draft.swimlane_id ? 'selected' : ''}>
-                                                ${escapeHtml(String(swimlane.title || ''))}
                                             </option>
                                         `).join('')}
                                     </select>
@@ -1150,11 +1617,11 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                             </div>
 
                             <label class="task-boards-panel-title-field">
-                                <span class="task-boards-eyebrow">Tarea</span>
-                                <input type="text" name="title" value="${escapeHtml(draft.title)}" placeholder="Escribe una tarea clara" required>
+                                <span class="task-boards-eyebrow">Ficha</span>
+                                <input type="text" name="title" value="${escapeHtml(draft.title)}" placeholder="Escribe una ficha clara" required>
                             </label>
 
-                            <p class="task-boards-panel-subtitle">En ${escapeHtml(columnLabel)} · ${escapeHtml(swimlaneLabel)}</p>
+                            <p class="task-boards-panel-subtitle">En ${escapeHtml(columnLabel)}</p>
                         </div>
 
                         <div class="task-boards-panel-head-actions">
@@ -1170,25 +1637,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                     <div class="task-boards-panel-body">
                         <div class="task-boards-detail-layout">
                             <div class="task-boards-detail-main">
-                                <div class="task-boards-action-row">
-                                    <span class="task-boards-detail-chip">
-                                        <span class="material-symbols-rounded">add</span>
-                                        <span>Añadir</span>
-                                    </span>
-                                    <span class="task-boards-detail-chip">
-                                        <span class="material-symbols-rounded">sell</span>
-                                        <span>Etiquetas</span>
-                                    </span>
-                                    <span class="task-boards-detail-chip">
-                                        <span class="material-symbols-rounded">event</span>
-                                        <span>Fechas</span>
-                                    </span>
-                                    <span class="task-boards-detail-chip">
-                                        <span class="material-symbols-rounded">checklist</span>
-                                        <span>Checklist</span>
-                                    </span>
-                                </div>
-
                                 <section class="task-boards-panel-card task-boards-panel-card--editor">
                                     <div class="task-boards-meta-head">
                                         <strong>Descripcion</strong>
@@ -1196,7 +1644,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                                     </div>
 
                                     <label class="task-boards-field task-boards-field--wide">
-                                        <textarea name="description_markdown" rows="9" placeholder="Describe el trabajo, criterios de aceptacion o contexto" data-task-card-description>${escapeHtml(draft.description_markdown)}</textarea>
+                                        <textarea name="description_markdown" rows="9" placeholder="Describe la ficha, criterios de aceptacion o contexto" data-task-card-description>${escapeHtml(draft.description_markdown)}</textarea>
                                     </label>
 
                                     <div class="task-boards-preview-card">
@@ -1264,7 +1712,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                                         <label class="task-boards-field">
                                             <span>Vencimiento</span>
                                             <input type="date" name="due_date" value="${escapeHtml(draft.due_date)}">
-                                            ${isDateOverdue(draft.due_date) ? '<small class="task-boards-inline-alert">Esta tarea esta atrasada.</small>' : ''}
+                                            ${isDateOverdue(draft.due_date) ? '<small class="task-boards-inline-alert">Esta ficha esta atrasada.</small>' : ''}
                                         </label>
                                     </div>
                                 </section>
@@ -1287,15 +1735,15 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                                 <section class="task-boards-meta-card">
                                     <div class="task-boards-meta-head">
                                         <strong>Etiquetas</strong>
-                                        <span>Marca categoria o contexto.</span>
+                                        <span>Usa colores o nombres para clasificar la ficha.</span>
                                     </div>
                                     <div class="task-boards-checkbox-list">
                                         ${(state.activeBoard?.labels ?? []).map((label) => `
                                             <label class="task-boards-checkbox-item">
                                                 <input type="checkbox" name="label_ids[]" value="${escapeHtml(String(label.id || ''))}" ${draft.label_ids.includes(String(label.id || '')) ? 'checked' : ''}>
-                                                <span class="task-boards-label-inline">
+                                                <span class="task-boards-label-inline ${String(label.title || '').trim() === '' ? 'task-boards-label-inline--swatch-only' : ''}">
                                                     <i style="background:${escapeHtml(String(label.color || '#2F7CEF'))};"></i>
-                                                    ${escapeHtml(String(label.title || 'Etiqueta'))}
+                                                    ${String(label.title || '').trim() !== '' ? escapeHtml(String(label.title || '')) : ''}
                                                 </span>
                                             </label>
                                         `).join('')}
@@ -1305,7 +1753,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                                 <section class="task-boards-panel-card">
                                     <div class="task-boards-meta-head">
                                         <strong>Comentarios y actividad</strong>
-                                        <span>Coordina y deja trazabilidad dentro de la misma tarea.</span>
+                                        <span>Coordina y deja trazabilidad dentro de la misma ficha.</span>
                                     </div>
 
                                     ${draft.id ? `
@@ -1323,7 +1771,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                                                 </button>
                                             </div>
                                         </div>
-                                    ` : '<div class="task-boards-muted-box">Guarda la tarea para habilitar comentarios e historial.</div>'}
+                                    ` : '<div class="task-boards-muted-box">Guarda la ficha para habilitar comentarios e historial.</div>'}
 
                                     <div class="task-boards-comment-list">
                                         ${comments.length > 0 ? comments.map(renderComment).join('') : '<div class="task-boards-muted-box">Todavia no hay comentarios.</div>'}
@@ -1341,14 +1789,14 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                         ${draft.id ? `
                             <button type="button" class="task-boards-danger" data-task-card-delete>
                                 <span class="material-symbols-rounded">delete</span>
-                                <span>Eliminar tarea</span>
+                                <span>Eliminar ficha</span>
                             </button>
                         ` : '<span></span>'}
                         <div class="task-boards-panel-footer-actions">
                             <button type="button" class="task-boards-secondary" data-task-card-close>Cancelar</button>
                             <button type="submit" class="task-boards-primary">
                                 <span class="material-symbols-rounded">save</span>
-                                <span>${draft.id ? 'Guardar cambios' : 'Crear tarea'}</span>
+                                <span>${draft.id ? 'Guardar cambios' : 'Crear ficha'}</span>
                             </button>
                         </div>
                     </div>
@@ -1398,13 +1846,43 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         state.structureModal.mode = mode;
         state.structureModal.draft = mode === 'columns'
             ? state.activeBoard.columns.map((column) => normalizeStructureItem(column, mode))
-            : mode === 'swimlanes'
-            ? state.activeBoard.swimlanes.map((swimlane) => normalizeStructureItem(swimlane, mode))
             : state.activeBoard.labels.map((label) => normalizeStructureItem(label, mode));
         render();
     }
 
-    function openNewCard(columnId = '', swimlaneId = '') {
+    function openColumnDialog(columnId, mode, overrides = {}) {
+        const column = getColumnById(columnId);
+
+        if (!column || !state.activeBoard) {
+            return;
+        }
+
+        const rules = getRulesForColumn(columnId);
+        const shouldCreateNewRule = Object.prototype.hasOwnProperty.call(overrides, 'rule_id') && String(overrides.rule_id || '') === '';
+        const selectedRule = shouldCreateNewRule
+            ? null
+            : (rules.find((rule) => String(rule.id || '') === String(overrides.rule_id || '')) || rules[0] || null);
+        state.columnDialog.open = true;
+        state.columnDialog.mode = mode;
+        state.columnDialog.columnId = columnId;
+        state.columnDialog.draft = createColumnDialogDraft(column, {
+            position: getActiveColumns().findIndex((item) => String(item.id || '') === columnId),
+            follow: isFollowingColumn(columnId),
+            target_column_id: getActiveColumns().find((item) => String(item.id || '') !== columnId)?.id || '',
+            rule_id: String(selectedRule?.id || ''),
+            rule_title: String(selectedRule?.title || ''),
+            trigger_type: String(overrides.trigger_type || selectedRule?.trigger_type || 'card_added'),
+            action_type: String(selectedRule?.action_type || 'sort_list'),
+            rule_sort_key: String(selectedRule?.config?.sort_key || 'due_date'),
+            rule_direction: String(selectedRule?.config?.direction || 'asc'),
+            rule_notification_title: String(selectedRule?.config?.title || ''),
+            rule_notification_body: String(selectedRule?.config?.body || ''),
+            ...overrides,
+        });
+        render();
+    }
+
+    function openNewCard(columnId = '') {
         if (!state.activeBoard) {
             return;
         }
@@ -1413,10 +1891,194 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         state.cardPanel.dirty = false;
         state.cardPanel.draft = createCardDraft({
             board_id: String(state.activeBoard.board.id || ''),
-            column_id: columnId || String(state.activeBoard.columns[0]?.id || ''),
-            swimlane_id: swimlaneId || String(state.activeBoard.swimlanes[0]?.id || ''),
+            column_id: columnId || String(getActiveColumns()[0]?.id || ''),
         });
         render();
+    }
+
+    async function saveColumnDialog(form) {
+        if (!state.activeBoard) {
+            return;
+        }
+
+        const formData = new FormData(form);
+        const columnId = String(state.columnDialog.columnId || '');
+        const wasFollowing = isFollowingColumn(columnId);
+
+        try {
+            if (state.columnDialog.mode === 'properties') {
+                const shouldFollow = formData.get('follow') !== null;
+                const response = await sendJson('save-column', {
+                    board_id: String(state.activeBoard.board.id || ''),
+                    column_id: columnId,
+                    title: String(formData.get('title') || '').trim(),
+                    responsible_member_id: String(formData.get('responsible_member_id') || '').trim(),
+                    accent_color: String(formData.get('accent_color') || '#1A73E8'),
+                    wip_limit: String(formData.get('wip_limit') || '').trim(),
+                    position: Number.parseInt(String(formData.get('position') || '0'), 10) || 0,
+                    is_archived: false,
+                });
+                state.columnDialog.open = false;
+                applyBoardPayload(response);
+
+                if (shouldFollow !== wasFollowing) {
+                    await setColumnFollow(columnId, shouldFollow);
+                }
+
+                showNotice('success', 'Propiedades de la lista actualizadas.');
+            } else if (state.columnDialog.mode === 'move') {
+                const response = await sendJson('save-column', {
+                    board_id: String(state.activeBoard.board.id || ''),
+                    column_id: columnId,
+                    title: String(state.columnDialog.draft.title || '').trim(),
+                    responsible_member_id: String(state.columnDialog.draft.responsible_member_id || '').trim(),
+                    accent_color: String(state.columnDialog.draft.accent_color || '#1A73E8'),
+                    wip_limit: String(state.columnDialog.draft.wip_limit || '').trim(),
+                    position: Number.parseInt(String(formData.get('position') || '0'), 10) || 0,
+                    is_archived: Boolean(state.columnDialog.draft.is_archived),
+                });
+                state.columnDialog.open = false;
+                applyBoardPayload(response);
+                showNotice('success', 'Lista reubicada correctamente.');
+            } else if (state.columnDialog.mode === 'move-cards') {
+                const response = await sendJson('move-column-cards', {
+                    board_id: String(state.activeBoard.board.id || ''),
+                    from_column_id: columnId,
+                    to_column_id: String(formData.get('target_column_id') || '').trim(),
+                });
+                state.columnDialog.open = false;
+                applyBoardPayload(response);
+                showNotice('success', 'Las fichas se movieron correctamente.');
+            } else if (state.columnDialog.mode === 'sort') {
+                const response = await sendJson('sort-column', {
+                    board_id: String(state.activeBoard.board.id || ''),
+                    column_id: columnId,
+                    sort_key: String(formData.get('sort_key') || 'due_date'),
+                    direction: String(formData.get('direction') || 'asc'),
+                });
+                state.columnDialog.open = false;
+                applyBoardPayload(response);
+                showNotice('success', 'La lista se ordenó correctamente.');
+            } else if (state.columnDialog.mode === 'rule') {
+                const actionType = String(formData.get('action_type') || 'sort_list');
+                const config = {};
+
+                if (actionType === 'sort_list') {
+                    config.sort_key = String(formData.get('rule_sort_key') || 'due_date');
+                    config.direction = String(formData.get('rule_direction') || 'asc');
+                } else if (actionType === 'create_notification') {
+                    config.title = String(formData.get('rule_notification_title') || '').trim();
+                    config.body = String(formData.get('rule_notification_body') || '').trim();
+                }
+
+                const response = await sendJson('save-column-rule', {
+                    id: String(state.columnDialog.draft.rule_id || '').trim(),
+                    board_id: String(state.activeBoard.board.id || ''),
+                    column_id: columnId,
+                    title: String(formData.get('title') || '').trim(),
+                    trigger_type: String(formData.get('trigger_type') || 'card_added'),
+                    action_type: actionType,
+                    config,
+                    is_active: true,
+                });
+                state.columnDialog.open = false;
+                applyBoardPayload(response);
+                showNotice('success', 'Regla guardada correctamente.');
+            }
+        } catch (error) {
+            showNotice('error', humanizeError(error));
+        }
+    }
+
+    async function duplicateColumn(columnId) {
+        if (!state.activeBoard) {
+            return;
+        }
+
+        try {
+            const response = await sendJson('duplicate-column', {
+                board_id: String(state.activeBoard.board.id || ''),
+                column_id: columnId,
+            });
+            applyBoardPayload(response);
+            showNotice('success', 'Lista copiada correctamente.');
+        } catch (error) {
+            showNotice('error', humanizeError(error));
+        }
+    }
+
+    async function toggleColumnFollow(columnId) {
+        await setColumnFollow(columnId, !isFollowingColumn(columnId));
+    }
+
+    async function setColumnFollow(columnId, shouldFollow) {
+        if (!state.activeBoard) {
+            return;
+        }
+
+        try {
+            const response = await sendJson('toggle-column-follow', {
+                board_id: String(state.activeBoard.board.id || ''),
+                column_id: columnId,
+                follow: shouldFollow,
+            });
+            applyBoardPayload(response);
+        } catch (error) {
+            showNotice('error', humanizeError(error));
+        }
+    }
+
+    async function archiveColumn(columnId, archived) {
+        if (!state.activeBoard) {
+            return;
+        }
+
+        try {
+            const response = await sendJson('archive-column', {
+                board_id: String(state.activeBoard.board.id || ''),
+                column_id: columnId,
+                archived,
+            });
+            applyBoardPayload(response);
+            showNotice('success', archived ? 'Lista archivada correctamente.' : 'Lista restaurada correctamente.');
+        } catch (error) {
+            showNotice('error', humanizeError(error));
+        }
+    }
+
+    async function archiveColumnCards(columnId, archived) {
+        if (!state.activeBoard) {
+            return;
+        }
+
+        try {
+            const response = await sendJson('archive-column-cards', {
+                board_id: String(state.activeBoard.board.id || ''),
+                column_id: columnId,
+                archived,
+            });
+            applyBoardPayload(response);
+            showNotice('success', archived ? 'Las fichas de la lista se archivaron.' : 'Las fichas de la lista se restauraron.');
+        } catch (error) {
+            showNotice('error', humanizeError(error));
+        }
+    }
+
+    async function deleteColumnRule(ruleId) {
+        if (!state.activeBoard) {
+            return;
+        }
+
+        try {
+            const response = await sendJson('delete-column-rule', {
+                board_id: String(state.activeBoard.board.id || ''),
+                rule_id,
+            });
+            applyBoardPayload(response);
+            showNotice('success', 'Regla eliminada correctamente.');
+        } catch (error) {
+            showNotice('error', humanizeError(error));
+        }
     }
 
     function openExistingCard(cardId) {
@@ -1474,6 +2136,8 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 title: title instanceof HTMLInputElement ? String(title.value || '').trim() : '',
                 color: color instanceof HTMLInputElement ? String(color.value || '#2F7CEF') : '#2F7CEF',
                 wip_limit: wipLimit instanceof HTMLInputElement ? String(wipLimit.value || '').trim() : '',
+                responsible_member_id: String(state.structureModal.draft[index]?.responsible_member_id || ''),
+                is_archived: Boolean(state.structureModal.draft[index]?.is_archived),
             };
         });
     }
@@ -1496,7 +2160,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             title: String(formData.get('title') || '').trim(),
             description_markdown: String(formData.get('description_markdown') || ''),
             column_id: String(formData.get('column_id') || ''),
-            swimlane_id: String(formData.get('swimlane_id') || ''),
             priority: resolvePriority(String(formData.get('priority') || 'medium')),
             start_date: String(formData.get('start_date') || ''),
             due_date: String(formData.get('due_date') || ''),
@@ -1564,9 +2227,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         const columns = state.structureModal.mode === 'columns'
             ? state.structureModal.draft
             : state.activeBoard.columns.map((column) => normalizeStructureItem(column, 'columns'));
-        const swimlanes = state.structureModal.mode === 'swimlanes'
-            ? state.structureModal.draft
-            : state.activeBoard.swimlanes.map((swimlane) => normalizeStructureItem(swimlane, 'swimlanes'));
         const labels = state.structureModal.mode === 'labels'
             ? state.structureModal.draft
             : state.activeBoard.labels.map((label) => normalizeStructureItem(label, 'labels'));
@@ -1575,7 +2235,6 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             const response = await sendJson('save-structure', {
                 board_id: String(state.activeBoard.board.id || ''),
                 columns,
-                swimlanes,
                 labels,
             });
             applyBoardPayload(response);
@@ -1595,19 +2254,12 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         syncCardDraftFromDom();
 
         try {
+            const isEditing = state.cardPanel.draft.id !== '';
             const response = await sendJson('save-card', state.cardPanel.draft);
-            applyBoardPayload(response);
-            const savedCardId = String(response?.saved_card_id || state.cardPanel.draft.id || '');
+            state.cardPanel.open = false;
             state.cardPanel.dirty = false;
-
-            if (savedCardId !== '') {
-                openExistingCard(savedCardId);
-            } else {
-                state.cardPanel.open = false;
-                render();
-            }
-
-            showNotice('success', savedCardId ? 'Tarea actualizada correctamente.' : 'Tarea creada correctamente.');
+            applyBoardPayload(response);
+            showNotice('success', isEditing ? 'Ficha actualizada correctamente.' : 'Ficha creada correctamente.');
         } catch (error) {
             showNotice('error', humanizeError(error));
         }
@@ -1618,7 +2270,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             return;
         }
 
-        if (!window.confirm('Esta tarea se eliminara del tablero. ¿Deseas continuar?')) {
+        if (!window.confirm('Esta ficha se eliminara del tablero. ¿Deseas continuar?')) {
             return;
         }
 
@@ -1630,7 +2282,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             applyBoardPayload(response);
             state.cardPanel.open = false;
             state.cardPanel.dirty = false;
-            showNotice('success', 'Tarea eliminada correctamente.');
+            showNotice('success', 'Ficha eliminada correctamente.');
             render();
         } catch (error) {
             showNotice('error', humanizeError(error));
@@ -1692,9 +2344,9 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         state.viewer = payload.viewer;
         state.realtime = payload.realtime;
         state.activeBoard = payload.active_board;
-        state.activeSwimlaneId = resolveVisibleSwimlaneId(payload.active_board, state.activeSwimlaneId);
         state.searchQuery = '';
         state.cardPanel.dirty = false;
+        state.columnMenu.columnId = '';
 
         if (!state.activeBoard) {
             state.screen = 'overview';
@@ -1706,6 +2358,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     function applyBoardPayload(response) {
         const payload = normalizeBoardPayload(response?.data ?? response ?? {});
         state.activeBoard = payload;
+        state.columnMenu.columnId = '';
 
         if (state.cardPanel.open && state.cardPanel.draft.id) {
             const cardId = String(state.cardPanel.draft.id || '');
@@ -1760,6 +2413,10 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             throw new Error(String(parsed.message || 'No fue posible completar la operacion.'));
         }
 
+        if (!['notifications', 'notifications-read'].includes(String(action || ''))) {
+            void refreshNotifications();
+        }
+
         return parsed;
     }
 
@@ -1771,13 +2428,34 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         renderNotice();
     }
 
-    function getCardsForCell(columnId, swimlaneId) {
+    function getCardsForColumn(columnId) {
         const query = state.searchQuery;
 
         return (state.activeBoard?.cards ?? [])
-            .filter((card) => String(card.column_id || '') === columnId && String(card.swimlane_id || '') === swimlaneId)
+            .filter((card) => String(card.column_id || '') === columnId && !Boolean(card.is_archived))
             .filter((card) => matchesCardSearch(card, query))
             .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0));
+    }
+
+    function getActiveColumns() {
+        return (state.activeBoard?.columns ?? []).filter((column) => !Boolean(column.is_archived));
+    }
+
+    function getColumnById(columnId) {
+        return (state.activeBoard?.columns ?? []).find((column) => String(column.id || '') === columnId) ?? null;
+    }
+
+    function getColumnResponsible(column) {
+        const responsibleId = String(column?.responsible_member_id || '');
+        return state.members.find((member) => String(member.id || '') === responsibleId) ?? null;
+    }
+
+    function getRulesForColumn(columnId) {
+        return (state.activeBoard?.rules ?? []).filter((rule) => String(rule.column_id || '') === columnId);
+    }
+
+    function isFollowingColumn(columnId) {
+        return (state.activeBoard?.viewer_column_follows ?? []).includes(columnId);
     }
 
     function getCommentsForCard(cardId) {
@@ -1801,6 +2479,100 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     function getCardLabels(card) {
         const labelIds = Array.isArray(card.label_ids) ? card.label_ids.map((value) => String(value || '')) : [];
         return (state.activeBoard?.labels ?? []).filter((label) => labelIds.includes(String(label.id || '')));
+    }
+
+    async function refreshNotifications() {
+        const toggle = document.querySelector('[data-task-header-notifications-toggle]');
+
+        if (!(toggle instanceof HTMLElement)) {
+            return;
+        }
+
+        state.notifications.loading = true;
+        syncHeaderNotifications();
+
+        try {
+            const response = await fetch(`${state.apiUrl}&action=notifications`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({}),
+            });
+            const payload = await response.json().catch(() => ({ success: false, data: { notifications: [] } }));
+            const items = Array.isArray(payload?.data?.notifications) ? payload.data.notifications : [];
+            state.notifications.items = items;
+            state.notifications.unreadCount = items.filter((item) => !item.is_read).length;
+        } catch (error) {
+            console.error(error);
+        } finally {
+            state.notifications.loading = false;
+            syncHeaderNotifications();
+        }
+    }
+
+    async function markNotificationsRead(ids) {
+        try {
+            const response = await fetch(`${state.apiUrl}&action=notifications-read`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ ids }),
+            });
+            const payload = await response.json().catch(() => ({ success: false, data: { notifications: [] } }));
+            const items = Array.isArray(payload?.data?.notifications) ? payload.data.notifications : [];
+            state.notifications.items = items;
+            state.notifications.unreadCount = items.filter((item) => !item.is_read).length;
+            syncHeaderNotifications();
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    function syncHeaderNotifications() {
+        const toggle = document.querySelector('[data-task-header-notifications-toggle]');
+        const badge = document.querySelector('[data-task-header-notifications-count]');
+        const panel = document.querySelector('[data-task-header-notifications-panel]');
+        const list = document.querySelector('[data-task-header-notifications-list]');
+
+        if (!(toggle instanceof HTMLElement) || !(badge instanceof HTMLElement) || !(panel instanceof HTMLElement) || !(list instanceof HTMLElement)) {
+            return;
+        }
+
+        toggle.setAttribute('aria-expanded', state.notifications.open ? 'true' : 'false');
+        panel.classList.toggle('hidden', !state.notifications.open);
+        badge.classList.toggle('hidden', state.notifications.unreadCount <= 0);
+        badge.textContent = String(state.notifications.unreadCount || 0);
+
+        if (state.notifications.loading && state.notifications.items.length === 0) {
+            list.innerHTML = '<div class="workspace-notifications-empty">Cargando notificaciones...</div>';
+            return;
+        }
+
+        if (state.notifications.items.length === 0) {
+            list.innerHTML = '<div class="workspace-notifications-empty">No hay notificaciones nuevas.</div>';
+            return;
+        }
+
+        list.innerHTML = state.notifications.items.map((item) => `
+            <button
+                type="button"
+                class="workspace-notifications-item ${item.is_read ? '' : 'is-unread'}"
+                data-task-header-notification-item
+                data-notification-id="${escapeHtml(String(item.id || ''))}"
+                data-board-id="${escapeHtml(String(item.destination?.board_id || ''))}"
+                data-card-id="${escapeHtml(String(item.destination?.card_id || ''))}"
+            >
+                <strong>${escapeHtml(String(item.title || 'Notificación'))}</strong>
+                <p>${escapeHtml(String(item.body || ''))}</p>
+                <span>${escapeHtml(formatDateTime(String(item.created_at || '')))}</span>
+            </button>
+        `).join('');
     }
 
     function matchesCardSearch(card, query) {
@@ -1841,6 +2613,12 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 table: 'task_boards',
                 filter: `project_id=eq.${state.project.id}`,
             }, () => scheduleRealtimeRefresh())
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'workspace_notifications',
+                filter: `user_id=eq.${state.viewer.user_id}`,
+            }, () => void refreshNotifications())
             .subscribe();
 
         const activeBoardId = String(state.activeBoard?.board?.id || '').trim();
@@ -1852,7 +2630,8 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         boardChannel = realtime
             .channel(`task-boards-board:${activeBoardId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_columns', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_swimlanes', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_column_follows', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_column_rules', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
             .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_labels', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
             .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_cards', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
             .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_comments', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
@@ -1862,7 +2641,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
     function scheduleRealtimeRefresh(preserveBoard = false) {
         if (state.cardPanel.open && state.cardPanel.dirty) {
-            showNotice('info', 'Hay cambios nuevos en el tablero. Guarda o cierra la tarea para recargar la vista.');
+            showNotice('info', 'Hay cambios nuevos en el tablero. Guarda o cierra la ficha para recargar la vista.');
             return;
         }
 
@@ -1870,6 +2649,55 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         refreshTimeout = window.setTimeout(() => {
             void reloadBootstrap(preserveBoard ? String(state.activeBoard?.board?.id || '') : '');
         }, 350);
+    }
+
+    function rememberCardPanelState(options = {}) {
+        if (!state.cardPanel.open) {
+            pendingCardPanelRestore = null;
+            return;
+        }
+
+        const panelBody = root.querySelector('.task-boards-panel-body');
+        pendingCardPanelRestore = {
+            scrollTop: panelBody instanceof HTMLElement ? panelBody.scrollTop : 0,
+            focusChecklistIndex: Number.isInteger(options.focusChecklistIndex) ? options.focusChecklistIndex : null,
+            fallbackSelector: typeof options.fallbackSelector === 'string' ? options.fallbackSelector : null,
+        };
+    }
+
+    function restoreCardPanelState() {
+        if (!pendingCardPanelRestore || !state.cardPanel.open) {
+            pendingCardPanelRestore = null;
+            return;
+        }
+
+        const restoreState = pendingCardPanelRestore;
+        pendingCardPanelRestore = null;
+        const panelBody = root.querySelector('.task-boards-panel-body');
+
+        if (panelBody instanceof HTMLElement) {
+            panelBody.scrollTop = restoreState.scrollTop;
+        }
+
+        let target = null;
+
+        if (Number.isInteger(restoreState.focusChecklistIndex)) {
+            const checklistInputs = [...root.querySelectorAll('input[name="checklist_titles[]"]')];
+            target = checklistInputs[restoreState.focusChecklistIndex] ?? null;
+        }
+
+        if (!(target instanceof HTMLElement) && restoreState.fallbackSelector) {
+            target = root.querySelector(restoreState.fallbackSelector);
+        }
+
+        if (target instanceof HTMLElement) {
+            target.focus({ preventScroll: true });
+
+            if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+                const length = target.value.length;
+                target.setSelectionRange(length, length);
+            }
+        }
     }
 
     function cleanupRealtime() {
@@ -1984,16 +2812,11 @@ function normalizeBoardPayload(raw) {
             id: String(column.id || ''),
             title: String(column.title || ''),
             accent_color: String(column.accent_color || '#1A73E8'),
+            responsible_member_id: String(column.responsible_member_id || ''),
             wip_limit: column.wip_limit ?? '',
             sort_order: Number(column.sort_order || 0),
+            is_archived: Boolean(column.is_archived),
         })).filter((column) => column.id !== '') : [],
-        swimlanes: Array.isArray(raw.swimlanes) ? raw.swimlanes.map((swimlane) => ({
-            id: String(swimlane.id || ''),
-            title: String(swimlane.title || ''),
-            accent_color: String(swimlane.accent_color || '#EEF3FB'),
-            sort_order: Number(swimlane.sort_order || 0),
-            is_default: Boolean(swimlane.is_default),
-        })).filter((swimlane) => swimlane.id !== '') : [],
         labels: Array.isArray(raw.labels) ? raw.labels.map((label) => ({
             id: String(label.id || ''),
             title: String(label.title || ''),
@@ -2004,7 +2827,6 @@ function normalizeBoardPayload(raw) {
             id: String(card.id || ''),
             board_id: String(card.board_id || ''),
             column_id: String(card.column_id || ''),
-            swimlane_id: String(card.swimlane_id || ''),
             title: String(card.title || ''),
             description_markdown: String(card.description_markdown || ''),
             priority: resolvePriority(String(card.priority || 'medium')),
@@ -2013,10 +2835,24 @@ function normalizeBoardPayload(raw) {
             assigned_member_ids: Array.isArray(card.assigned_member_ids) ? card.assigned_member_ids.map((value) => String(value || '')) : [],
             label_ids: Array.isArray(card.label_ids) ? card.label_ids.map((value) => String(value || '')) : [],
             checklist: normalizeChecklist(card.checklist),
+            is_archived: Boolean(card.is_archived),
             sort_order: Number(card.sort_order || 0),
             created_by_email: String(card.created_by_email || ''),
             created_at: String(card.created_at || ''),
         })).filter((card) => card.id !== '') : [],
+        rules: Array.isArray(raw.rules) ? raw.rules.map((rule) => ({
+            id: String(rule.id || ''),
+            board_id: String(rule.board_id || ''),
+            column_id: String(rule.column_id || ''),
+            title: String(rule.title || ''),
+            trigger_type: String(rule.trigger_type || 'card_added'),
+            action_type: String(rule.action_type || 'sort_list'),
+            config: isObject(rule.config) ? rule.config : {},
+            is_active: Boolean(rule.is_active ?? true),
+        })).filter((rule) => rule.id !== '') : [],
+        viewer_column_follows: Array.isArray(raw.viewer_column_follows)
+            ? raw.viewer_column_follows.map((follow) => String(follow.column_id || '')).filter(Boolean)
+            : [],
         comments: Array.isArray(raw.comments) ? raw.comments.map((comment) => ({
             id: String(comment.id || ''),
             board_id: String(comment.board_id || ''),
@@ -2063,7 +2899,6 @@ function createCardDraft(card = {}) {
         title: String(card.title || ''),
         description_markdown: String(card.description_markdown || ''),
         column_id: String(card.column_id || ''),
-        swimlane_id: String(card.swimlane_id || ''),
         priority: resolvePriority(String(card.priority || 'medium')),
         start_date: String(card.start_date || ''),
         due_date: String(card.due_date || ''),
@@ -2078,8 +2913,34 @@ function createStructureItem(mode) {
     return {
         id: ensureId(mode),
         title: '',
-        color: mode === 'columns' ? '#1A73E8' : mode === 'swimlanes' ? '#EEF3FB' : '#2F7CEF',
+        color: mode === 'columns' ? '#1A73E8' : '#2F7CEF',
+        responsible_member_id: '',
         wip_limit: '',
+        is_archived: false,
+    };
+}
+
+function createColumnDialogDraft(column = {}, overrides = {}) {
+    return {
+        id: String(column.id || ''),
+        title: String(column.title || ''),
+        accent_color: String(column.accent_color || column.color || '#1A73E8'),
+        responsible_member_id: String(column.responsible_member_id || ''),
+        wip_limit: column.wip_limit === null || column.wip_limit === undefined ? '' : String(column.wip_limit),
+        is_archived: Boolean(column.is_archived),
+        position: Number(overrides.position ?? 0),
+        follow: Boolean(overrides.follow),
+        target_column_id: String(overrides.target_column_id || ''),
+        sort_key: String(overrides.sort_key || 'due_date'),
+        direction: String(overrides.direction || 'asc'),
+        rule_id: String(overrides.rule_id || ''),
+        rule_title: String(overrides.rule_title || ''),
+        trigger_type: String(overrides.trigger_type || 'card_added'),
+        action_type: String(overrides.action_type || 'sort_list'),
+        rule_sort_key: String(overrides.rule_sort_key || 'due_date'),
+        rule_direction: String(overrides.rule_direction || 'asc'),
+        rule_notification_title: String(overrides.rule_notification_title || ''),
+        rule_notification_body: String(overrides.rule_notification_body || ''),
     };
 }
 
@@ -2095,21 +2956,11 @@ function normalizeStructureItem(item, mode) {
     return {
         id: String(item.id || ensureId(mode)),
         title: String(item.title || ''),
-        color: String(item.accent_color || item.color || (mode === 'swimlanes' ? '#EEF3FB' : '#2F7CEF')),
+        color: String(item.accent_color || item.color || (mode === 'columns' ? '#1A73E8' : '#2F7CEF')),
+        responsible_member_id: String(item.responsible_member_id || ''),
         wip_limit: item.wip_limit === null || item.wip_limit === undefined ? '' : String(item.wip_limit),
+        is_archived: Boolean(item.is_archived),
     };
-}
-
-function resolveVisibleSwimlaneId(boardPayload, preferredSwimlaneId = '') {
-    const swimlanes = Array.isArray(boardPayload?.swimlanes) ? boardPayload.swimlanes : [];
-    const preferred = String(preferredSwimlaneId || '').trim();
-
-    if (preferred !== '' && swimlanes.some((swimlane) => String(swimlane.id || '') === preferred)) {
-        return preferred;
-    }
-
-    const defaultLane = swimlanes.find((swimlane) => Boolean(swimlane.is_default));
-    return String(defaultLane?.id || swimlanes[0]?.id || '');
 }
 
 function resolveBoardVisual(board) {
@@ -2137,12 +2988,11 @@ function resolveBoardVisual(board) {
     };
 }
 
-function countCardsByColumn(cards, swimlaneId = '') {
+function countCardsByColumn(cards) {
     return cards.reduce((counts, card) => {
         const columnId = String(card.column_id || '');
-        const currentSwimlaneId = String(card.swimlane_id || '');
 
-        if (columnId !== '' && (swimlaneId === '' || currentSwimlaneId === swimlaneId)) {
+        if (columnId !== '' && !Boolean(card.is_archived)) {
             counts[columnId] = (counts[columnId] || 0) + 1;
         }
 
@@ -2198,7 +3048,7 @@ function renderMarkdown(markdown) {
     const source = String(markdown || '').trim();
 
     if (source === '') {
-        return '<p class="task-boards-markdown-empty">La descripcion aparecera aqui en cuanto escribas algo.</p>';
+        return '<p class="task-boards-markdown-empty">La descripción aparecerá aquí en cuanto escribas algo.</p>';
     }
 
     const lines = source.split('\n');
@@ -2273,6 +3123,23 @@ function priorityLabel(priority) {
         high: 'Alta',
         urgent: 'Urgente',
     }[resolvePriority(priority)] || 'Media';
+}
+
+function humanizeRule(rule) {
+    const trigger = String(rule?.trigger_type || 'card_added');
+    const action = String(rule?.action_type || 'sort_list');
+    const triggerLabel = {
+        card_added: 'Al agregar ficha',
+        daily: 'Todos los días',
+        weekly_monday: 'Todos los lunes',
+    }[trigger] || 'Regla';
+    const actionLabel = {
+        sort_list: 'ordenar lista',
+        assign_responsible: 'asignar responsable',
+        create_notification: 'crear notificación',
+    }[action] || 'acción';
+
+    return `${triggerLabel}: ${actionLabel}`;
 }
 
 function isDateOverdue(value) {

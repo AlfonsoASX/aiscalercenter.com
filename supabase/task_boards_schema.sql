@@ -32,20 +32,9 @@ create table if not exists public.task_board_columns (
     board_id uuid not null references public.task_boards (id) on delete cascade,
     title text not null,
     accent_color text not null default '#1A73E8',
+    responsible_member_id uuid references public.project_members (id) on delete set null,
     wip_limit integer check (wip_limit is null or wip_limit >= 0),
     sort_order integer not null default 0,
-    is_archived boolean not null default false,
-    created_at timestamptz not null default timezone('utc', now()),
-    updated_at timestamptz not null default timezone('utc', now())
-);
-
-create table if not exists public.task_board_swimlanes (
-    id uuid primary key default gen_random_uuid(),
-    board_id uuid not null references public.task_boards (id) on delete cascade,
-    title text not null,
-    accent_color text not null default '#EEF3FB',
-    sort_order integer not null default 0,
-    is_default boolean not null default false,
     is_archived boolean not null default false,
     created_at timestamptz not null default timezone('utc', now()),
     updated_at timestamptz not null default timezone('utc', now())
@@ -65,7 +54,6 @@ create table if not exists public.task_board_cards (
     id uuid primary key default gen_random_uuid(),
     board_id uuid not null references public.task_boards (id) on delete cascade,
     column_id uuid not null references public.task_board_columns (id) on delete restrict,
-    swimlane_id uuid references public.task_board_swimlanes (id) on delete set null,
     title text not null,
     description_markdown text not null default '',
     priority text not null default 'medium' check (priority in ('low', 'medium', 'high', 'urgent')),
@@ -75,12 +63,80 @@ create table if not exists public.task_board_cards (
     label_ids jsonb not null default '[]'::jsonb,
     checklist jsonb not null default '[]'::jsonb,
     metadata jsonb not null default '{}'::jsonb,
+    is_archived boolean not null default false,
     sort_order numeric(20, 10) not null default 0,
     created_by uuid references auth.users (id) on delete set null,
     created_by_email text not null default '',
     created_at timestamptz not null default timezone('utc', now()),
     updated_at timestamptz not null default timezone('utc', now())
 );
+
+create table if not exists public.task_board_column_follows (
+    id uuid primary key default gen_random_uuid(),
+    board_id uuid not null references public.task_boards (id) on delete cascade,
+    column_id uuid not null references public.task_board_columns (id) on delete cascade,
+    user_id uuid not null references auth.users (id) on delete cascade,
+    user_email text not null default '',
+    created_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.task_board_column_rules (
+    id uuid primary key default gen_random_uuid(),
+    board_id uuid not null references public.task_boards (id) on delete cascade,
+    column_id uuid not null references public.task_board_columns (id) on delete cascade,
+    title text not null default '',
+    trigger_type text not null check (trigger_type in ('card_added', 'daily', 'weekly_monday')),
+    action_type text not null check (action_type in ('sort_list', 'assign_responsible', 'create_notification')),
+    config jsonb not null default '{}'::jsonb,
+    is_active boolean not null default true,
+    last_run_at timestamptz,
+    created_by uuid references auth.users (id) on delete set null,
+    created_by_email text not null default '',
+    created_at timestamptz not null default timezone('utc', now()),
+    updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.workspace_notifications (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid not null references auth.users (id) on delete cascade,
+    project_id uuid references public.projects (id) on delete cascade,
+    source_tool_slug text not null default '',
+    source_type text not null default '',
+    title text not null,
+    body text not null default '',
+    destination jsonb not null default '{}'::jsonb,
+    payload jsonb not null default '{}'::jsonb,
+    is_read boolean not null default false,
+    read_at timestamptz,
+    created_at timestamptz not null default timezone('utc', now()),
+    updated_at timestamptz not null default timezone('utc', now())
+);
+
+do $$
+begin
+    if not exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'task_board_columns'
+          and column_name = 'responsible_member_id'
+    ) then
+        alter table public.task_board_columns
+            add column responsible_member_id uuid references public.project_members (id) on delete set null;
+    end if;
+
+    if not exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'task_board_cards'
+          and column_name = 'is_archived'
+    ) then
+        alter table public.task_board_cards
+            add column is_archived boolean not null default false;
+    end if;
+end
+$$;
 
 create table if not exists public.task_board_comments (
     id uuid primary key default gen_random_uuid(),
@@ -105,20 +161,72 @@ create table if not exists public.task_board_activity (
     created_at timestamptz not null default timezone('utc', now())
 );
 
+do $$
+begin
+    if exists (
+        select 1
+        from information_schema.columns
+        where table_schema = 'public'
+          and table_name = 'task_board_cards'
+          and column_name = 'swimlane_id'
+    ) then
+        with ranked as (
+            select
+                id,
+                (((row_number() over (
+                    partition by board_id, column_id
+                    order by sort_order asc, created_at asc, id asc
+                )) - 1) * 1024)::numeric(20, 10) as new_sort_order
+            from public.task_board_cards
+        )
+        update public.task_board_cards cards
+        set sort_order = ranked.new_sort_order
+        from ranked
+        where ranked.id = cards.id;
+
+        alter table public.task_board_cards
+            drop constraint if exists task_board_cards_swimlane_id_fkey;
+
+        alter table public.task_board_cards
+            drop column if exists swimlane_id;
+    end if;
+
+    if exists (
+        select 1
+        from information_schema.tables
+        where table_schema = 'public'
+          and table_name = 'task_board_swimlanes'
+    ) then
+        drop table public.task_board_swimlanes;
+    end if;
+end
+$$;
+
 create index if not exists task_boards_project_sort_idx
 on public.task_boards (project_id, sort_order, updated_at desc);
 
 create index if not exists task_board_columns_board_sort_idx
 on public.task_board_columns (board_id, sort_order);
 
-create index if not exists task_board_swimlanes_board_sort_idx
-on public.task_board_swimlanes (board_id, sort_order);
-
 create index if not exists task_board_labels_board_sort_idx
 on public.task_board_labels (board_id, sort_order);
 
-create index if not exists task_board_cards_board_column_lane_sort_idx
-on public.task_board_cards (board_id, column_id, swimlane_id, sort_order);
+drop index if exists task_board_cards_board_column_lane_sort_idx;
+
+create index if not exists task_board_cards_board_column_sort_idx
+on public.task_board_cards (board_id, column_id, sort_order);
+
+create unique index if not exists task_board_column_follows_column_user_unique
+on public.task_board_column_follows (column_id, user_id);
+
+create index if not exists task_board_column_follows_board_user_idx
+on public.task_board_column_follows (board_id, user_id);
+
+create index if not exists task_board_column_rules_board_column_idx
+on public.task_board_column_rules (board_id, column_id, is_active);
+
+create index if not exists workspace_notifications_user_created_idx
+on public.workspace_notifications (user_id, is_read, created_at desc);
 
 create index if not exists task_board_comments_board_card_created_idx
 on public.task_board_comments (board_id, card_id, created_at);
@@ -148,12 +256,6 @@ before update on public.task_board_columns
 for each row
 execute function public.set_task_board_updated_at();
 
-drop trigger if exists trg_task_board_swimlanes_updated_at on public.task_board_swimlanes;
-create trigger trg_task_board_swimlanes_updated_at
-before update on public.task_board_swimlanes
-for each row
-execute function public.set_task_board_updated_at();
-
 drop trigger if exists trg_task_board_labels_updated_at on public.task_board_labels;
 create trigger trg_task_board_labels_updated_at
 before update on public.task_board_labels
@@ -169,6 +271,18 @@ execute function public.set_task_board_updated_at();
 drop trigger if exists trg_task_board_comments_updated_at on public.task_board_comments;
 create trigger trg_task_board_comments_updated_at
 before update on public.task_board_comments
+for each row
+execute function public.set_task_board_updated_at();
+
+drop trigger if exists trg_task_board_column_rules_updated_at on public.task_board_column_rules;
+create trigger trg_task_board_column_rules_updated_at
+before update on public.task_board_column_rules
+for each row
+execute function public.set_task_board_updated_at();
+
+drop trigger if exists trg_workspace_notifications_updated_at on public.workspace_notifications;
+create trigger trg_workspace_notifications_updated_at
+before update on public.workspace_notifications
 for each row
 execute function public.set_task_board_updated_at();
 
@@ -205,11 +319,13 @@ $$;
 
 alter table public.task_boards enable row level security;
 alter table public.task_board_columns enable row level security;
-alter table public.task_board_swimlanes enable row level security;
 alter table public.task_board_labels enable row level security;
 alter table public.task_board_cards enable row level security;
 alter table public.task_board_comments enable row level security;
 alter table public.task_board_activity enable row level security;
+alter table public.task_board_column_follows enable row level security;
+alter table public.task_board_column_rules enable row level security;
+alter table public.workspace_notifications enable row level security;
 
 drop policy if exists "Users can view accessible task boards" on public.task_boards;
 create policy "Users can view accessible task boards"
@@ -250,21 +366,6 @@ using (public.can_access_task_board(board_id));
 drop policy if exists "Users can manage accessible task board columns" on public.task_board_columns;
 create policy "Users can manage accessible task board columns"
 on public.task_board_columns
-for all
-to authenticated
-using (public.can_access_task_board(board_id))
-with check (public.can_access_task_board(board_id));
-
-drop policy if exists "Users can view accessible task board swimlanes" on public.task_board_swimlanes;
-create policy "Users can view accessible task board swimlanes"
-on public.task_board_swimlanes
-for select
-to authenticated
-using (public.can_access_task_board(board_id));
-
-drop policy if exists "Users can manage accessible task board swimlanes" on public.task_board_swimlanes;
-create policy "Users can manage accessible task board swimlanes"
-on public.task_board_swimlanes
 for all
 to authenticated
 using (public.can_access_task_board(board_id))
@@ -329,13 +430,80 @@ for insert
 to authenticated
 with check (public.can_access_task_board(board_id));
 
+drop policy if exists "Users can view own task board follows" on public.task_board_column_follows;
+create policy "Users can view own task board follows"
+on public.task_board_column_follows
+for select
+to authenticated
+using (auth.uid() = user_id and public.can_access_task_board(board_id));
+
+drop policy if exists "Users can create own task board follows" on public.task_board_column_follows;
+create policy "Users can create own task board follows"
+on public.task_board_column_follows
+for insert
+to authenticated
+with check (auth.uid() = user_id and public.can_access_task_board(board_id));
+
+drop policy if exists "Users can delete own task board follows" on public.task_board_column_follows;
+create policy "Users can delete own task board follows"
+on public.task_board_column_follows
+for delete
+to authenticated
+using (auth.uid() = user_id and public.can_access_task_board(board_id));
+
+drop policy if exists "Users can view accessible task board rules" on public.task_board_column_rules;
+create policy "Users can view accessible task board rules"
+on public.task_board_column_rules
+for select
+to authenticated
+using (public.can_access_task_board(board_id));
+
+drop policy if exists "Users can manage accessible task board rules" on public.task_board_column_rules;
+create policy "Users can manage accessible task board rules"
+on public.task_board_column_rules
+for all
+to authenticated
+using (public.can_access_task_board(board_id))
+with check (public.can_access_task_board(board_id));
+
+drop policy if exists "Users can view own workspace notifications" on public.workspace_notifications;
+create policy "Users can view own workspace notifications"
+on public.workspace_notifications
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can update own workspace notifications" on public.workspace_notifications;
+create policy "Users can update own workspace notifications"
+on public.workspace_notifications
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can create project workspace notifications" on public.workspace_notifications;
+create policy "Users can create project workspace notifications"
+on public.workspace_notifications
+for insert
+to authenticated
+with check ((project_id is null) or public.can_access_project(project_id));
+
+drop policy if exists "Users can delete own workspace notifications" on public.workspace_notifications;
+create policy "Users can delete own workspace notifications"
+on public.workspace_notifications
+for delete
+to authenticated
+using (auth.uid() = user_id);
+
 grant select, insert, update, delete on public.task_boards to authenticated;
 grant select, insert, update, delete on public.task_board_columns to authenticated;
-grant select, insert, update, delete on public.task_board_swimlanes to authenticated;
 grant select, insert, update, delete on public.task_board_labels to authenticated;
 grant select, insert, update, delete on public.task_board_cards to authenticated;
 grant select, insert, update, delete on public.task_board_comments to authenticated;
 grant select, insert on public.task_board_activity to authenticated;
+grant select, insert, delete on public.task_board_column_follows to authenticated;
+grant select, insert, update, delete on public.task_board_column_rules to authenticated;
+grant select, insert, update, delete on public.workspace_notifications to authenticated;
 
 do $$
 begin
@@ -358,9 +526,9 @@ begin
         from pg_publication_tables
         where pubname = 'supabase_realtime'
           and schemaname = 'public'
-          and tablename = 'task_board_columns'
+          and tablename = 'task_board_column_follows'
     ) then
-        execute 'alter publication supabase_realtime add table public.task_board_columns';
+        execute 'alter publication supabase_realtime add table public.task_board_column_follows';
     end if;
 end
 $$;
@@ -372,9 +540,37 @@ begin
         from pg_publication_tables
         where pubname = 'supabase_realtime'
           and schemaname = 'public'
-          and tablename = 'task_board_swimlanes'
+          and tablename = 'task_board_column_rules'
     ) then
-        execute 'alter publication supabase_realtime add table public.task_board_swimlanes';
+        execute 'alter publication supabase_realtime add table public.task_board_column_rules';
+    end if;
+end
+$$;
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = 'workspace_notifications'
+    ) then
+        execute 'alter publication supabase_realtime add table public.workspace_notifications';
+    end if;
+end
+$$;
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_publication_tables
+        where pubname = 'supabase_realtime'
+          and schemaname = 'public'
+          and tablename = 'task_board_columns'
+    ) then
+        execute 'alter publication supabase_realtime add table public.task_board_columns';
     end if;
 end
 $$;
