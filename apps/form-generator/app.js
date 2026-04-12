@@ -9,6 +9,7 @@
     const addFieldButton = form.querySelector('[data-form-add-field]');
     const duplicateActiveButton = form.querySelector('[data-form-duplicate-active]');
     const settingsButton = form.querySelector('[data-form-focus-settings]');
+    const sideTools = form.querySelector('[data-form-side-tools]');
     const titleInput = form.querySelector('[data-form-title-input]');
     const docTitle = form.querySelector('[data-form-doc-title]');
     const responsesShell = form.querySelector('[data-form-responses-shell]');
@@ -35,6 +36,7 @@
         }
     })();
     const choiceTypes = new Set(['single_choice', 'multiple_choice', 'dropdown']);
+    const chartPalette = ['#3367d6', '#d93025', '#f29900', '#1e8e3e', '#9334e6', '#0099c6'];
     const pollIntervalMs = 5000;
     let statsPollTimer = 0;
     let statsRequestController = null;
@@ -419,50 +421,312 @@
         clone.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
-    const pieChartStyle = (options) => {
-        if (!Array.isArray(options) || options.length === 0) {
-            return 'conic-gradient(#d7dbe0 0% 100%)';
-        }
+    const describePieSlice = (centerX, centerY, radius, startAngle, endAngle) => {
+        const startX = centerX + (radius * Math.cos(startAngle));
+        const startY = centerY + (radius * Math.sin(startAngle));
+        const endX = centerX + (radius * Math.cos(endAngle));
+        const endY = centerY + (radius * Math.sin(endAngle));
+        const largeArcFlag = endAngle - startAngle > Math.PI ? 1 : 0;
 
-        let current = 0;
-        const parts = options.map((option, index) => {
-            const percent = Math.max(0, Number(option?.percent || 0));
-            const next = Math.min(100, current + percent);
-            const color = `var(--chart-color-${(index % 6) + 1})`;
-            const segment = `${color} ${current.toFixed(2)}% ${next.toFixed(2)}%`;
-            current = next;
+        return `M ${centerX.toFixed(3)} ${centerY.toFixed(3)} L ${startX.toFixed(3)} ${startY.toFixed(3)} A ${radius.toFixed(3)} ${radius.toFixed(3)} 0 ${largeArcFlag} 1 ${endX.toFixed(3)} ${endY.toFixed(3)} Z`;
+    };
+
+    const buildChoiceChartSegments = (options) => {
+        let angle = -Math.PI / 2;
+
+        return (Array.isArray(options) ? options : []).map((option, index) => {
+            const percent = Math.max(0, Math.min(100, Number(option?.percent || 0)));
+            const sweep = (Math.PI * 2 * percent) / 100;
+            const startAngle = angle;
+            const endAngle = angle + sweep;
+            const segment = {
+                color: chartPalette[index % chartPalette.length],
+                percent,
+                label: String(option?.label || ''),
+                count: Math.max(0, Number(option?.count || 0)),
+                startAngle,
+                endAngle,
+                midAngle: startAngle + (sweep / 2),
+            };
+
+            angle = endAngle;
             return segment;
         });
+    };
 
-        if (current < 100) {
-            parts.push(`#eceff1 ${current.toFixed(2)}% 100%`);
+    const renderChoicePieSvg = (options) => {
+        const segments = buildChoiceChartSegments(options);
+        const visibleSegments = segments.filter((segment) => segment.percent > 0.01);
+
+        return `
+            <svg class="form-builder-pie-svg" viewBox="0 0 280 280" role="img" aria-hidden="true">
+                <circle cx="140" cy="140" r="112" fill="#eef1f5"></circle>
+                ${visibleSegments.map((segment) => `
+                    <path d="${escapeHtml(describePieSlice(140, 140, 112, segment.startAngle, segment.endAngle))}" fill="${escapeHtml(segment.color)}" stroke="#ffffff" stroke-width="2"></path>
+                `).join('')}
+                ${visibleSegments.map((segment) => {
+                    if (segment.percent < 6) {
+                        return '';
+                    }
+
+                    const labelRadius = 78.4;
+                    const x = 140 + (labelRadius * Math.cos(segment.midAngle));
+                    const y = 140 + (labelRadius * Math.sin(segment.midAngle));
+
+                    return `
+                        <text x="${escapeHtml(x.toFixed(2))}" y="${escapeHtml(y.toFixed(2))}" text-anchor="middle" dominant-baseline="middle" class="form-builder-pie-svg-label">${escapeHtml(String(Math.round(segment.percent)))}%</text>
+                    `;
+                }).join('')}
+                ${visibleSegments.length === 0 ? '<text x="140" y="146" text-anchor="middle" class="form-builder-pie-svg-empty">Sin datos</text>' : ''}
+            </svg>
+        `;
+    };
+
+    const setCopyButtonState = (button, label) => {
+        const labelNode = button?.querySelector('span:last-child');
+
+        if (labelNode) {
+            labelNode.textContent = label;
+        }
+    };
+
+    const wrapCanvasText = (context, text, maxWidth) => {
+        const normalized = String(text || '').trim();
+
+        if (normalized === '') {
+            return ['Pregunta'];
         }
 
-        return `conic-gradient(${parts.join(', ')})`;
+        const words = normalized.split(/\s+/);
+        const lines = [];
+        let currentLine = '';
+
+        words.forEach((word) => {
+            const candidate = currentLine === '' ? word : `${currentLine} ${word}`;
+
+            if (context.measureText(candidate).width <= maxWidth || currentLine === '') {
+                currentLine = candidate;
+                return;
+            }
+
+            lines.push(currentLine);
+            currentLine = word;
+        });
+
+        if (currentLine !== '') {
+            lines.push(currentLine);
+        }
+
+        return lines;
+    };
+
+    const drawRoundedRect = (context, x, y, width, height, radius) => {
+        context.beginPath();
+        context.moveTo(x + radius, y);
+        context.arcTo(x + width, y, x + width, y + height, radius);
+        context.arcTo(x + width, y + height, x, y + height, radius);
+        context.arcTo(x, y + height, x, y, radius);
+        context.arcTo(x, y, x + width, y, radius);
+        context.closePath();
+    };
+
+    const canvasToBlob = (canvas) => new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+            if (blob) {
+                resolve(blob);
+                return;
+            }
+
+            reject(new Error('No fue posible generar la imagen.'));
+        }, 'image/png');
+    });
+
+    const buildChoiceChartCanvas = (question) => {
+        const title = String(question?.label || 'Pregunta');
+        const answerCount = Math.max(0, Number(question?.answer_count || 0));
+        const options = Array.isArray(question?.options) ? question.options : [];
+        const segments = buildChoiceChartSegments(options);
+        const width = 1440;
+        const padding = 44;
+        const chartCenterX = 470;
+        const chartRadius = 170;
+        const legendX = 900;
+        const legendRowHeight = 74;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        if (!context) {
+            throw new Error('No fue posible preparar el grafico.');
+        }
+
+        context.font = '600 30px Arial';
+        const titleLines = wrapCanvasText(context, title, width - (padding * 2));
+        const titleBlockHeight = titleLines.length * 38;
+        const subtitleY = 68 + titleBlockHeight + 26;
+        const visualTop = subtitleY + 44;
+        const chartCenterY = visualTop + 158;
+        const legendTop = visualTop + 34;
+        const legendHeight = Math.max(280, options.length * legendRowHeight);
+        const height = Math.max(680, visualTop + Math.max(chartRadius * 2, legendHeight) + 70);
+
+        canvas.width = width;
+        canvas.height = height;
+
+        context.fillStyle = '#f5f7fb';
+        context.fillRect(0, 0, width, height);
+        context.shadowColor = 'rgba(15, 23, 42, 0.08)';
+        context.shadowBlur = 24;
+        context.shadowOffsetY = 10;
+        drawRoundedRect(context, 12, 12, width - 24, height - 24, 26);
+        context.fillStyle = '#ffffff';
+        context.fill();
+        context.shadowColor = 'transparent';
+
+        context.strokeStyle = '#d9dee8';
+        context.lineWidth = 2;
+        drawRoundedRect(context, 12, 12, width - 24, height - 24, 26);
+        context.stroke();
+
+        context.fillStyle = '#202124';
+        context.font = '600 30px Arial';
+        titleLines.forEach((line, index) => {
+            context.fillText(line, padding, 68 + (index * 38));
+        });
+
+        context.fillStyle = '#202124';
+        context.font = '400 24px Arial';
+        context.fillText(`${answerCount} respuestas`, padding, subtitleY);
+
+        context.fillStyle = '#eef1f5';
+        context.beginPath();
+        context.arc(chartCenterX, chartCenterY, chartRadius, 0, Math.PI * 2);
+        context.fill();
+
+        segments.forEach((segment) => {
+            if (segment.percent <= 0.01) {
+                return;
+            }
+
+            context.beginPath();
+            context.moveTo(chartCenterX, chartCenterY);
+            context.arc(chartCenterX, chartCenterY, chartRadius, segment.startAngle, segment.endAngle);
+            context.closePath();
+            context.fillStyle = segment.color;
+            context.fill();
+            context.strokeStyle = '#ffffff';
+            context.lineWidth = 3;
+            context.stroke();
+        });
+
+        segments.forEach((segment) => {
+            if (segment.percent < 6) {
+                return;
+            }
+
+            const labelRadius = chartRadius * 0.72;
+            const x = chartCenterX + (labelRadius * Math.cos(segment.midAngle));
+            const y = chartCenterY + (labelRadius * Math.sin(segment.midAngle));
+            context.fillStyle = '#ffffff';
+            context.font = '700 22px Arial';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(`${Math.round(segment.percent)}%`, x, y);
+        });
+
+        context.textAlign = 'left';
+        context.textBaseline = 'alphabetic';
+
+        options.forEach((option, index) => {
+            const y = legendTop + (index * legendRowHeight);
+            context.fillStyle = chartPalette[index % chartPalette.length];
+            context.beginPath();
+            context.arc(legendX, y, 12, 0, Math.PI * 2);
+            context.fill();
+
+            context.fillStyle = '#202124';
+            context.font = '500 21px Arial';
+            context.fillText(String(option?.label || ''), legendX + 28, y + 8);
+
+            context.fillStyle = '#5f6368';
+            context.font = '400 18px Arial';
+            context.fillText(`${Math.max(0, Number(option?.count || 0))} respuestas • ${Math.round(Math.max(0, Number(option?.percent || 0)))}%`, legendX + 28, y + 36);
+        });
+
+        return canvas;
+    };
+
+    const copyChoiceChart = async (button) => {
+        const originalLabel = button?.querySelector('span:last-child')?.textContent || 'Copiar grafico';
+        let resetTimer = 0;
+
+        button.disabled = true;
+        setCopyButtonState(button, 'Copiando...');
+
+        try {
+            const payload = JSON.parse(String(button.dataset.chartPayload || '{}'));
+            const canvas = buildChoiceChartCanvas(payload);
+            const blob = await canvasToBlob(canvas);
+
+            if (navigator.clipboard?.write && window.ClipboardItem) {
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                setCopyButtonState(button, 'Imagen copiada');
+            } else {
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'grafico-formulario.png';
+                link.click();
+                window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+                setCopyButtonState(button, 'Imagen descargada');
+            }
+        } catch (error) {
+            setCopyButtonState(button, 'No se pudo copiar');
+        } finally {
+            resetTimer = window.setTimeout(() => {
+                setCopyButtonState(button, originalLabel);
+                button.disabled = false;
+                window.clearTimeout(resetTimer);
+            }, 1800);
+        }
     };
 
     const renderChoiceQuestionCard = (question) => {
         const options = Array.isArray(question?.options) ? question.options : [];
+        const payload = {
+            label: String(question?.label || 'Pregunta'),
+            answer_count: Math.max(0, Number(question?.answer_count || 0)),
+            options: options.map((option) => ({
+                label: String(option?.label || ''),
+                count: Math.max(0, Number(option?.count || 0)),
+                percent: Math.max(0, Number(option?.percent || 0)),
+            })),
+        };
 
         return `
-            <article class="form-builder-chart-card">
+            <article class="form-builder-chart-card form-builder-chart-card--choice">
                 <div class="form-builder-chart-head">
-                    <h3>${escapeHtml(question?.label || 'Pregunta')}</h3>
-                    <p>${escapeHtml(String(question?.answer_count || 0))} respuestas completas</p>
+                    <div class="form-builder-chart-head-main">
+                        <h3>${escapeHtml(question?.label || 'Pregunta')}</h3>
+                        <p>${escapeHtml(String(question?.answer_count || 0))} respuestas</p>
+                    </div>
+                    <button type="button" class="form-builder-chart-copy" data-form-copy-chart data-chart-payload="${escapeHtml(JSON.stringify(payload))}">
+                        <span class="material-symbols-rounded">content_copy</span>
+                        <span>Copiar grafico</span>
+                    </button>
                 </div>
 
-                <div class="form-builder-chart-body">
-                    <div class="form-builder-pie-chart" style="--pie-chart: ${escapeHtml(pieChartStyle(options))};">
-                        <span>${escapeHtml(String(question?.selection_count || 0))}</span>
+                <div class="form-builder-chart-body form-builder-chart-body--choice">
+                    <div class="form-builder-chart-visual">
+                        ${renderChoicePieSvg(options)}
                     </div>
 
                     <div class="form-builder-chart-legend">
                         ${options.map((option, index) => `
                             <div class="form-builder-chart-legend-item">
-                                <span class="form-builder-chart-swatch" style="background: var(--chart-color-${(index % 6) + 1});"></span>
+                                <span class="form-builder-chart-swatch" style="background: ${escapeHtml(chartPalette[index % chartPalette.length])};"></span>
                                 <div>
                                     <strong>${escapeHtml(option?.label || '')}</strong>
-                                    <small>${escapeHtml(String(option?.count || 0))} respuestas • ${escapeHtml(Number(option?.percent || 0).toFixed(1))}%</small>
+                                    <small>${escapeHtml(String(option?.count || 0))} respuestas • ${escapeHtml(String(Math.round(Number(option?.percent || 0))))}%</small>
                                 </div>
                             </div>
                         `).join('')}
@@ -694,6 +958,10 @@
             panel.classList.toggle('is-active', panel.dataset.formPanel === target);
         });
 
+        if (sideTools instanceof HTMLElement) {
+            sideTools.hidden = target !== 'questions';
+        }
+
         if (target === 'responses') {
             startStatsPolling();
         } else {
@@ -719,6 +987,17 @@
     });
 
     titleInput?.addEventListener('input', updateDocTitle);
+
+    responsesShell?.addEventListener('click', (event) => {
+        const copyButton = closest(event.target, '[data-form-copy-chart]');
+
+        if (!copyButton) {
+            return;
+        }
+
+        event.preventDefault();
+        void copyChoiceChart(copyButton);
+    });
 
     form.querySelectorAll('[data-form-tab]').forEach((tab) => {
         tab.addEventListener('click', () => {

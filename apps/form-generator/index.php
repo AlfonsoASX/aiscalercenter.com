@@ -626,7 +626,7 @@ function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolCont
                     </div>
                 </div>
 
-                <aside class="form-google-side-tools" aria-label="Herramientas del formulario">
+                <aside class="form-google-side-tools" data-form-side-tools aria-label="Herramientas del formulario">
                     <button type="submit" name="builder_action" value="add_field" class="form-google-tool-button" data-form-add-field title="Agregar pregunta" aria-label="Agregar pregunta">
                         <span class="material-symbols-rounded">add_circle</span>
                     </button>
@@ -957,45 +957,121 @@ function formBuilderRenderResponsesPanel(array $summary, bool $canLoadStats): st
     return (string) ob_get_clean();
 }
 
-function formBuilderRenderChoiceQuestionCard(array $question): string
+function formBuilderChartPalette(): array
 {
-    $options = is_array($question['options'] ?? null) ? $question['options'] : [];
-    $segments = [];
-    $start = 0.0;
+    return ['#3367d6', '#d93025', '#f29900', '#1e8e3e', '#9334e6', '#0099c6'];
+}
 
-    foreach ($options as $option) {
-        $percent = max(0, (float) ($option['percent'] ?? 0));
-        $end = min(100, $start + $percent);
-        $segments[] = 'var(--chart-color-' . ((count($segments) % 6) + 1) . ') ' . number_format($start, 2, '.', '') . '% ' . number_format($end, 2, '.', '') . '%';
-        $start = $end;
-    }
+function formBuilderDescribePieSlice(float $centerX, float $centerY, float $radius, float $startAngle, float $endAngle): string
+{
+    $startX = $centerX + ($radius * cos($startAngle));
+    $startY = $centerY + ($radius * sin($startAngle));
+    $endX = $centerX + ($radius * cos($endAngle));
+    $endY = $centerY + ($radius * sin($endAngle));
+    $largeArcFlag = ($endAngle - $startAngle) > M_PI ? 1 : 0;
 
-    if ($segments === []) {
-        $segments[] = '#d7dbe0 0% 100%';
-    } elseif ($start < 100) {
-        $segments[] = '#eceff1 ' . number_format($start, 2, '.', '') . '% 100%';
-    }
+    return sprintf(
+        'M %.3F %.3F L %.3F %.3F A %.3F %.3F 0 %d 1 %.3F %.3F Z',
+        $centerX,
+        $centerY,
+        $startX,
+        $startY,
+        $radius,
+        $radius,
+        $largeArcFlag,
+        $endX,
+        $endY
+    );
+}
+
+function formBuilderRenderChoicePieSvg(array $options): string
+{
+    $palette = formBuilderChartPalette();
+    $centerX = 140.0;
+    $centerY = 140.0;
+    $radius = 112.0;
+    $angle = -M_PI / 2;
+    $hasVisibleData = false;
 
     ob_start();
     ?>
-    <article class="form-builder-chart-card">
+    <svg class="form-builder-pie-svg" viewBox="0 0 280 280" role="img" aria-hidden="true">
+        <circle cx="140" cy="140" r="112" fill="#eef1f5"></circle>
+        <?php foreach ($options as $index => $option): ?>
+            <?php
+            $percent = max(0.0, min(100.0, (float) ($option['percent'] ?? 0)));
+            $sweep = (2 * M_PI * $percent) / 100;
+            $sliceStart = $angle;
+            $sliceEnd = $angle + $sweep;
+            $angle = $sliceEnd;
+
+            if ($percent <= 0.01) {
+                continue;
+            }
+
+            $hasVisibleData = true;
+            $midAngle = $sliceStart + ($sweep / 2);
+            $labelRadius = $radius * 0.7;
+            $labelX = $centerX + ($labelRadius * cos($midAngle));
+            $labelY = $centerY + ($labelRadius * sin($midAngle));
+            ?>
+            <path d="<?= htmlspecialchars(formBuilderDescribePieSlice($centerX, $centerY, $radius, $sliceStart, $sliceEnd), ENT_QUOTES, 'UTF-8'); ?>" fill="<?= htmlspecialchars($palette[$index % count($palette)], ENT_QUOTES, 'UTF-8'); ?>" stroke="#ffffff" stroke-width="2"></path>
+            <?php if ($percent >= 6): ?>
+                <text x="<?= htmlspecialchars(number_format($labelX, 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" y="<?= htmlspecialchars(number_format($labelY, 2, '.', ''), ENT_QUOTES, 'UTF-8'); ?>" text-anchor="middle" dominant-baseline="middle" class="form-builder-pie-svg-label"><?= htmlspecialchars(number_format($percent, 0), ENT_QUOTES, 'UTF-8'); ?>%</text>
+            <?php endif; ?>
+        <?php endforeach; ?>
+
+        <?php if (!$hasVisibleData): ?>
+            <text x="140" y="146" text-anchor="middle" class="form-builder-pie-svg-empty">Sin datos</text>
+        <?php endif; ?>
+    </svg>
+    <?php
+
+    return (string) ob_get_clean();
+}
+
+function formBuilderRenderChoiceQuestionCard(array $question): string
+{
+    $options = is_array($question['options'] ?? null) ? $question['options'] : [];
+    $payload = [
+        'label' => (string) ($question['label'] ?? 'Pregunta'),
+        'answer_count' => (int) ($question['answer_count'] ?? 0),
+        'options' => array_map(static function ($option): array {
+            return [
+                'label' => (string) ($option['label'] ?? ''),
+                'count' => (int) ($option['count'] ?? 0),
+                'percent' => (float) ($option['percent'] ?? 0),
+            ];
+        }, $options),
+    ];
+
+    ob_start();
+    ?>
+    <article class="form-builder-chart-card form-builder-chart-card--choice">
         <div class="form-builder-chart-head">
-            <h3><?= htmlspecialchars((string) ($question['label'] ?? 'Pregunta'), ENT_QUOTES, 'UTF-8'); ?></h3>
-            <p><?= htmlspecialchars((string) ((int) ($question['answer_count'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?> respuestas completas</p>
+            <div class="form-builder-chart-head-main">
+                <h3><?= htmlspecialchars((string) ($question['label'] ?? 'Pregunta'), ENT_QUOTES, 'UTF-8'); ?></h3>
+                <p><?= htmlspecialchars((string) ((int) ($question['answer_count'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?> respuestas</p>
+            </div>
+
+            <button type="button" class="form-builder-chart-copy" data-form-copy-chart data-chart-payload="<?= htmlspecialchars((string) json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), ENT_QUOTES, 'UTF-8'); ?>">
+                <span class="material-symbols-rounded">content_copy</span>
+                <span>Copiar grafico</span>
+            </button>
         </div>
 
-        <div class="form-builder-chart-body">
-            <div class="form-builder-pie-chart" style="--pie-chart: conic-gradient(<?= htmlspecialchars(implode(', ', $segments), ENT_QUOTES, 'UTF-8'); ?>);">
-                <span><?= htmlspecialchars((string) ((int) ($question['selection_count'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?></span>
+        <div class="form-builder-chart-body form-builder-chart-body--choice">
+            <div class="form-builder-chart-visual">
+                <?= formBuilderRenderChoicePieSvg($options); ?>
             </div>
 
             <div class="form-builder-chart-legend">
                 <?php foreach ($options as $index => $option): ?>
                     <div class="form-builder-chart-legend-item">
-                        <span class="form-builder-chart-swatch" style="background: var(--chart-color-<?= ($index % 6) + 1; ?>);"></span>
+                        <span class="form-builder-chart-swatch" style="background: <?= htmlspecialchars(formBuilderChartPalette()[$index % count(formBuilderChartPalette())], ENT_QUOTES, 'UTF-8'); ?>;"></span>
                         <div>
                             <strong><?= htmlspecialchars((string) ($option['label'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></strong>
-                            <small><?= htmlspecialchars((string) ((int) ($option['count'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?> respuestas • <?= htmlspecialchars(number_format((float) ($option['percent'] ?? 0), 1), ENT_QUOTES, 'UTF-8'); ?>%</small>
+                            <small><?= htmlspecialchars((string) ((int) ($option['count'] ?? 0)), ENT_QUOTES, 'UTF-8'); ?> respuestas • <?= htmlspecialchars(number_format((float) ($option['percent'] ?? 0), 0), ENT_QUOTES, 'UTF-8'); ?>%</small>
                         </div>
                     </div>
                 <?php endforeach; ?>

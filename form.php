@@ -406,11 +406,6 @@ $initialAnsweredCount = formPublicCountAnswered($answers);
         <?php if (is_array($form) && $notice === null): ?>
             <section class="public-form-card">
                 <div class="public-form-header">
-                    <span class="public-form-kicker">
-                        <span class="material-symbols-rounded">dynamic_form</span>
-                        <span>AiScaler Center</span>
-                    </span>
-
                     <div>
                         <h1><?= htmlspecialchars((string) ($form['title'] ?? 'Formulario'), ENT_QUOTES, 'UTF-8'); ?></h1>
                         <?php if (trim((string) ($form['description'] ?? '')) !== ''): ?>
@@ -461,7 +456,7 @@ $initialAnsweredCount = formPublicCountAnswered($answers);
 
         <div class="public-form-logo-wrap">
             <img class="public-form-logo" src="img/logoAiScalerCenter.png" alt="AiScaler Center Logo">
-            <p class="public-form-footer-note">Impulsado por AiScaler Center</p>
+            <p class="public-form-footer-note">Impulsado por AiScaler parte de ASX.mx</p>
         </div>
     </main>
 
