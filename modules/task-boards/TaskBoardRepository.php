@@ -337,15 +337,15 @@ final class TaskBoardRepository
     {
         $headers = ['Prefer: return=representation'];
         $boardId = trim((string) ($payload['board_id'] ?? ''));
+        $cardId = trim((string) ($payload['id'] ?? ''));
 
         if ($boardId === '') {
             throw new RuntimeException('No encontramos el tablero de la tarea.');
         }
 
-        if (isset($payload['id']) && trim((string) $payload['id']) !== '') {
-            $cardId = trim((string) $payload['id']);
-            unset($payload['id']);
+        unset($payload['id']);
 
+        if ($cardId !== '') {
             $response = \supabaseRestRequest(
                 'PATCH',
                 'task_board_cards?id=eq.' . rawurlencode($cardId) . '&board_id=eq.' . rawurlencode($boardId),

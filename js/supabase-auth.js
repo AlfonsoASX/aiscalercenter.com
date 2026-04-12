@@ -3,6 +3,7 @@ import {
     bindForm,
     cleanupAuthHash,
     consumeFlash,
+    describeErrorMessage,
     setButtonBusy,
     setFlash,
     showNotice,
@@ -89,7 +90,8 @@ export async function updateUserProfile(payload) {
 }
 
 export function humanizeAuthError(message) {
-    const normalized = String(message ?? '').toLowerCase();
+    const rawMessage = describeErrorMessage(message, 'Ocurrio un error al conectar con Supabase.');
+    const normalized = rawMessage.toLowerCase();
 
     if (normalized.includes('invalid login credentials')) {
         return 'Correo o contrasena incorrectos.';
@@ -111,7 +113,7 @@ export function humanizeAuthError(message) {
         return 'Supabase esta pidiendo una validacion adicional. Revisa la configuracion anti-bots del proyecto.';
     }
 
-    return message;
+    return rawMessage;
 }
 
 function initLoginAuth() {

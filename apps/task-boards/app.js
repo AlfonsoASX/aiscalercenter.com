@@ -24,6 +24,9 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         boards: initialState.boards,
         members: initialState.members,
         activeBoard: initialState.active_board,
+        screen: 'overview',
+        dashboardSection: 'boards',
+        activeSwimlaneId: String(initialState.active_board?.swimlanes?.[0]?.id || ''),
         searchQuery: '',
         notice: null,
         boardModal: {
@@ -76,10 +79,50 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             event.preventDefault();
             const boardId = String(boardSelect.dataset.taskBoardSelect || '');
 
-            if (boardId !== '' && boardId !== String(state.activeBoard?.board?.id || '')) {
-                void reloadBootstrap(boardId);
+            if (boardId !== '') {
+                void openBoard(boardId);
             }
 
+            return;
+        }
+
+        const boardOpen = target.closest('[data-task-board-open]');
+
+        if (boardOpen instanceof HTMLElement) {
+            event.preventDefault();
+            const boardId = String(boardOpen.dataset.taskBoardOpen || '');
+
+            if (boardId !== '') {
+                void openBoard(boardId);
+            }
+
+            return;
+        }
+
+        const dashboardSection = target.closest('[data-task-dashboard-section]');
+
+        if (dashboardSection instanceof HTMLElement) {
+            event.preventDefault();
+            const section = String(dashboardSection.dataset.taskDashboardSection || 'boards');
+            state.dashboardSection = ['boards', 'templates', 'home'].includes(section) ? section : 'boards';
+            state.screen = 'overview';
+            render();
+            return;
+        }
+
+        if (target.closest('[data-task-view-home]')) {
+            event.preventDefault();
+            state.screen = 'overview';
+            render();
+            return;
+        }
+
+        const laneSelect = target.closest('[data-task-lane-select]');
+
+        if (laneSelect instanceof HTMLElement) {
+            event.preventDefault();
+            state.activeSwimlaneId = String(laneSelect.dataset.taskLaneSelect || '');
+            render();
             return;
         }
 
@@ -458,38 +501,289 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     }
 
     function renderShell() {
-        if (state.boards.length === 0) {
-            return `
-                <section class="task-boards-empty-state">
-                    <span class="material-symbols-rounded">view_kanban</span>
-                    <h2>Empieza con tu primer tablero</h2>
-                    <p>Crea un tablero por proyecto, define columnas, carriles y comienza a mover trabajo en tiempo real con tu equipo.</p>
-                    <button type="button" class="task-boards-primary" data-task-board-create>
-                        <span class="material-symbols-rounded">add_circle</span>
-                        <span>Crear tablero</span>
-                    </button>
-                </section>
-                ${renderBoardModal()}
-            `;
-        }
-
         return `
-            <section class="task-boards-board-switcher">
-                <div class="task-boards-board-strip">
-                    ${state.boards.map((board) => renderBoardTab(board)).join('')}
-                    <button type="button" class="task-boards-board-tab task-boards-board-tab--create" data-task-board-create>
-                        <span class="material-symbols-rounded">add</span>
-                        <span>Nuevo</span>
-                    </button>
+            <section class="task-boards-dashboard ${state.screen === 'board' ? 'task-boards-dashboard--board' : ''}">
+                ${renderDashboardSidebar()}
+                <div class="task-boards-dashboard-main ${state.screen === 'board' ? 'task-boards-dashboard-main--board' : ''}">
+                    ${state.screen === 'board' && state.activeBoard ? renderActiveBoard() : renderDashboardMain()}
                 </div>
             </section>
-
-            ${state.activeBoard ? renderActiveBoard() : ''}
 
             ${renderBoardModal()}
             ${renderStructureModal()}
             ${renderCardPanel()}
         `;
+    }
+
+    function renderOverview() {
+        return `
+            <section class="task-boards-dashboard">
+                ${renderDashboardSidebar()}
+                <div class="task-boards-dashboard-main">
+                    ${renderDashboardMain()}
+                </div>
+            </section>
+        `;
+    }
+
+    function renderDashboardSidebar() {
+        const section = state.dashboardSection;
+
+        return `
+            <aside class="task-boards-dashboard-sidebar">
+                <nav class="task-boards-dashboard-nav" aria-label="Secciones internas">
+                    ${renderDashboardNavItem('boards', 'dashboard', 'Tableros', section === 'boards')}
+                    ${renderDashboardNavItem('templates', 'library_add', 'Plantillas', section === 'templates')}
+                    ${renderDashboardNavItem('home', 'bolt', 'Inicio', section === 'home')}
+                </nav>
+
+                <section class="task-boards-sidebar-project">
+                    <p class="task-boards-sidebar-label">Espacio de trabajo</p>
+                    <div class="task-boards-sidebar-project-card">
+                        ${renderWorkspaceBadge()}
+                        <div>
+                            <strong>${escapeHtml(state.project.name || 'Proyecto')}</strong>
+                            <span>${state.boards.length} ${state.boards.length === 1 ? 'tablero' : 'tableros'}</span>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+        `;
+    }
+
+    function renderDashboardNavItem(id, icon, label, isActive) {
+        return `
+            <button type="button" class="task-boards-dashboard-nav-item ${isActive ? 'is-active' : ''}" data-task-dashboard-section="${id}">
+                <span class="material-symbols-rounded">${icon}</span>
+                <span>${label}</span>
+            </button>
+        `;
+    }
+
+    function renderDashboardMain() {
+        if (state.dashboardSection === 'templates') {
+            return renderTemplatesOverview();
+        }
+
+        if (state.dashboardSection === 'home') {
+            return renderHomeOverview();
+        }
+
+        return renderBoardsOverview();
+    }
+
+    function renderBoardsOverview() {
+        return `
+            <section class="task-boards-dashboard-stack">
+                ${state.boards.length > 0 ? renderRecentBoards() : ''}
+                <section class="task-boards-workspace-section">
+                    <header class="task-boards-section-head">
+                        <div class="task-boards-section-copy">
+                            <p class="task-boards-section-kicker">Tus espacios de trabajo</p>
+                            <div class="task-boards-workspace-title">
+                                ${renderWorkspaceBadge()}
+                                <strong>${escapeHtml(state.project.name || 'Proyecto')}</strong>
+                            </div>
+                        </div>
+
+                        <div class="task-boards-workspace-tabs">
+                            <span class="task-boards-workspace-pill is-active">
+                                <span class="material-symbols-rounded">dashboard</span>
+                                <span>Tableros</span>
+                            </span>
+                            <span class="task-boards-workspace-pill">
+                                <span class="material-symbols-rounded">group</span>
+                                <span>${state.members.length} miembros</span>
+                            </span>
+                            <span class="task-boards-workspace-pill">
+                                <span class="material-symbols-rounded">tune</span>
+                                <span>Configuracion</span>
+                            </span>
+                        </div>
+                    </header>
+
+                    ${state.boards.length > 0
+                        ? `<div class="task-boards-board-gallery">${state.boards.map((board) => renderBoardCard(board)).join('')}${renderCreateBoardCard()}</div>`
+                        : `
+                            <section class="task-boards-empty-state task-boards-empty-state--embedded">
+                                <span class="material-symbols-rounded">view_kanban</span>
+                                <h2>Empieza con tu primer tablero</h2>
+                                <p>Crea un tablero por proyecto, define columnas, carriles y comienza a mover trabajo en tiempo real con tu equipo.</p>
+                                <button type="button" class="task-boards-primary" data-task-board-create>
+                                    <span class="material-symbols-rounded">add_circle</span>
+                                    <span>Crear tablero</span>
+                                </button>
+                            </section>
+                        `}
+                </section>
+            </section>
+        `;
+    }
+
+    function renderRecentBoards() {
+        const recentBoards = [...state.boards]
+            .sort((left, right) => String(right.updated_at || '').localeCompare(String(left.updated_at || '')))
+            .slice(0, 4);
+
+        return `
+            <section class="task-boards-recent-strip">
+                <header class="task-boards-section-head task-boards-section-head--compact">
+                    <div class="task-boards-section-copy">
+                        <p class="task-boards-section-kicker">
+                            <span class="material-symbols-rounded">history</span>
+                            <span>Visto recientemente</span>
+                        </p>
+                    </div>
+                </header>
+                <div class="task-boards-recent-grid">
+                    ${recentBoards.map((board) => renderBoardCard(board, { compact: true })).join('')}
+                </div>
+            </section>
+        `;
+    }
+
+    function renderTemplatesOverview() {
+        const templates = [
+            {
+                id: 'template-sprint',
+                title: 'Sprint semanal',
+                description: 'Planea pendientes, trabajo en curso, revision y cierre semanal con limites WIP.',
+                accent: '#1a73e8',
+            },
+            {
+                id: 'template-marketing',
+                title: 'Calendario de marketing',
+                description: 'Organiza ideas, produccion, aprobacion y publicacion de contenido con tu equipo.',
+                accent: '#d93025',
+            },
+            {
+                id: 'template-ops',
+                title: 'Operacion diaria',
+                description: 'Da seguimiento a tareas operativas, urgencias y entregables recurrentes del proyecto.',
+                accent: '#188038',
+            },
+        ];
+
+        return `
+            <section class="task-boards-dashboard-stack">
+                <section class="task-boards-workspace-section">
+                    <header class="task-boards-section-head">
+                        <div class="task-boards-section-copy">
+                            <p class="task-boards-section-kicker">Plantillas</p>
+                            <h2>Empieza mas rapido</h2>
+                            <p>Usa una estructura sugerida y luego ajusta columnas, carriles y etiquetas a tu proceso.</p>
+                        </div>
+                    </header>
+
+                    <div class="task-boards-template-grid">
+                        ${templates.map((template) => `
+                            <article class="task-boards-template-card" style="--task-template-accent:${template.accent};">
+                                <div class="task-boards-template-preview"></div>
+                                <div class="task-boards-template-copy">
+                                    <strong>${escapeHtml(template.title)}</strong>
+                                    <p>${escapeHtml(template.description)}</p>
+                                </div>
+                                <button type="button" class="task-boards-secondary" data-task-board-create>
+                                    <span class="material-symbols-rounded">add</span>
+                                    <span>Crear desde cero</span>
+                                </button>
+                            </article>
+                        `).join('')}
+                    </div>
+                </section>
+            </section>
+        `;
+    }
+
+    function renderHomeOverview() {
+        const totalCards = (state.activeBoard?.cards ?? []).length;
+        const overdueCards = (state.activeBoard?.cards ?? []).filter((card) => isDateOverdue(card.due_date)).length;
+
+        return `
+            <section class="task-boards-dashboard-stack">
+                <section class="task-boards-workspace-section">
+                    <header class="task-boards-section-head">
+                        <div class="task-boards-section-copy">
+                            <p class="task-boards-section-kicker">Inicio</p>
+                            <h2>${escapeHtml(state.project.name || 'Proyecto')}</h2>
+                            <p>Entra rapido al tablero que necesitas y revisa el pulso general del trabajo dentro de este proyecto.</p>
+                        </div>
+                    </header>
+
+                    <div class="task-boards-home-grid">
+                        ${renderHomeMetric('Tableros', String(state.boards.length), 'view_kanban')}
+                        ${renderHomeMetric('Miembros', String(state.members.length), 'group')}
+                        ${renderHomeMetric('Tareas visibles', String(totalCards), 'task')}
+                        ${renderHomeMetric('Atrasadas', String(overdueCards), 'alarm')}
+                    </div>
+
+                    ${state.boards.length > 0 ? `
+                        <div class="task-boards-board-gallery">
+                            ${state.boards.slice(0, 6).map((board) => renderBoardCard(board)).join('')}
+                        </div>
+                    ` : ''}
+                </section>
+            </section>
+        `;
+    }
+
+    function renderHomeMetric(label, value, icon) {
+        return `
+            <article class="task-boards-home-metric">
+                <span class="material-symbols-rounded">${icon}</span>
+                <strong>${escapeHtml(value)}</strong>
+                <p>${escapeHtml(label)}</p>
+            </article>
+        `;
+    }
+
+    function renderBoardCard(board, options = {}) {
+        const compact = Boolean(options.compact);
+        const visual = resolveBoardVisual(board);
+
+        return `
+            <button
+                type="button"
+                class="task-boards-board-card ${compact ? 'is-compact' : ''}"
+                data-task-board-open="${escapeHtml(String(board.id || ''))}"
+                style="--task-board-accent:${escapeHtml(visual.accent)}; --task-board-accent-soft:${escapeHtml(visual.soft)}; --task-board-image:${escapeHtml(visual.image)};"
+            >
+                <div class="task-boards-board-card-media"></div>
+                <div class="task-boards-board-card-copy">
+                    <strong>${escapeHtml(board.title || 'Tablero')}</strong>
+                    ${compact
+                        ? `<span>${escapeHtml(board.description || 'Listo para retomar trabajo.')}</span>`
+                        : `<p>${escapeHtml(board.description || 'Organiza tareas, subtareas y responsables en un solo lugar.')}</p>`}
+                </div>
+            </button>
+        `;
+    }
+
+    function renderCreateBoardCard() {
+        return `
+            <button type="button" class="task-boards-board-card task-boards-board-card--create" data-task-board-create>
+                <div class="task-boards-board-card-copy">
+                    <span class="material-symbols-rounded">add_circle</span>
+                    <strong>Crear un tablero nuevo</strong>
+                    <p>Arma un flujo nuevo para otro frente de trabajo dentro del mismo proyecto.</p>
+                </div>
+            </button>
+        `;
+    }
+
+    function renderWorkspaceBadge() {
+        const projectName = String(state.project.name || 'Proyecto');
+        const initial = projectName.trim().charAt(0).toUpperCase() || 'P';
+
+        if (String(state.project.logo_url || '').trim() !== '') {
+            return `
+                <span class="task-boards-workspace-badge">
+                    <img src="${escapeHtml(String(state.project.logo_url || ''))}" alt="${escapeHtml(projectName)}">
+                </span>
+            `;
+        }
+
+        return `<span class="task-boards-workspace-badge">${escapeHtml(initial)}</span>`;
     }
 
     function renderBoardTab(board) {
@@ -511,11 +805,31 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             return '';
         }
 
+        const visual = resolveBoardVisual(board);
+        const visibleSwimlaneId = resolveVisibleSwimlaneId(state.activeBoard, state.activeSwimlaneId);
+
         return `
-            <section class="task-boards-workbench">
+            <section
+                class="task-boards-workbench task-boards-workbench--board"
+                style="--task-board-accent:${escapeHtml(visual.accent)}; --task-board-accent-soft:${escapeHtml(visual.soft)}; --task-board-image:${escapeHtml(visual.image)};"
+            >
+                <section class="task-boards-board-switcher">
+                    <div class="task-boards-board-strip">
+                        <button type="button" class="task-boards-board-tab task-boards-board-tab--back" data-task-view-home>
+                            <span class="material-symbols-rounded">arrow_back</span>
+                            <span>Todos los tableros</span>
+                        </button>
+                        ${state.boards.map((item) => renderBoardTab(item)).join('')}
+                        <button type="button" class="task-boards-board-tab task-boards-board-tab--create" data-task-board-create>
+                            <span class="material-symbols-rounded">add</span>
+                            <span>Nuevo</span>
+                        </button>
+                    </div>
+                </section>
+
                 <header class="task-boards-toolbar">
                     <div class="task-boards-toolbar-copy">
-                        <p class="task-boards-eyebrow">Proyecto activo</p>
+                        <p class="task-boards-eyebrow">Tablero activo</p>
                         <h2>${escapeHtml(board.title || 'Tablero')}</h2>
                         <p>${escapeHtml(board.description || 'Organiza tareas, limita trabajo en curso y da seguimiento a tu equipo sin salir del proyecto.')}</p>
                     </div>
@@ -543,13 +857,15 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                                 <span class="material-symbols-rounded">sell</span>
                                 <span>Etiquetas</span>
                             </button>
-                            <button type="button" class="task-boards-primary" data-task-card-new data-column-id="${escapeHtml(String(state.activeBoard.columns[0]?.id || ''))}" data-swimlane-id="${escapeHtml(String(state.activeBoard.swimlanes[0]?.id || ''))}">
+                            <button type="button" class="task-boards-primary" data-task-card-new data-column-id="${escapeHtml(String(state.activeBoard.columns[0]?.id || ''))}" data-swimlane-id="${escapeHtml(visibleSwimlaneId)}">
                                 <span class="material-symbols-rounded">add_task</span>
                                 <span>Nueva tarea</span>
                             </button>
                         </div>
                     </div>
                 </header>
+
+                ${renderLaneTabs()}
 
                 <section class="task-boards-canvas-shell">
                     ${renderBoardCanvas()}
@@ -560,67 +876,75 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
     function renderBoardCanvas() {
         const columns = state.activeBoard?.columns ?? [];
-        const swimlanes = state.activeBoard?.swimlanes ?? [];
-        const columnCounts = countCardsByColumn(state.activeBoard?.cards ?? []);
+        const visibleSwimlaneId = resolveVisibleSwimlaneId(state.activeBoard, state.activeSwimlaneId);
+        const visibleSwimlane = (state.activeBoard?.swimlanes ?? []).find((swimlane) => String(swimlane.id || '') === visibleSwimlaneId) ?? null;
+        const columnCounts = countCardsByColumn(state.activeBoard?.cards ?? [], visibleSwimlaneId);
 
         return `
             <div class="task-boards-canvas-scroll">
-                <div class="task-boards-grid" style="--task-board-column-count:${Math.max(columns.length, 1)};">
-                    <div class="task-boards-grid-corner">
-                        <strong>Carriles</strong>
-                        <span>Separan trabajo especial o urgente.</span>
-                    </div>
-                    ${columns.map((column) => renderColumnHead(column, columnCounts[column.id] ?? 0)).join('')}
-                    ${swimlanes.map((swimlane) => renderSwimlaneRow(swimlane, columns, columnCounts)).join('')}
-                </div>
-            </div>
-        `;
-    }
-
-    function renderColumnHead(column, count) {
-        const limit = normalizeNumber(column.wip_limit);
-        const isOverLimit = limit !== null && count > limit;
-
-        return `
-            <div class="task-boards-column-head ${isOverLimit ? 'is-over-limit' : ''}">
-                <div>
-                    <h3>${escapeHtml(column.title || 'Columna')}</h3>
-                    <p>${count} ${count === 1 ? 'tarea' : 'tareas'}${limit !== null ? ` / limite ${limit}` : ''}</p>
-                </div>
-                ${limit !== null ? `<span class="task-boards-column-limit ${isOverLimit ? 'is-over-limit' : ''}">WIP ${limit}</span>` : ''}
-            </div>
-        `;
-    }
-
-    function renderSwimlaneRow(swimlane, columns, columnCounts) {
-        return `
-            <div class="task-boards-lane-title">
-                <strong>${escapeHtml(swimlane.title || 'Carril')}</strong>
-                <span>${escapeHtml(swimlane.title === 'Expedite' ? 'Prioriza lo urgente sin perder el contexto del tablero.' : 'Organiza un flujo adicional de trabajo dentro del mismo tablero.')}</span>
-            </div>
-            ${columns.map((column) => renderCell(swimlane, column, columnCounts[column.id] ?? 0)).join('')}
-        `;
-    }
-
-    function renderCell(swimlane, column, count) {
-        const cards = getCardsForCell(String(column.id || ''), String(swimlane.id || ''));
-        const limit = normalizeNumber(column.wip_limit);
-        const isOverLimit = limit !== null && count > limit;
-
-        return `
-            <div class="task-boards-cell ${isOverLimit ? 'is-over-limit' : ''}">
-                <div class="task-boards-cell-head">
-                    <button type="button" class="task-boards-link-button" data-task-card-new data-column-id="${escapeHtml(String(column.id || ''))}" data-swimlane-id="${escapeHtml(String(swimlane.id || ''))}">
+                <div class="task-boards-board-scroll" style="--task-board-column-count:${Math.max(columns.length, 1)};">
+                    ${columns.map((column) => renderBoardList(column, visibleSwimlane, columnCounts[column.id] ?? 0)).join('')}
+                    <button type="button" class="task-boards-add-list" data-task-structure-open="columns">
                         <span class="material-symbols-rounded">add</span>
-                        <span>Agregar</span>
+                        <span>Añade otra lista</span>
                     </button>
                 </div>
-                <div class="task-boards-card-list" data-task-cell-list="true" data-column-id="${escapeHtml(String(column.id || ''))}" data-swimlane-id="${escapeHtml(String(swimlane.id || ''))}">
+            </div>
+        `;
+    }
+
+    function renderLaneTabs() {
+        const swimlanes = state.activeBoard?.swimlanes ?? [];
+
+        if (swimlanes.length <= 1) {
+            return '';
+        }
+
+        const visibleSwimlaneId = resolveVisibleSwimlaneId(state.activeBoard, state.activeSwimlaneId);
+
+        return `
+            <section class="task-boards-lane-switcher">
+                ${swimlanes.map((swimlane) => `
+                    <button type="button" class="task-boards-lane-pill ${String(swimlane.id || '') === visibleSwimlaneId ? 'is-active' : ''}" data-task-lane-select="${escapeHtml(String(swimlane.id || ''))}">
+                        ${escapeHtml(String(swimlane.title || 'Carril'))}
+                    </button>
+                `).join('')}
+            </section>
+        `;
+    }
+
+    function renderBoardList(column, swimlane, count) {
+        const swimlaneId = String(swimlane?.id || '');
+        const cards = getCardsForCell(String(column.id || ''), swimlaneId);
+        const limit = normalizeNumber(column.wip_limit);
+        const isOverLimit = limit !== null && count > limit;
+
+        return `
+            <section class="task-boards-list ${isOverLimit ? 'is-over-limit' : ''}">
+                <div class="task-boards-column-head ${isOverLimit ? 'is-over-limit' : ''}">
+                    <div>
+                        <h3>${escapeHtml(column.title || 'Columna')}</h3>
+                        <p>${count} ${count === 1 ? 'tarea' : 'tareas'}${limit !== null ? ` / WIP ${limit}` : ''}</p>
+                    </div>
+                    <button type="button" class="task-boards-icon-button task-boards-icon-button--ghost" data-task-structure-open="columns" aria-label="Configurar listas">
+                        <span class="material-symbols-rounded">more_horiz</span>
+                    </button>
+                </div>
+                <div class="task-boards-cell-head">
+                    ${limit !== null ? `<span class="task-boards-column-limit ${isOverLimit ? 'is-over-limit' : ''}">WIP ${limit}</span>` : '<span class="task-boards-list-caption">Listo para mover tarjetas</span>'}
+                </div>
+                <div class="task-boards-card-list" data-task-cell-list="true" data-column-id="${escapeHtml(String(column.id || ''))}" data-swimlane-id="${escapeHtml(swimlaneId)}">
                     ${cards.length > 0
                         ? cards.map((card) => renderCard(card)).join('')
-                        : '<div class="task-boards-cell-empty">Arrastra o crea una tarea aqui.</div>'}
+                        : '<div class="task-boards-cell-empty">Arrastra o crea una tarjeta aquí.</div>'}
                 </div>
-            </div>
+                <div class="task-boards-cell-head task-boards-cell-head--footer">
+                    <button type="button" class="task-boards-link-button" data-task-card-new data-column-id="${escapeHtml(String(column.id || ''))}" data-swimlane-id="${escapeHtml(swimlaneId)}">
+                        <span class="material-symbols-rounded">add</span>
+                        <span>Añade una tarjeta</span>
+                    </button>
+                </div>
+            </section>
         `;
     }
 
@@ -643,10 +967,11 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             >
                 <div class="task-boards-card-top">
                     <strong>${escapeHtml(card.title || 'Tarea')}</strong>
-                    <span class="task-boards-priority task-boards-priority--${escapeHtml(resolvePriority(card.priority))}">${escapeHtml(priorityLabel(card.priority))}</span>
+                    <span class="material-symbols-rounded">drag_indicator</span>
                 </div>
 
                 ${labels.length > 0 ? `<div class="task-boards-card-labels">${labels.map(renderLabelChip).join('')}</div>` : ''}
+                ${resolvePriority(card.priority) !== 'medium' ? `<span class="task-boards-priority task-boards-priority--${escapeHtml(resolvePriority(card.priority))}">${escapeHtml(priorityLabel(card.priority))}</span>` : ''}
 
                 ${String(card.description_markdown || '').trim() !== ''
                     ? `<p class="task-boards-card-copy">${escapeHtml(String(card.description_markdown || '').trim())}</p>`
@@ -825,188 +1150,225 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         const draft = state.cardPanel.draft;
         const comments = getCommentsForCard(String(draft.id || ''));
         const activity = getActivityForCard(String(draft.id || ''));
+        const columnLabel = (state.activeBoard?.columns ?? []).find((column) => String(column.id || '') === draft.column_id)?.title || 'Lista';
+        const swimlaneLabel = (state.activeBoard?.swimlanes ?? []).find((swimlane) => String(swimlane.id || '') === draft.swimlane_id)?.title || 'Carril';
 
         return `
             <div class="task-boards-overlay task-boards-overlay--panel" data-task-card-close></div>
-            <aside class="task-boards-panel" aria-modal="true" role="dialog">
+            <section class="task-boards-panel" aria-modal="true" role="dialog">
                 <form class="task-boards-panel-shell" data-task-card-form>
                     <div class="task-boards-panel-head">
-                        <div>
-                            <p class="task-boards-eyebrow">Tarea</p>
-                            <h3>${draft.id ? 'Editar tarea' : 'Nueva tarea'}</h3>
+                        <div class="task-boards-panel-head-main">
+                            <div class="task-boards-panel-meta-row">
+                                <label class="task-boards-inline-select">
+                                    <span>Lista</span>
+                                    <select name="column_id">
+                                        ${(state.activeBoard?.columns ?? []).map((column) => `
+                                            <option value="${escapeHtml(String(column.id || ''))}" ${String(column.id || '') === draft.column_id ? 'selected' : ''}>
+                                                ${escapeHtml(String(column.title || ''))}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                </label>
+
+                                <label class="task-boards-inline-select">
+                                    <span>Carril</span>
+                                    <select name="swimlane_id">
+                                        ${(state.activeBoard?.swimlanes ?? []).map((swimlane) => `
+                                            <option value="${escapeHtml(String(swimlane.id || ''))}" ${String(swimlane.id || '') === draft.swimlane_id ? 'selected' : ''}>
+                                                ${escapeHtml(String(swimlane.title || ''))}
+                                            </option>
+                                        `).join('')}
+                                    </select>
+                                </label>
+                            </div>
+
+                            <label class="task-boards-panel-title-field">
+                                <span class="task-boards-eyebrow">Tarea</span>
+                                <input type="text" name="title" value="${escapeHtml(draft.title)}" placeholder="Escribe una tarea clara" required>
+                            </label>
+
+                            <p class="task-boards-panel-subtitle">En ${escapeHtml(columnLabel)} · ${escapeHtml(swimlaneLabel)}</p>
                         </div>
-                        <button type="button" class="task-boards-icon-button" data-task-card-close aria-label="Cerrar">
-                            <span class="material-symbols-rounded">close</span>
-                        </button>
+
+                        <div class="task-boards-panel-head-actions">
+                            <button type="button" class="task-boards-icon-button task-boards-icon-button--ghost" data-task-card-close aria-label="Cerrar">
+                                <span class="material-symbols-rounded">close</span>
+                            </button>
+                        </div>
                     </div>
 
                     <input type="hidden" name="id" value="${escapeHtml(draft.id)}">
                     <input type="hidden" name="board_id" value="${escapeHtml(draft.board_id)}">
 
                     <div class="task-boards-panel-body">
-                        <div class="task-boards-panel-grid">
-                            <label class="task-boards-field task-boards-field--wide">
-                                <span>Titulo</span>
-                                <input type="text" name="title" value="${escapeHtml(draft.title)}" placeholder="Escribe una tarea clara" required>
-                            </label>
-
-                            <label class="task-boards-field">
-                                <span>Columna</span>
-                                <select name="column_id">
-                                    ${(state.activeBoard?.columns ?? []).map((column) => `
-                                        <option value="${escapeHtml(String(column.id || ''))}" ${String(column.id || '') === draft.column_id ? 'selected' : ''}>
-                                            ${escapeHtml(String(column.title || ''))}
-                                        </option>
-                                    `).join('')}
-                                </select>
-                            </label>
-
-                            <label class="task-boards-field">
-                                <span>Carril</span>
-                                <select name="swimlane_id">
-                                    ${(state.activeBoard?.swimlanes ?? []).map((swimlane) => `
-                                        <option value="${escapeHtml(String(swimlane.id || ''))}" ${String(swimlane.id || '') === draft.swimlane_id ? 'selected' : ''}>
-                                            ${escapeHtml(String(swimlane.title || ''))}
-                                        </option>
-                                    `).join('')}
-                                </select>
-                            </label>
-
-                            <label class="task-boards-field">
-                                <span>Prioridad</span>
-                                <select name="priority">
-                                    ${['low', 'medium', 'high', 'urgent'].map((priority) => `
-                                        <option value="${priority}" ${priority === resolvePriority(draft.priority) ? 'selected' : ''}>
-                                            ${escapeHtml(priorityLabel(priority))}
-                                        </option>
-                                    `).join('')}
-                                </select>
-                            </label>
-
-                            <label class="task-boards-field">
-                                <span>Inicio</span>
-                                <input type="date" name="start_date" value="${escapeHtml(draft.start_date)}">
-                            </label>
-
-                            <label class="task-boards-field">
-                                <span>Vencimiento</span>
-                                <input type="date" name="due_date" value="${escapeHtml(draft.due_date)}">
-                                ${isDateOverdue(draft.due_date) ? '<small class="task-boards-inline-alert">Esta tarea esta atrasada.</small>' : ''}
-                            </label>
-
-                            <label class="task-boards-field task-boards-field--wide">
-                                <span>Descripcion (Markdown)</span>
-                                <textarea name="description_markdown" rows="6" placeholder="Describe el trabajo, criterios de aceptacion o contexto" data-task-card-description>${escapeHtml(draft.description_markdown)}</textarea>
-                            </label>
-                        </div>
-
-                        <section class="task-boards-preview-card">
-                            <div class="task-boards-preview-head">
-                                <strong>Vista previa Markdown</strong>
-                                <span>Soporta listas, negritas, enlaces y codigo.</span>
-                            </div>
-                            <div class="task-boards-markdown-preview" data-task-markdown-preview>${renderMarkdown(draft.description_markdown)}</div>
-                        </section>
-
-                        <section class="task-boards-meta-grid">
-                            <div class="task-boards-meta-card">
-                                <div class="task-boards-meta-head">
-                                    <strong>Responsables</strong>
-                                    <span>Asigna uno o varios miembros.</span>
+                        <div class="task-boards-detail-layout">
+                            <div class="task-boards-detail-main">
+                                <div class="task-boards-action-row">
+                                    <span class="task-boards-detail-chip">
+                                        <span class="material-symbols-rounded">add</span>
+                                        <span>Añadir</span>
+                                    </span>
+                                    <span class="task-boards-detail-chip">
+                                        <span class="material-symbols-rounded">sell</span>
+                                        <span>Etiquetas</span>
+                                    </span>
+                                    <span class="task-boards-detail-chip">
+                                        <span class="material-symbols-rounded">event</span>
+                                        <span>Fechas</span>
+                                    </span>
+                                    <span class="task-boards-detail-chip">
+                                        <span class="material-symbols-rounded">checklist</span>
+                                        <span>Checklist</span>
+                                    </span>
                                 </div>
-                                <div class="task-boards-checkbox-list">
-                                    ${state.members.map((member) => `
-                                        <label class="task-boards-checkbox-item">
-                                            <input type="checkbox" name="assigned_member_ids[]" value="${escapeHtml(member.id)}" ${draft.assigned_member_ids.includes(member.id) ? 'checked' : ''}>
-                                            <span>${escapeHtml(member.label)}</span>
-                                        </label>
-                                    `).join('')}
-                                </div>
-                            </div>
 
-                            <div class="task-boards-meta-card">
-                                <div class="task-boards-meta-head">
-                                    <strong>Etiquetas</strong>
-                                    <span>Marca categoria o contexto.</span>
-                                </div>
-                                <div class="task-boards-checkbox-list">
-                                    ${(state.activeBoard?.labels ?? []).map((label) => `
-                                        <label class="task-boards-checkbox-item">
-                                            <input type="checkbox" name="label_ids[]" value="${escapeHtml(String(label.id || ''))}" ${draft.label_ids.includes(String(label.id || '')) ? 'checked' : ''}>
-                                            <span class="task-boards-label-inline">
-                                                <i style="background:${escapeHtml(String(label.color || '#2F7CEF'))};"></i>
-                                                ${escapeHtml(String(label.title || 'Etiqueta'))}
-                                            </span>
-                                        </label>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        </section>
-
-                        <section class="task-boards-panel-card">
-                            <div class="task-boards-meta-head">
-                                <strong>Subtareas</strong>
-                                <span>Divide el trabajo en pasos pequeños.</span>
-                            </div>
-                            <div class="task-boards-checklist-list">
-                                ${draft.checklist.length > 0
-                                    ? draft.checklist.map((item, index) => `
-                                        <div class="task-boards-checklist-row">
-                                            <input type="hidden" name="checklist_ids[]" value="${escapeHtml(item.id)}">
-                                            <label class="task-boards-checklist-toggle">
-                                                <input type="checkbox" name="checklist_done[]" value="${index}" ${item.is_done ? 'checked' : ''}>
-                                                <span></span>
-                                            </label>
-                                            <input type="text" name="checklist_titles[]" value="${escapeHtml(item.title)}" placeholder="Describe la subtarea">
-                                            <button type="button" class="task-boards-icon-button task-boards-icon-button--danger" data-task-checklist-action="delete" data-index="${index}" aria-label="Eliminar subtarea">
-                                                <span class="material-symbols-rounded">delete</span>
-                                            </button>
-                                        </div>
-                                    `).join('')
-                                    : '<div class="task-boards-muted-box">Aun no hay subtareas. Agrega una para desglosar el trabajo.</div>'}
-                            </div>
-                            <button type="button" class="task-boards-secondary" data-task-checklist-add>
-                                <span class="material-symbols-rounded">add</span>
-                                <span>Agregar subtarea</span>
-                            </button>
-                        </section>
-
-                        <section class="task-boards-panel-card">
-                            <div class="task-boards-meta-head">
-                                <strong>Comentarios</strong>
-                                <span>Coordina al equipo dentro de la misma tarea.</span>
-                            </div>
-                            <div class="task-boards-comment-list">
-                                ${comments.length > 0 ? comments.map(renderComment).join('') : '<div class="task-boards-muted-box">Todavia no hay comentarios.</div>'}
-                            </div>
-
-                            ${draft.id ? `
-                                <div
-                                    class="task-boards-comment-form"
-                                    data-task-comment-form="true"
-                                    data-board-id="${escapeHtml(draft.board_id)}"
-                                    data-card-id="${escapeHtml(draft.id)}"
-                                >
-                                    <textarea rows="3" placeholder="Escribe un comentario para el equipo" data-task-comment-input></textarea>
-                                    <div class="task-boards-comment-actions">
-                                        <button type="button" class="task-boards-primary" data-task-comment-submit>
-                                            <span class="material-symbols-rounded">send</span>
-                                            <span>Comentar</span>
-                                        </button>
+                                <section class="task-boards-panel-card task-boards-panel-card--editor">
+                                    <div class="task-boards-meta-head">
+                                        <strong>Descripcion</strong>
+                                        <span>Usa Markdown para detallar contexto, pasos o criterios de aceptacion.</span>
                                     </div>
-                                </div>
-                            ` : '<div class="task-boards-muted-box">Guarda la tarea para habilitar comentarios e historial.</div>'}
-                        </section>
 
-                        <section class="task-boards-panel-card">
-                            <div class="task-boards-meta-head">
-                                <strong>Historial</strong>
-                                <span>Registro de cambios y movimientos.</span>
+                                    <label class="task-boards-field task-boards-field--wide">
+                                        <textarea name="description_markdown" rows="9" placeholder="Describe el trabajo, criterios de aceptacion o contexto" data-task-card-description>${escapeHtml(draft.description_markdown)}</textarea>
+                                    </label>
+
+                                    <div class="task-boards-preview-card">
+                                        <div class="task-boards-preview-head">
+                                            <strong>Vista previa</strong>
+                                            <span>Negritas, listas, enlaces y bloques cortos.</span>
+                                        </div>
+                                        <div class="task-boards-markdown-preview" data-task-markdown-preview>${renderMarkdown(draft.description_markdown)}</div>
+                                    </div>
+                                </section>
+
+                                <section class="task-boards-panel-card">
+                                    <div class="task-boards-meta-head">
+                                        <strong>Subtareas</strong>
+                                        <span>Divide el trabajo en pasos pequeños.</span>
+                                    </div>
+                                    <div class="task-boards-checklist-list">
+                                        ${draft.checklist.length > 0
+                                            ? draft.checklist.map((item, index) => `
+                                                <div class="task-boards-checklist-row">
+                                                    <input type="hidden" name="checklist_ids[]" value="${escapeHtml(item.id)}">
+                                                    <label class="task-boards-checklist-toggle">
+                                                        <input type="checkbox" name="checklist_done[]" value="${index}" ${item.is_done ? 'checked' : ''}>
+                                                        <span></span>
+                                                    </label>
+                                                    <input type="text" name="checklist_titles[]" value="${escapeHtml(item.title)}" placeholder="Describe la subtarea">
+                                                    <button type="button" class="task-boards-icon-button task-boards-icon-button--danger" data-task-checklist-action="delete" data-index="${index}" aria-label="Eliminar subtarea">
+                                                        <span class="material-symbols-rounded">delete</span>
+                                                    </button>
+                                                </div>
+                                            `).join('')
+                                            : '<div class="task-boards-muted-box">Aun no hay subtareas. Agrega una para desglosar el trabajo.</div>'}
+                                    </div>
+                                    <button type="button" class="task-boards-secondary" data-task-checklist-add>
+                                        <span class="material-symbols-rounded">add</span>
+                                        <span>Agregar subtarea</span>
+                                    </button>
+                                </section>
                             </div>
-                            <div class="task-boards-activity-list">
-                                ${activity.length > 0 ? activity.map(renderActivity).join('') : '<div class="task-boards-muted-box">No hay actividad registrada todavia.</div>'}
-                            </div>
-                        </section>
+
+                            <aside class="task-boards-detail-sidebar">
+                                <section class="task-boards-meta-card">
+                                    <div class="task-boards-meta-head">
+                                        <strong>Detalles</strong>
+                                        <span>Prioridad, fechas y control general.</span>
+                                    </div>
+
+                                    <div class="task-boards-panel-grid">
+                                        <label class="task-boards-field">
+                                            <span>Prioridad</span>
+                                            <select name="priority">
+                                                ${['low', 'medium', 'high', 'urgent'].map((priority) => `
+                                                    <option value="${priority}" ${priority === resolvePriority(draft.priority) ? 'selected' : ''}>
+                                                        ${escapeHtml(priorityLabel(priority))}
+                                                    </option>
+                                                `).join('')}
+                                            </select>
+                                        </label>
+
+                                        <label class="task-boards-field">
+                                            <span>Inicio</span>
+                                            <input type="date" name="start_date" value="${escapeHtml(draft.start_date)}">
+                                        </label>
+
+                                        <label class="task-boards-field">
+                                            <span>Vencimiento</span>
+                                            <input type="date" name="due_date" value="${escapeHtml(draft.due_date)}">
+                                            ${isDateOverdue(draft.due_date) ? '<small class="task-boards-inline-alert">Esta tarea esta atrasada.</small>' : ''}
+                                        </label>
+                                    </div>
+                                </section>
+
+                                <section class="task-boards-meta-card">
+                                    <div class="task-boards-meta-head">
+                                        <strong>Responsables</strong>
+                                        <span>Asigna uno o varios miembros.</span>
+                                    </div>
+                                    <div class="task-boards-checkbox-list">
+                                        ${state.members.map((member) => `
+                                            <label class="task-boards-checkbox-item">
+                                                <input type="checkbox" name="assigned_member_ids[]" value="${escapeHtml(member.id)}" ${draft.assigned_member_ids.includes(member.id) ? 'checked' : ''}>
+                                                <span>${escapeHtml(member.label)}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </section>
+
+                                <section class="task-boards-meta-card">
+                                    <div class="task-boards-meta-head">
+                                        <strong>Etiquetas</strong>
+                                        <span>Marca categoria o contexto.</span>
+                                    </div>
+                                    <div class="task-boards-checkbox-list">
+                                        ${(state.activeBoard?.labels ?? []).map((label) => `
+                                            <label class="task-boards-checkbox-item">
+                                                <input type="checkbox" name="label_ids[]" value="${escapeHtml(String(label.id || ''))}" ${draft.label_ids.includes(String(label.id || '')) ? 'checked' : ''}>
+                                                <span class="task-boards-label-inline">
+                                                    <i style="background:${escapeHtml(String(label.color || '#2F7CEF'))};"></i>
+                                                    ${escapeHtml(String(label.title || 'Etiqueta'))}
+                                                </span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </section>
+
+                                <section class="task-boards-panel-card">
+                                    <div class="task-boards-meta-head">
+                                        <strong>Comentarios y actividad</strong>
+                                        <span>Coordina y deja trazabilidad dentro de la misma tarea.</span>
+                                    </div>
+
+                                    ${draft.id ? `
+                                        <div
+                                            class="task-boards-comment-form"
+                                            data-task-comment-form="true"
+                                            data-board-id="${escapeHtml(draft.board_id)}"
+                                            data-card-id="${escapeHtml(draft.id)}"
+                                        >
+                                            <textarea rows="3" placeholder="Escribe un comentario..." data-task-comment-input></textarea>
+                                            <div class="task-boards-comment-actions">
+                                                <button type="button" class="task-boards-primary" data-task-comment-submit>
+                                                    <span class="material-symbols-rounded">send</span>
+                                                    <span>Comentar</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ` : '<div class="task-boards-muted-box">Guarda la tarea para habilitar comentarios e historial.</div>'}
+
+                                    <div class="task-boards-comment-list">
+                                        ${comments.length > 0 ? comments.map(renderComment).join('') : '<div class="task-boards-muted-box">Todavia no hay comentarios.</div>'}
+                                    </div>
+
+                                    <div class="task-boards-activity-list">
+                                        ${activity.length > 0 ? activity.map(renderActivity).join('') : '<div class="task-boards-muted-box">No hay actividad registrada todavia.</div>'}
+                                    </div>
+                                </section>
+                            </aside>
+                        </div>
                     </div>
 
                     <div class="task-boards-panel-footer">
@@ -1025,7 +1387,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                         </div>
                     </div>
                 </form>
-            </aside>
+            </section>
         `;
     }
 
@@ -1106,6 +1468,25 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         state.cardPanel.dirty = false;
         state.cardPanel.draft = createCardDraft(card);
         render();
+    }
+
+    async function openBoard(boardId) {
+        const normalizedBoardId = String(boardId || '').trim();
+
+        if (normalizedBoardId === '') {
+            return;
+        }
+
+        state.dashboardSection = 'boards';
+
+        if (normalizedBoardId === String(state.activeBoard?.board?.id || '') && state.activeBoard) {
+            state.screen = 'board';
+            render();
+            return;
+        }
+
+        state.screen = 'board';
+        await reloadBootstrap(normalizedBoardId);
     }
 
     function syncStructureDraftFromDom() {
@@ -1345,8 +1726,14 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         state.viewer = payload.viewer;
         state.realtime = payload.realtime;
         state.activeBoard = payload.active_board;
+        state.activeSwimlaneId = resolveVisibleSwimlaneId(payload.active_board, state.activeSwimlaneId);
         state.searchQuery = '';
         state.cardPanel.dirty = false;
+
+        if (!state.activeBoard) {
+            state.screen = 'overview';
+        }
+
         subscribeRealtime();
     }
 
@@ -1747,11 +2134,49 @@ function normalizeStructureItem(item, mode) {
     };
 }
 
-function countCardsByColumn(cards) {
+function resolveVisibleSwimlaneId(boardPayload, preferredSwimlaneId = '') {
+    const swimlanes = Array.isArray(boardPayload?.swimlanes) ? boardPayload.swimlanes : [];
+    const preferred = String(preferredSwimlaneId || '').trim();
+
+    if (preferred !== '' && swimlanes.some((swimlane) => String(swimlane.id || '') === preferred)) {
+        return preferred;
+    }
+
+    const defaultLane = swimlanes.find((swimlane) => Boolean(swimlane.is_default));
+    return String(defaultLane?.id || swimlanes[0]?.id || '');
+}
+
+function resolveBoardVisual(board) {
+    const accents = [
+        ['#1a73e8', 'rgba(26, 115, 232, 0.18)'],
+        ['#d93025', 'rgba(217, 48, 37, 0.18)'],
+        ['#188038', 'rgba(24, 128, 56, 0.18)'],
+        ['#df9c0a', 'rgba(223, 156, 10, 0.2)'],
+        ['#7c4dff', 'rgba(124, 77, 255, 0.18)'],
+    ];
+    const patterns = [
+        'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0)), radial-gradient(circle at 18% 20%, rgba(255,255,255,0.55), transparent 24%), linear-gradient(120deg, rgba(15,23,42,0.16), rgba(15,23,42,0.04))',
+        'radial-gradient(circle at 20% 18%, rgba(255,255,255,0.58), transparent 22%), linear-gradient(160deg, rgba(255,255,255,0.04), rgba(17,24,39,0.24)), repeating-linear-gradient(135deg, rgba(255,255,255,0.08) 0 14px, rgba(255,255,255,0.02) 14px 28px)',
+        'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0)), radial-gradient(circle at 78% 24%, rgba(255,255,255,0.45), transparent 20%), linear-gradient(120deg, rgba(17,24,39,0.2), rgba(255,255,255,0.03))',
+        'radial-gradient(circle at 78% 26%, rgba(255,255,255,0.48), transparent 18%), linear-gradient(135deg, rgba(255,255,255,0.08), rgba(17,24,39,0.14)), repeating-linear-gradient(45deg, rgba(255,255,255,0.08) 0 12px, rgba(255,255,255,0.01) 12px 24px)',
+    ];
+    const seed = Math.abs(hashString(`${board?.id || ''}:${board?.title || ''}`));
+    const [accent, soft] = accents[seed % accents.length];
+    const image = patterns[seed % patterns.length];
+
+    return {
+        accent,
+        soft,
+        image,
+    };
+}
+
+function countCardsByColumn(cards, swimlaneId = '') {
     return cards.reduce((counts, card) => {
         const columnId = String(card.column_id || '');
+        const currentSwimlaneId = String(card.swimlane_id || '');
 
-        if (columnId !== '') {
+        if (columnId !== '' && (swimlaneId === '' || currentSwimlaneId === swimlaneId)) {
             counts[columnId] = (counts[columnId] || 0) + 1;
         }
 
@@ -1985,4 +2410,10 @@ function escapeAttribute(value) {
 
 function escapeToken(value) {
     return String(value ?? '').replace(/[^a-z0-9_-]/gi, '') || 'info';
+}
+
+function hashString(value) {
+    return [...String(value || '')].reduce((hash, char) => {
+        return ((hash << 5) - hash) + char.charCodeAt(0);
+    }, 0);
 }

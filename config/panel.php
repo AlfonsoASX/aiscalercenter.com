@@ -55,6 +55,15 @@ $regularMenu = [
         'color' => '#000000',
         'section_title' => 'Conecta',
     ],
+    [
+        'id' => 'configuracion-proyecto',
+        'label' => 'Configuracion',
+        'hover_label' => 'Configurar proyecto',
+        'icon_path' => 'img/ico/9.svg',
+        'color' => '#202124',
+        'section_title' => 'Configuracion del proyecto',
+        'requires_project' => true,
+    ],
 ];
 
 $adminMenu = [

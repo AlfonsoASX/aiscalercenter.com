@@ -84,15 +84,15 @@ $initialState = [
     data-task-boards="true"
     data-api-url="<?= htmlspecialchars($apiUrl, ENT_QUOTES, 'UTF-8'); ?>"
 >
-    <header class="task-boards-hero">
-        <div class="task-boards-hero-copy">
+    <header class="task-boards-context-bar">
+        <div class="task-boards-context-copy">
             <p class="task-boards-eyebrow">Diseñar</p>
             <h1>Tableros de tareas</h1>
-            <p>Organiza trabajo con un Kanban colaborativo, carriles, limites WIP, comentarios y tareas en tiempo real dentro del proyecto activo.</p>
+            <p>Proyecto activo: <?= htmlspecialchars((string) ($project['name'] ?? 'Proyecto'), ENT_QUOTES, 'UTF-8'); ?></p>
         </div>
 
         <?php if ($error === null): ?>
-            <div class="task-boards-hero-actions">
+            <div class="task-boards-context-actions">
                 <button type="button" class="task-boards-primary" data-task-board-create>
                     <span class="material-symbols-rounded">add_circle</span>
                     <span>Nuevo tablero</span>

@@ -46,9 +46,10 @@ export function showNotice(view, type, message) {
         info: 'mb-6 rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-100',
     };
     const palettes = view === 'app' ? appPalettes : authPalettes;
+    const normalizedMessage = describeErrorMessage(message, 'Ocurrio un problema inesperado.');
 
     notice.className = palettes[type] ?? palettes.info;
-    notice.textContent = message;
+    notice.textContent = normalizedMessage;
     notice.classList.remove('hidden');
 }
 
@@ -86,6 +87,40 @@ export function cleanupAuthHash() {
 
 export function normalizeEmail(value) {
     return String(value ?? '').trim().toLowerCase();
+}
+
+export function describeErrorMessage(error, fallback = '') {
+    if (error instanceof Error) {
+        return String(error.message ?? fallback).trim() || fallback;
+    }
+
+    if (typeof error === 'string') {
+        return error.trim() || fallback;
+    }
+
+    if (error && typeof error === 'object') {
+        const candidate = [
+            error.message,
+            error.msg,
+            error.error_description,
+            error.description,
+            error.details,
+            error.hint,
+            error.code,
+        ].find((value) => typeof value === 'string' && value.trim() !== '');
+
+        if (typeof candidate === 'string' && candidate.trim() !== '') {
+            return candidate.trim();
+        }
+
+        try {
+            return JSON.stringify(error);
+        } catch (jsonError) {
+            return fallback || '[error]';
+        }
+    }
+
+    return fallback;
 }
 
 export function escapeHtml(value) {

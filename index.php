@@ -30,6 +30,18 @@ $authClientConfig = [
     'hasSupabaseConfig' => $hasSupabaseConfig,
     'panel' => $panelConfig,
 ];
+
+function appAssetUrl(string $path): string
+{
+    $normalizedPath = ltrim($path, '/');
+    $absolutePath = __DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalizedPath);
+
+    if (!is_file($absolutePath)) {
+        return $normalizedPath;
+    }
+
+    return $normalizedPath . '?v=' . (string) filemtime($absolutePath);
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -44,14 +56,15 @@ $authClientConfig = [
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
-    <link rel="stylesheet" href="css/modules/blog-entries.css">
-    <link rel="stylesheet" href="css/modules/connect.css">
-    <link rel="stylesheet" href="css/modules/courses.css">
-    <link rel="stylesheet" href="css/modules/execute.css">
-    <link rel="stylesheet" href="css/modules/learn.css">
-    <link rel="stylesheet" href="css/modules/projects.css">
-    <link rel="stylesheet" href="css/modules/research.css">
-    <link rel="stylesheet" href="css/modules/tools-catalog.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/blog-entries.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/connect.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/courses.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/execute.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/learn.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/project-settings.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/projects.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/research.css'), ENT_QUOTES, 'UTF-8'); ?>">
+    <link rel="stylesheet" href="<?= htmlspecialchars(appAssetUrl('css/modules/tools-catalog.css'), ENT_QUOTES, 'UTF-8'); ?>">
 
     <style>
         :root {
@@ -1602,7 +1615,7 @@ $authClientConfig = [
         <script>
             window.AISCALER_AUTH_CONFIG = <?= json_encode($authClientConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         </script>
-        <script type="module" src="js/app.js"></script>
+        <script type="module" src="<?= htmlspecialchars(appAssetUrl('js/app.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
     <?php endif; ?>
 </head>
 <?php if ($showAppView): ?>

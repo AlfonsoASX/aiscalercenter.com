@@ -2,6 +2,7 @@ import { BLOG_ENTRIES_SECTION_ID, createBlogEntriesModule } from './modules/blog
 import { CONNECT_SECTION_ID, createConnectModule } from './modules/connect/index.js';
 import { COURSES_SECTION_ID, createCoursesModule } from './modules/courses/index.js';
 import { LEARN_SECTION_ID, createLearnModule } from './modules/learn/index.js';
+import { PROJECT_SETTINGS_SECTION_ID, createProjectSettingsModule } from './modules/project-settings/index.js';
 import { createProjectsModule } from './modules/projects/index.js';
 import { createToolsCatalogModule } from './modules/tools-catalog/index.js';
 import {
@@ -96,6 +97,25 @@ const toolsCatalogModule = createToolsCatalogModule({
 
 const connectModule = createConnectModule({
     getAccessToken,
+});
+
+const projectSettingsModule = createProjectSettingsModule({
+    supabase,
+    getCurrentUser: () => state.currentUser,
+    getActiveProject: () => state.activeProject,
+    onProjectUpdated: (project) => {
+        setActiveProject(project);
+    },
+    onProjectDeleted: () => {
+        setActiveProject(null);
+        void projectsModule.loadProjects();
+        selectMenu(getDashboardItem().id);
+    },
+    onProjectChanged: () => {
+        void projectsModule.loadProjects();
+    },
+    showNotice: (type, message) => notify(type, message),
+    humanizeError: (message) => humanizePanelError(message),
 });
 
 if (view === 'app') {
@@ -414,6 +434,7 @@ function setActiveProject(project) {
         window.localStorage.removeItem(ACTIVE_PROJECT_ID_STORAGE_KEY);
         window.localStorage.removeItem(ACTIVE_PROJECT_STORAGE_KEY);
         toolsCatalogModule.setProject(null);
+        projectSettingsModule.setProject(null);
         updateActiveProjectSidebar();
         renderBreadcrumbs();
         return;
@@ -428,6 +449,7 @@ function setActiveProject(project) {
     window.localStorage.setItem(ACTIVE_PROJECT_ID_STORAGE_KEY, state.activeProject.id);
     window.localStorage.setItem(ACTIVE_PROJECT_STORAGE_KEY, JSON.stringify(state.activeProject));
     toolsCatalogModule.setProject(state.activeProject);
+    projectSettingsModule.setProject(state.activeProject);
     updateActiveProjectSidebar();
     renderBreadcrumbs();
 }
@@ -452,12 +474,14 @@ function primeActiveProjectFromStorage() {
     if (!storedProject) {
         state.activeProject = null;
         toolsCatalogModule.setProject(null);
+        projectSettingsModule.setProject(null);
         updateActiveProjectSidebar();
         return;
     }
 
     state.activeProject = storedProject;
     toolsCatalogModule.setProject(storedProject);
+    projectSettingsModule.setProject(storedProject);
     updateActiveProjectSidebar();
 }
 
@@ -591,8 +615,8 @@ function selectMenu(menuId) {
         return;
     }
 
-    if (selectedItem.tool_category_key && !state.activeProject) {
-        notify('info', 'Selecciona o crea un proyecto antes de abrir herramientas.');
+    if ((selectedItem.tool_category_key || selectedItem.requires_project) && !state.activeProject) {
+        notify('info', 'Selecciona o crea un proyecto antes de abrir esta seccion.');
 
         if (menuId !== getDashboardItem().id) {
             selectMenu(getDashboardItem().id);
@@ -669,6 +693,8 @@ function ensureSectionBound(item) {
         learnModule.bind();
     } else if (item.id === CONNECT_SECTION_ID) {
         connectModule.bind();
+    } else if (item.id === PROJECT_SETTINGS_SECTION_ID) {
+        projectSettingsModule.bind();
     } else if (item.id === getDashboardItem().id) {
         projectsModule.bind();
         learnModule.bind();
@@ -861,6 +887,8 @@ function renderSectionContent(item) {
         ? learnModule.renderSection(item)
         : item.id === CONNECT_SECTION_ID
         ? connectModule.renderSection(item)
+        : item.id === PROJECT_SETTINGS_SECTION_ID
+        ? projectSettingsModule.renderSection(item)
         : item.tool_category_key
         ? toolsCatalogModule.renderSection(item)
         : item.id === getDashboardItem().id

@@ -3,6 +3,7 @@ import {
     USER_FILES_STORAGE_BUCKET,
     buildUserStoragePath,
 } from '../../shared/storage.js';
+import { describeErrorMessage } from '../../shared/ui.js';
 
 export const PROJECTS_SECTION_ID = 'proyectos';
 
@@ -25,7 +26,6 @@ export function createProjectsModule({
         editingProjectId: '',
         logoFile: null,
         logoPreviewUrl: '',
-        memberDraft: '',
         notice: null,
     };
 
@@ -88,7 +88,7 @@ export function createProjectsModule({
         try {
             const { data, error } = await supabase
                 .from('projects')
-                .select('id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at, project_members(id, user_id, invited_email, role, status)')
+                .select('id, owner_user_id, name, logo_url, logo_storage_path, description, company_type, company_goal, status, updated_at')
                 .is('deleted_at', null)
                 .order('updated_at', { ascending: false });
 
@@ -96,7 +96,16 @@ export function createProjectsModule({
                 throw error;
             }
 
-            state.projects = (data ?? []).map(normalizeProject);
+            const rows = Array.isArray(data) ? data : [];
+            let memberCounts = new Map();
+
+            try {
+                memberCounts = await loadMemberCounts(rows.map((project) => String(project?.id ?? '')).filter(Boolean));
+            } catch (memberError) {
+                console.error(memberError);
+            }
+
+            state.projects = rows.map((project) => normalizeProject(project, memberCounts));
             onProjectsLoaded?.(state.projects);
         } catch (error) {
             state.projects = [];
@@ -108,6 +117,36 @@ export function createProjectsModule({
             state.loading = false;
             renderShell();
         }
+    }
+
+    async function loadMemberCounts(projectIds) {
+        if (!Array.isArray(projectIds) || projectIds.length === 0) {
+            return new Map();
+        }
+
+        const { data, error } = await supabase
+            .from('project_members')
+            .select('project_id, id')
+            .in('project_id', projectIds)
+            .eq('status', 'active');
+
+        if (error) {
+            throw error;
+        }
+
+        const counts = new Map();
+
+        (Array.isArray(data) ? data : []).forEach((row) => {
+            const projectId = String(row?.project_id ?? '').trim();
+
+            if (projectId === '') {
+                return;
+            }
+
+            counts.set(projectId, (counts.get(projectId) ?? 0) + 1);
+        });
+
+        return counts;
     }
 
     function renderShell() {
@@ -187,7 +226,6 @@ export function createProjectsModule({
         const project = getEditingProject();
         const isEditing = Boolean(project?.id);
         const logoPreview = state.logoPreviewUrl || project?.logo_url || '';
-        const membersText = state.memberDraft || getMembersText(project);
 
         return `
             <div id="project-modal" class="project-modal ${state.modalOpen ? '' : 'hidden'}" role="dialog" aria-modal="true" aria-label="${isEditing ? 'Editar proyecto' : 'Crear proyecto'}">
@@ -241,11 +279,7 @@ export function createProjectsModule({
                         </label>
                     </div>
 
-                    <label class="workspace-field-block">
-                        <span class="workspace-field-label">Usuarios con acceso</span>
-                        <textarea name="members" class="workspace-field project-textarea" rows="4" placeholder="correo@empresa.com&#10;otro@empresa.com">${escapeHtml(membersText)}</textarea>
-                        <small class="project-helper">Agrega un correo por linea. Esas personas veran el proyecto cuando entren con ese email.</small>
-                    </label>
+                    <p class="project-helper">Los accesos del equipo y la configuracion avanzada se administran dentro del proyecto, en la seccion Configuracion.</p>
 
                     <div class="project-modal-footer">
                         ${isEditing ? `
@@ -367,7 +401,6 @@ export function createProjectsModule({
         const project = state.projects.find((item) => item.id === projectId) ?? null;
         state.modalOpen = true;
         state.editingProjectId = project?.id ?? '';
-        state.memberDraft = getMembersText(project);
         releaseLogoPreview();
         renderShell();
     }
@@ -375,7 +408,6 @@ export function createProjectsModule({
     function closeModal() {
         state.modalOpen = false;
         state.editingProjectId = '';
-        state.memberDraft = '';
         state.logoFile = null;
         releaseLogoPreview();
         renderShell();
@@ -395,14 +427,12 @@ export function createProjectsModule({
         const description = String(form.description.value ?? '').trim();
         const companyType = String(form.company_type.value ?? '').trim();
         const companyGoal = String(form.company_goal.value ?? '').trim();
-        const membersText = String(form.members.value ?? '');
 
         if (!name) {
             showModuleNotice('error', 'El proyecto necesita un nombre.');
             return;
         }
 
-        state.memberDraft = membersText;
         state.saving = true;
         renderModalIntoDom();
 
@@ -424,8 +454,7 @@ export function createProjectsModule({
                 status: 'active',
             };
 
-            const savedProject = await upsertProject(projectId, payload);
-            await addProjectMembers(savedProject.id, membersText);
+            await upsertProject(projectId, payload);
 
             showModuleNotice('success', 'Proyecto guardado correctamente.');
             closeModal();
@@ -458,6 +487,12 @@ export function createProjectsModule({
             return data;
         }
 
+        const rpcProject = await createProjectWithRpc(payload);
+
+        if (rpcProject?.project) {
+            return rpcProject.project;
+        }
+
         const { data, error } = await supabase
             .from('projects')
             .insert(payload)
@@ -465,46 +500,60 @@ export function createProjectsModule({
             .single();
 
         if (error) {
+            if (rpcProject?.missingFunction && isProjectCreatePolicyError(error)) {
+                throw new Error('create_project missing and direct project insert blocked by row-level security');
+            }
+
             throw error;
         }
 
         return data;
     }
 
-    async function addProjectMembers(projectId, membersText) {
-        const currentUser = getCurrentUser();
-        const emails = parseMemberEmails(membersText)
-            .filter((email) => email !== String(currentUser?.email ?? '').toLowerCase());
+    async function createProjectWithRpc(payload) {
+        const rpcPayload = {
+            p_name: payload.name,
+            p_logo_url: payload.logo_url,
+            p_logo_storage_path: payload.logo_storage_path,
+            p_description: payload.description,
+            p_company_type: payload.company_type,
+            p_company_goal: payload.company_goal,
+            p_status: payload.status,
+        };
+        const { data, error } = await supabase.rpc('create_project', rpcPayload).single();
 
-        if (emails.length === 0) {
-            return;
+        if (!error) {
+            return {
+                project: data,
+                missingFunction: false,
+            };
         }
 
-        const existing = getEditingProject()?.members ?? [];
-        const existingEmails = new Set(existing.map((member) => String(member.invited_email ?? '').toLowerCase()).filter(Boolean));
-        const rows = emails
-            .filter((email) => !existingEmails.has(email))
-            .map((email) => {
-                return {
-                    project_id: projectId,
-                    invited_email: email,
-                    role: 'member',
-                    status: 'active',
-                    invited_by: currentUser?.id ?? null,
-                };
-            });
-
-        if (rows.length === 0) {
-            return;
+        if (canFallbackToDirectProjectInsert(error)) {
+            return {
+                project: null,
+                missingFunction: true,
+            };
         }
 
-        const { error } = await supabase
-            .from('project_members')
-            .insert(rows);
+        throw error;
+    }
 
-        if (error) {
-            throw error;
-        }
+    function canFallbackToDirectProjectInsert(error) {
+        const normalized = describeErrorMessage(error, '').toLowerCase();
+
+        return (
+            normalized.includes('pgrst202')
+            || normalized.includes('could not find the function')
+            || normalized.includes('schema cache')
+            || normalized.includes('create_project')
+        );
+    }
+
+    function isProjectCreatePolicyError(error) {
+        const normalized = describeErrorMessage(error, '').toLowerCase();
+
+        return normalized.includes('row-level security') || normalized.includes('42501');
     }
 
     async function deleteProject(projectId) {
@@ -558,9 +607,11 @@ export function createProjectsModule({
         };
     }
 
-    function normalizeProject(project) {
+    function normalizeProject(project, memberCounts = new Map()) {
+        const projectId = String(project?.id ?? '');
+
         return {
-            id: String(project?.id ?? ''),
+            id: projectId,
             owner_user_id: String(project?.owner_user_id ?? ''),
             name: String(project?.name ?? 'Proyecto sin nombre'),
             logo_url: String(project?.logo_url ?? ''),
@@ -570,41 +621,12 @@ export function createProjectsModule({
             company_goal: String(project?.company_goal ?? ''),
             status: String(project?.status ?? 'active'),
             updated_at: String(project?.updated_at ?? ''),
-            members: Array.isArray(project?.project_members)
-                ? project.project_members.map(normalizeProjectMember)
-                : [],
-        };
-    }
-
-    function normalizeProjectMember(member) {
-        return {
-            id: String(member?.id ?? ''),
-            user_id: String(member?.user_id ?? ''),
-            invited_email: String(member?.invited_email ?? '').toLowerCase(),
-            role: String(member?.role ?? 'member'),
-            status: String(member?.status ?? 'active'),
+            members: Array.from({ length: memberCounts.get(projectId) ?? 0 }, () => ({})),
         };
     }
 
     function getEditingProject() {
         return state.projects.find((item) => item.id === state.editingProjectId) ?? null;
-    }
-
-    function getMembersText(project) {
-        return (project?.members ?? [])
-            .filter((member) => member.role !== 'owner')
-            .map((member) => member.invited_email)
-            .filter(Boolean)
-            .join('\n');
-    }
-
-    function parseMemberEmails(value) {
-        return [...new Set(
-            String(value ?? '')
-                .split(/\s|,|;/)
-                .map((email) => email.trim().toLowerCase())
-                .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-        )];
     }
 
     function showModuleNotice(type, message) {
@@ -614,11 +636,31 @@ export function createProjectsModule({
     }
 
     function humanizeProjectError(error) {
-        const raw = error instanceof Error ? error.message : String(error ?? 'No fue posible cargar proyectos.');
+        const raw = describeErrorMessage(error, 'No fue posible cargar proyectos.');
         const normalized = raw.toLowerCase();
 
         if (normalized.includes('pgrst205') || normalized.includes('could not find the table') || normalized.includes('projects')) {
             return 'Falta crear la estructura de proyectos. Ejecuta supabase/projects_schema.sql en Supabase.';
+        }
+
+        if (normalized.includes('project_members') && (normalized.includes('relationship') || normalized.includes('schema cache'))) {
+            return 'Supabase aun no reconoce correctamente la relacion de proyectos. Actualiza el esquema y recarga el panel.';
+        }
+
+        if (
+            normalized.includes('pgrst202')
+            || normalized.includes('could not find the function')
+            || (normalized.includes('schema cache') && normalized.includes('create_project'))
+            || normalized.includes('create_project')
+        ) {
+            return 'La base de datos aun no tiene la funcion create_project actualizada. Ejecuta de nuevo supabase/projects_schema.sql y recarga el panel.';
+        }
+
+        if (
+            normalized.includes('new row violates row-level security policy')
+            || (normalized.includes('42501') && normalized.includes('projects'))
+        ) {
+            return 'La base de datos bloqueo la creacion del proyecto por politicas internas. Ejecuta de nuevo supabase/projects_schema.sql y recarga el panel.';
         }
 
         if (normalized.includes('bucket') || normalized.includes('storage')) {
@@ -626,7 +668,7 @@ export function createProjectsModule({
         }
 
         if (normalized.includes('row-level security')) {
-            return 'Supabase bloqueo esta operacion por permisos. Revisa supabase/projects_schema.sql.';
+            return 'Supabase bloqueo esta operacion por permisos. Reejecuta supabase/projects_schema.sql en Supabase.';
         }
 
         return typeof humanizeError === 'function' ? humanizeError(raw) : raw;

@@ -3,6 +3,18 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/modules/tools/bootstrap.php';
 
+function toolAssetUrl(string $path): string
+{
+    $normalizedPath = ltrim($path, '/');
+    $absolutePath = __DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $normalizedPath);
+
+    if (!is_file($absolutePath)) {
+        return $normalizedPath;
+    }
+
+    return $normalizedPath . '?v=' . (string) filemtime($absolutePath);
+}
+
 ensureToolsSessionStarted();
 
 $launchToken = trim((string) ($_GET['launch'] ?? ''));
@@ -165,7 +177,7 @@ if ($launchMode === 'php_folder') {
     <title><?= htmlspecialchars($toolTitle, ENT_QUOTES, 'UTF-8'); ?> - AiScaler Center</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
-    <link rel="stylesheet" href="css/tool-panel-shell.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(toolAssetUrl('css/tool-panel-shell.css'), ENT_QUOTES, 'UTF-8'); ?>">
     <?php if ($appStyleHref !== null): ?>
         <link rel="stylesheet" href="<?= htmlspecialchars($appStyleHref, ENT_QUOTES, 'UTF-8'); ?>">
     <?php endif; ?>
@@ -188,7 +200,7 @@ if ($launchMode === 'php_folder') {
     <title><?= htmlspecialchars($toolTitle, ENT_QUOTES, 'UTF-8'); ?> - AiScaler Center</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
-    <link rel="stylesheet" href="css/tool-panel-shell.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(toolAssetUrl('css/tool-panel-shell.css'), ENT_QUOTES, 'UTF-8'); ?>">
     <?php if ($appStyleHref !== null): ?>
         <link rel="stylesheet" href="<?= htmlspecialchars($appStyleHref, ENT_QUOTES, 'UTF-8'); ?>">
     <?php endif; ?>
@@ -479,14 +491,14 @@ $moduleStylesheet = match ($panelModuleKey) {
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0">
     <?php if ($moduleStylesheet !== null): ?>
-        <link rel="stylesheet" href="<?= htmlspecialchars($moduleStylesheet, ENT_QUOTES, 'UTF-8'); ?>">
+        <link rel="stylesheet" href="<?= htmlspecialchars(toolAssetUrl($moduleStylesheet), ENT_QUOTES, 'UTF-8'); ?>">
     <?php endif; ?>
-    <link rel="stylesheet" href="css/tool-runtime.css">
+    <link rel="stylesheet" href="<?= htmlspecialchars(toolAssetUrl('css/tool-runtime.css'), ENT_QUOTES, 'UTF-8'); ?>">
     <script>
         window.AISCALER_AUTH_CONFIG = <?= json_encode($authClientConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
         window.AISCALER_TOOL_PAYLOAD = <?= json_encode($toolRuntimePayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?>;
     </script>
-    <script type="module" src="js/tool-runtime.js"></script>
+    <script type="module" src="<?= htmlspecialchars(toolAssetUrl('js/tool-runtime.js'), ENT_QUOTES, 'UTF-8'); ?>"></script>
 </head>
 <body data-view="<?= $isEmbedMode ? 'tool-embed' : 'tool'; ?>" class="tool-runtime-body<?= $isEmbedMode ? ' tool-runtime-body--embed' : ''; ?>">
     <div class="tool-runtime-shell">
