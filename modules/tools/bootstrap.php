@@ -9,7 +9,7 @@ function ensureToolsSessionStarted(): void
         return;
     }
 
-    session_name('aiscaler_tools');
+    session_name('aiscaler_account');
     session_set_cookie_params([
         'httponly' => true,
         'samesite' => 'Lax',
@@ -657,7 +657,6 @@ function retiredToolSlugs(): array
 {
     return [
         'validar-mercado',
-        'investigar-amazon',
     ];
 }
 

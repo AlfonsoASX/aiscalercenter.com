@@ -20,6 +20,20 @@ if (!$tool) {
     exit;
 }
 
+$requestMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+$readOnly = filter_var($launchPayload['read_only'] ?? false, FILTER_VALIDATE_BOOL);
+
+if ($readOnly && !in_array($requestMethod, ['GET', 'HEAD'], true)) {
+    header('Content-Type: application/json; charset=UTF-8');
+    http_response_code(402);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Tu cuenta esta en modo lectura. Reactiva tu suscripcion para volver a editar.',
+        'read_only' => true,
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
 $workspaceRoot = realpath(__DIR__) ?: __DIR__;
 $appFolder = trim((string) ($tool['app_folder'] ?? ''), '/');
 
@@ -63,6 +77,10 @@ $toolRuntimeContext = [
     'user_id' => (string) ($launchPayload['user_id'] ?? ''),
     'user_email' => (string) (($launchPayload['user']['email'] ?? null) ?: ''),
     'project' => is_array($launchPayload['project'] ?? null) ? $launchPayload['project'] : [],
+    'read_only' => $readOnly,
+    'private_app_key' => (string) ($launchPayload['private_app_key'] ?? ''),
+    'private_base_url' => (string) ($launchPayload['private_base_url'] ?? ''),
+    'subscription' => is_array($launchPayload['subscription'] ?? null) ? $launchPayload['subscription'] : [],
 ];
 
 require $apiPath;

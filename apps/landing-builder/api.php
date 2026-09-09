@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../../modules/landing-pages/bootstrap.php';
+require_once __DIR__ . '/bootstrap.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -130,12 +130,12 @@ function landingBuilderPutStorageObject(
 
     if ($responseBody === false) {
         $error = curl_error($curl);
-        curl_close($curl);
+        closeCurlHandle($curl);
         throw new RuntimeException('Error al subir la imagen a Supabase Storage: ' . $error);
     }
 
     $statusCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
+    closeCurlHandle($curl);
 
     if ($statusCode >= 400) {
         throw new RuntimeException('Supabase Storage respondio con error HTTP ' . $statusCode . ': ' . (string) $responseBody);

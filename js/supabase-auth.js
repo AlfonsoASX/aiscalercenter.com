@@ -20,6 +20,7 @@ export const absoluteUrls = {
     landing: new URL(authConfig?.landingUrl ?? '/', window.location.origin).toString(),
     login: new URL(authConfig?.loginUrl ?? '/login', window.location.origin).toString(),
     app: new URL(authConfig?.appUrl ?? '/app', window.location.origin).toString(),
+    account: new URL(authConfig?.accountUrl ?? authConfig?.appUrl ?? '/cuenta', window.location.origin).toString(),
 };
 
 const authState = {
@@ -71,6 +72,51 @@ export async function getCurrentSession() {
     } = await supabase.auth.getSession();
 
     return session;
+}
+
+export async function syncServerAccountSession(accessToken) {
+    const token = String(accessToken ?? '').trim();
+
+    if (!token || !authConfig?.accountSessionUrl) {
+        return;
+    }
+
+    await fetch(authConfig.accountSessionUrl, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+}
+
+export async function clearServerAccountSession() {
+    if (!authConfig?.accountSessionUrl) {
+        return;
+    }
+
+    await fetch(authConfig.accountSessionUrl, {
+        method: 'DELETE',
+    });
+}
+
+export async function syncServerSessions(accessToken) {
+    const token = String(accessToken ?? '').trim();
+
+    if (!token) {
+        return;
+    }
+
+    await Promise.allSettled([
+        syncServerAccountSession(token),
+        syncLegacyToolsSession(token),
+    ]);
+}
+
+export async function clearServerSessions() {
+    await Promise.allSettled([
+        clearServerAccountSession(),
+        clearLegacyToolsSession(),
+    ]);
 }
 
 export function observeSupabaseAuth(handler) {
@@ -165,13 +211,12 @@ async function bootLoginView() {
     }
 
     if (session) {
-        setFlash('Sesion iniciada correctamente.');
-        window.location.href = authConfig.appUrl;
+        await finishAuthenticatedLogin(session, 'Sesion iniciada correctamente.');
     }
 }
 
 function observeLoginAuthState() {
-    observeSupabaseAuth((event) => {
+    observeSupabaseAuth(async (event, session) => {
         if (event === 'PASSWORD_RECOVERY') {
             authState.recoveryMode = true;
             cleanupAuthHash();
@@ -180,10 +225,12 @@ function observeLoginAuthState() {
             return;
         }
 
-        if (event === 'SIGNED_IN' && !authState.recoveryMode) {
-            cleanupAuthHash();
-            setFlash('Sesion iniciada correctamente.');
-            window.location.href = authConfig.appUrl;
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session) {
+            await syncServerSessions(session.access_token);
+        }
+
+        if (event === 'SIGNED_IN' && !authState.recoveryMode && session) {
+            await finishAuthenticatedLogin(session, 'Sesion iniciada correctamente.');
         }
     });
 }
@@ -317,8 +364,14 @@ async function handleSignIn(form) {
         return;
     }
 
-    setFlash('Sesion iniciada correctamente.');
-    window.location.href = authConfig.appUrl;
+    const session = await getCurrentSession();
+
+    if (!session) {
+        showNotice(view, 'error', 'No fue posible recuperar la sesion recien iniciada.');
+        return;
+    }
+
+    await finishAuthenticatedLogin(session, 'Sesion iniciada correctamente.');
 }
 
 async function handleSignUp(form) {
@@ -353,8 +406,7 @@ async function handleSignUp(form) {
     }
 
     if (data.session) {
-        setFlash('Cuenta creada y sesion iniciada.');
-        window.location.href = authConfig.appUrl;
+        await finishAuthenticatedLogin(data.session, 'Cuenta creada y sesion iniciada.');
         return;
     }
 
@@ -478,8 +530,15 @@ async function handleResetPassword(form) {
     }
 
     authState.recoveryMode = false;
-    setFlash('Contrasena actualizada. Ya puedes continuar al panel.');
-    window.location.href = authConfig.appUrl;
+    const session = await getCurrentSession();
+
+    if (session) {
+        await finishAuthenticatedLogin(session, 'Contrasena actualizada. Ya puedes continuar.');
+        return;
+    }
+
+    setFlash('Contrasena actualizada. Ya puedes iniciar sesion.');
+    window.location.href = authConfig.loginUrl;
 }
 
 function syncEmailAcrossForms(email) {
@@ -489,5 +548,69 @@ function syncEmailAcrossForms(email) {
         if (input && !input.value) {
             input.value = email;
         }
+    });
+}
+
+function resolvePostAuthUrl() {
+    const redirectTarget = String(authConfig?.redirectTarget ?? '').trim();
+
+    if (redirectTarget !== '') {
+        try {
+            return new URL(redirectTarget, window.location.origin).toString();
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    try {
+        const url = new URL(window.location.href);
+        const redirect = String(url.searchParams.get('redirect') || '').trim();
+
+        if (redirect !== '') {
+            return new URL(redirect, window.location.origin).toString();
+        }
+    } catch (error) {
+        console.error(error);
+    }
+
+    return String(authConfig?.defaultAfterLoginUrl || authConfig?.accountUrl || authConfig?.appUrl || '/app');
+}
+
+async function finishAuthenticatedLogin(session, flashMessage) {
+    cleanupAuthHash();
+
+    if (session?.access_token) {
+        await syncServerSessions(session.access_token);
+    }
+
+    if (flashMessage) {
+        setFlash(flashMessage);
+    }
+
+    window.location.href = resolvePostAuthUrl();
+}
+
+async function syncLegacyToolsSession(accessToken) {
+    const token = String(accessToken ?? '').trim();
+
+    if (!token || !authConfig?.toolsSessionUrl) {
+        return;
+    }
+
+    await fetch(authConfig.toolsSessionUrl, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+        },
+    });
+}
+
+async function clearLegacyToolsSession() {
+    if (!authConfig?.toolsSessionUrl) {
+        return;
+    }
+
+    await fetch(authConfig.toolsSessionUrl, {
+        method: 'DELETE',
     });
 }

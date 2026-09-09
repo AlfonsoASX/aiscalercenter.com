@@ -40,6 +40,11 @@ $authClientConfig = [
     'landingUrl' => $redirectUrl,
     'loginUrl' => $loginUrl,
     'appUrl' => $appUrl,
+    'accountUrl' => appAccountUrl(),
+    'defaultAfterLoginUrl' => appAccountUrl(),
+    'redirectTarget' => (string) ($_GET['redirect'] ?? ''),
+    'accountSessionUrl' => appToolUrl('api/account-session.php'),
+    'toolsSessionUrl' => appToolUrl('api/tools-session.php'),
     'hasSupabaseConfig' => $hasSupabaseConfig,
     'panel' => $panelConfig,
 ];

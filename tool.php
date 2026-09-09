@@ -475,6 +475,10 @@ $authClientConfig = [
     'landingUrl' => appHomeUrl(),
     'loginUrl' => $loginUrl,
     'appUrl' => $appUrl,
+    'accountUrl' => appAccountUrl(),
+    'defaultAfterLoginUrl' => appAccountUrl(),
+    'accountSessionUrl' => appToolUrl('api/account-session.php'),
+    'toolsSessionUrl' => appToolUrl('api/tools-session.php'),
     'hasSupabaseConfig' => $hasSupabaseConfig,
 ];
 

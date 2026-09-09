@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 use AiScaler\Forms\FormRepository;
 
-require_once __DIR__ . '/../../modules/forms/bootstrap.php';
+require_once __DIR__ . '/bootstrap.php';
 
 header('Content-Type: application/json; charset=UTF-8');
 

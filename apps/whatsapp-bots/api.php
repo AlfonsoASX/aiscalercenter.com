@@ -673,12 +673,12 @@ function whatsappBotPutStorageObject(string $path, string $body, string $mimeTyp
 
     if ($responseBody === false) {
         $error = curl_error($curl);
-        curl_close($curl);
+        closeCurlHandle($curl);
         throw new RuntimeException('Error al subir el archivo a Supabase Storage: ' . $error);
     }
 
     $statusCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-    curl_close($curl);
+    closeCurlHandle($curl);
 
     if ($statusCode >= 400) {
         throw new RuntimeException('Supabase Storage respondio con error HTTP ' . $statusCode . ': ' . (string) $responseBody);

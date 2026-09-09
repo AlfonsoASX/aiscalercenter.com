@@ -64,6 +64,12 @@ function appUsesConfiguredSubdomains(): bool
     return in_array($currentHost, $configuredHosts, true);
 }
 
+function appShouldUseScriptFallbackRoutes(): bool
+{
+    return !appUsesConfiguredSubdomains()
+        && in_array(appCurrentHost(), ['localhost', '127.0.0.1'], true);
+}
+
 function appIsPrimaryHost(): bool
 {
     return appCurrentHost() === appConfiguredHost('app_host');
@@ -144,16 +150,68 @@ function appHomeUrl(bool $absolute = false): string
 
 function appLoginUrl(bool $absolute = false): string
 {
+    if (appShouldUseScriptFallbackRoutes()) {
+        return $absolute
+            ? appAbsoluteUrl('/index.php', ['view' => 'login'])
+            : appPath('/index.php', ['view' => 'login']);
+    }
+
     return $absolute ? appAbsoluteUrl('/login', [], appPreferredPrimaryHost()) : appPath('/login');
+}
+
+function appLoginRedirectUrl(string $redirectPath, bool $absolute = false): string
+{
+    $candidate = trim($redirectPath);
+
+    if ($candidate === '') {
+        return appLoginUrl($absolute);
+    }
+
+    $normalized = str_starts_with($candidate, '/') ? $candidate : '/' . ltrim($candidate, '/');
+
+    if (appShouldUseScriptFallbackRoutes()) {
+        return $absolute
+            ? appAbsoluteUrl('/index.php', ['view' => 'login', 'redirect' => $normalized])
+            : appPath('/index.php', ['view' => 'login', 'redirect' => $normalized]);
+    }
+
+    return $absolute
+        ? appAbsoluteUrl('/login', ['redirect' => $normalized], appPreferredPrimaryHost())
+        : appPath('/login', ['redirect' => $normalized]);
 }
 
 function appPanelUrl(?string $sectionId = null, bool $absolute = false): string
 {
-    $url = $absolute ? appAbsoluteUrl('/app', [], appPreferredPrimaryHost()) : appPath('/app');
+    $url = appShouldUseScriptFallbackRoutes()
+        ? ($absolute ? appAbsoluteUrl('/index.php', ['view' => 'app']) : appPath('/index.php', ['view' => 'app']))
+        : ($absolute ? appAbsoluteUrl('/app', [], appPreferredPrimaryHost()) : appPath('/app'));
     $candidate = trim((string) ($sectionId ?? ''));
 
     if ($candidate !== '') {
         $url .= '#' . rawurlencode($candidate);
+    }
+
+    return $url;
+}
+
+function appAccountUrl(?string $sectionId = null, bool $absolute = false): string
+{
+    $candidate = trim((string) ($sectionId ?? ''));
+
+    if (appShouldUseScriptFallbackRoutes()) {
+        $query = $candidate !== '' ? ['section' => $candidate] : [];
+
+        return $absolute
+            ? appAbsoluteUrl('/account.php', $query)
+            : appPath('/account.php', $query);
+    }
+
+    $url = $absolute ? appAbsoluteUrl('/cuenta', [], appPreferredPrimaryHost()) : appPath('/cuenta');
+
+    if ($candidate !== '') {
+        $url = $absolute
+            ? appAbsoluteUrl('/cuenta/' . rawurlencode($candidate), [], appPreferredPrimaryHost())
+            : appPath('/cuenta/' . rawurlencode($candidate));
     }
 
     return $url;

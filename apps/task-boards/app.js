@@ -17,6 +17,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     }
 
     const initialState = normalizeBootstrap(parseJson(stateNode.textContent || '{}'));
+    const initialBoardIdFromUrl = readBoardIdFromUrl();
     const state = {
         apiUrl,
         project: initialState.project,
@@ -24,7 +25,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         boards: initialState.boards,
         members: initialState.members,
         activeBoard: initialState.active_board,
-        screen: 'overview',
+        screen: initialBoardIdFromUrl !== '' && initialBoardIdFromUrl === String(initialState.active_board?.board?.id || '') ? 'board' : 'overview',
         dashboardSection: 'boards',
         searchQuery: '',
         notice: null,
@@ -41,6 +42,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         columnMenu: {
             columnId: '',
         },
+        drag: createDragState(),
         columnDialog: {
             open: false,
             mode: 'properties',
@@ -65,18 +67,23 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
     let projectChannel = null;
     let boardChannel = null;
     let refreshTimeout = 0;
-    let draggingCardId = '';
     let pendingCardPanelRestore = null;
+    let pendingBoardViewportRestore = null;
+    let suppressBoardRealtimeUntil = 0;
 
     root.addEventListener('click', handleClick);
     root.addEventListener('input', handleInput);
     root.addEventListener('change', handleChange);
     root.addEventListener('submit', handleSubmit);
+    root.addEventListener('scroll', handleRootScroll, true);
     document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('keydown', handleDocumentKeydown);
     root.addEventListener('dragstart', handleDragStart);
     root.addEventListener('dragend', handleDragEnd);
     root.addEventListener('dragover', handleDragOver);
     root.addEventListener('drop', handleDrop);
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('resize', syncFloatingColumnMenu);
     window.addEventListener('beforeunload', cleanupRealtime);
 
     render();
@@ -134,6 +141,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         if (target.closest('[data-task-view-home]')) {
             event.preventDefault();
             state.screen = 'overview';
+            updateBoardUrl('', false);
             render();
             return;
         }
@@ -208,8 +216,13 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         if (columnMenuToggle instanceof HTMLElement) {
             event.preventDefault();
             const columnId = String(columnMenuToggle.dataset.columnId || '');
-            state.columnMenu.columnId = state.columnMenu.columnId === columnId ? '' : columnId;
-            render();
+
+            if (state.columnMenu.columnId === columnId) {
+                closeColumnMenu();
+            } else {
+                openColumnMenu(columnId);
+            }
+
             return;
         }
 
@@ -221,7 +234,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             const columnId = String(columnAction.dataset.columnId || '');
             const ruleTrigger = String(columnAction.dataset.ruleTrigger || '');
             const ruleId = String(columnAction.dataset.ruleId || '');
-            state.columnMenu.columnId = '';
+            closeColumnMenu();
 
             if (action === 'new-card') {
                 openNewCard(columnId);
@@ -421,9 +434,32 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         }
 
         if (state.columnMenu.columnId !== '' && !target.closest('[data-task-column-menu]') && !target.closest('[data-task-column-menu-toggle]')) {
-            state.columnMenu.columnId = '';
-            render();
+            closeColumnMenu();
         }
+    }
+
+    function handleDocumentKeydown(event) {
+        if (event.key === 'Escape' && state.columnMenu.columnId !== '') {
+            closeColumnMenu();
+        }
+    }
+
+    function handleRootScroll() {
+        if (state.columnMenu.columnId !== '') {
+            syncFloatingColumnMenu();
+        }
+    }
+
+    function handlePopState() {
+        const boardId = readBoardIdFromUrl();
+
+        if (boardId === '') {
+            state.screen = 'overview';
+            render();
+            return;
+        }
+
+        void openBoard(boardId, { syncHistory: false });
     }
 
     function handleInput(event) {
@@ -520,26 +556,29 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
             return;
         }
 
-        draggingCardId = String(card.dataset.taskCardId || '').trim();
+        const cardId = String(card.dataset.taskCardId || '').trim();
 
-        if (draggingCardId === '') {
+        if (cardId === '') {
             return;
         }
 
+        startCardDrag(cardId);
         card.classList.add('is-dragging');
-        event.dataTransfer?.setData('text/plain', draggingCardId);
+        event.dataTransfer?.setData('text/plain', cardId);
         event.dataTransfer?.setDragImage(card, 24, 24);
     }
 
     function handleDragEnd() {
-        draggingCardId = '';
-        root.querySelectorAll('.task-boards-card.is-dragging').forEach((card) => card.classList.remove('is-dragging'));
-        root.querySelectorAll('.task-boards-card-list.is-drop-target').forEach((list) => list.classList.remove('is-drop-target'));
-        root.querySelectorAll('.task-boards-cell.is-drop-target').forEach((cell) => cell.classList.remove('is-drop-target'));
+        if (state.drag.cardId === '') {
+            root.querySelectorAll('.task-boards-card.is-dragging').forEach((card) => card.classList.remove('is-dragging'));
+            return;
+        }
+
+        clearDragState();
     }
 
     function handleDragOver(event) {
-        if (draggingCardId === '') {
+        if (state.drag.cardId === '') {
             return;
         }
 
@@ -556,42 +595,36 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         }
 
         event.preventDefault();
-        root.querySelectorAll('.task-boards-card-list.is-drop-target').forEach((item) => item.classList.remove('is-drop-target'));
-        root.querySelectorAll('.task-boards-cell.is-drop-target').forEach((item) => item.classList.remove('is-drop-target'));
-        list.classList.add('is-drop-target');
-        list.closest('.task-boards-cell')?.classList.add('is-drop-target');
 
-        const draggingCard = root.querySelector(`.task-boards-card[data-task-card-id="${escapeAttribute(draggingCardId)}"]`);
+        const columnId = String(list.dataset.columnId || '').trim();
+        const dropIndex = resolveDragPreviewIndex(list, event.clientY, state.drag.cardId);
 
-        if (!(draggingCard instanceof HTMLElement)) {
+        if (state.drag.overColumnId === columnId && state.drag.overIndex === dropIndex) {
             return;
         }
 
-        const afterElement = getDragAfterElement(list, event.clientY);
-
-        if (afterElement) {
-            list.insertBefore(draggingCard, afterElement);
-        } else {
-            list.appendChild(draggingCard);
-        }
+        rememberBoardViewport();
+        state.drag.overColumnId = columnId;
+        state.drag.overIndex = dropIndex;
+        render();
     }
 
     async function handleDrop(event) {
-        if (draggingCardId === '') {
+        if (state.drag.cardId === '') {
             return;
         }
 
         const target = event.target;
 
         if (!(target instanceof HTMLElement)) {
-            handleDragEnd();
+            clearDragState();
             return;
         }
 
         const list = target.closest('[data-task-cell-list]');
 
         if (!(list instanceof HTMLElement) || !state.activeBoard) {
-            handleDragEnd();
+            clearDragState();
             return;
         }
 
@@ -600,23 +633,24 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         const columnId = String(list.dataset.columnId || '').trim();
 
         if (columnId === '') {
-            handleDragEnd();
+            clearDragState();
             return;
         }
 
+        const draggingCardId = state.drag.cardId;
         const card = state.activeBoard.cards.find((item) => item.id === draggingCardId);
 
         if (!card) {
-            handleDragEnd();
+            clearDragState();
             return;
         }
 
         const previousColumnId = String(card.column_id || '');
         const previousSortOrder = Number(card.sort_order || 0);
-        const sortOrder = resolveDroppedSortOrder(list, draggingCardId);
-
-        card.column_id = columnId;
-        card.sort_order = sortOrder;
+        const sortOrder = resolveDroppedSortOrder(getCardsForColumn(columnId), draggingCardId);
+        rememberBoardViewport();
+        applyLocalCardMove(draggingCardId, columnId, sortOrder);
+        clearDragState({ renderNow: false });
         render();
 
         try {
@@ -626,14 +660,12 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 column_id: columnId,
                 sort_order: sortOrder,
             });
-            scheduleRealtimeRefresh(true);
+            suppressBoardRealtimeUntil = Date.now() + 900;
         } catch (error) {
-            card.column_id = previousColumnId;
-            card.sort_order = previousSortOrder;
+            rememberBoardViewport();
+            applyLocalCardMove(draggingCardId, previousColumnId, previousSortOrder);
             showNotice('error', humanizeError(error));
             render();
-        } finally {
-            handleDragEnd();
         }
     }
 
@@ -641,6 +673,8 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         renderNotice();
         syncViewportMode();
         shell.innerHTML = renderShell();
+        restoreBoardViewport();
+        syncFloatingColumnMenu();
         restoreCardPanelState();
         syncHeaderNotifications();
     }
@@ -666,6 +700,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                 </div>
             </section>
 
+            ${renderColumnMenuLayer()}
             ${renderBoardModal()}
             ${renderStructureModal()}
             ${renderColumnDialog()}
@@ -997,9 +1032,10 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         const isOverLimit = limit !== null && count > limit;
         const responsible = getColumnResponsible(column);
         const isFollowing = isFollowingColumn(String(column.id || ''));
+        const isDropTarget = state.drag.overColumnId !== '' && state.drag.overColumnId === String(column.id || '');
 
         return `
-            <section class="task-boards-list ${isOverLimit ? 'is-over-limit' : ''}">
+            <section class="task-boards-list ${isOverLimit ? 'is-over-limit' : ''} ${isDropTarget ? 'is-drop-target' : ''}">
                 <div class="task-boards-column-head ${isOverLimit ? 'is-over-limit' : ''}">
                     <div class="task-boards-column-head-copy">
                         <h3>${escapeHtml(column.title || 'Columna')}</h3>
@@ -1009,18 +1045,17 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
                         </div>
                     </div>
                     <div class="task-boards-column-menu-shell" data-task-column-menu="true">
-                    <button type="button" class="task-boards-icon-button task-boards-icon-button--ghost" data-task-column-menu-toggle data-column-id="${escapeHtml(String(column.id || ''))}" aria-label="Configurar lista">
-                        <span class="material-symbols-rounded">more_horiz</span>
-                    </button>
-                    ${state.columnMenu.columnId === String(column.id || '') ? renderColumnMenu(column) : ''}
+                        <button type="button" class="task-boards-icon-button task-boards-icon-button--ghost" data-task-column-menu-toggle data-column-id="${escapeHtml(String(column.id || ''))}" aria-label="Configurar lista" aria-expanded="${state.columnMenu.columnId === String(column.id || '') ? 'true' : 'false'}">
+                            <span class="material-symbols-rounded">more_horiz</span>
+                        </button>
                     </div>
                 </div>
                 <div class="task-boards-cell-head">
                     ${limit !== null ? `<span class="task-boards-column-limit ${isOverLimit ? 'is-over-limit' : ''}">Límite de fichas ${limit}</span>` : '<span class="task-boards-list-caption">Sin límite de fichas</span>'}
                 </div>
-                <div class="task-boards-card-list" data-task-cell-list="true" data-column-id="${escapeHtml(String(column.id || ''))}">
+                <div class="task-boards-card-list ${isDropTarget ? 'is-drop-target' : ''}" data-task-cell-list="true" data-column-id="${escapeHtml(String(column.id || ''))}">
                     ${cards.length > 0
-                        ? cards.map((card) => renderCard(card)).join('')
+                        ? cards.map((card) => renderCard(card, { isDragPreview: Boolean(card._drag_preview) })).join('')
                         : '<div class="task-boards-cell-empty">Arrastra o crea una tarjeta aquí.</div>'}
                 </div>
                 <div class="task-boards-cell-head task-boards-cell-head--footer">
@@ -1033,13 +1068,14 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         `;
     }
 
-    function renderColumnMenu(column) {
+    function renderColumnMenu(column, options = {}) {
         const columnId = String(column.id || '');
         const rules = getRulesForColumn(columnId);
         const isFollowing = isFollowingColumn(columnId);
+        const floatingClass = options.floating ? ' task-boards-column-menu--floating' : '';
 
         return `
-            <div class="task-boards-column-menu">
+            <div class="task-boards-column-menu${floatingClass}" data-task-column-menu="true">
                 <button type="button" class="task-boards-column-menu-item" data-task-column-action="properties" data-column-id="${escapeHtml(columnId)}">Propiedades de la lista</button>
                 <button type="button" class="task-boards-column-menu-item" data-task-column-action="new-card" data-column-id="${escapeHtml(columnId)}">Añadir tarjeta</button>
                 <button type="button" class="task-boards-column-menu-item" data-task-column-action="duplicate" data-column-id="${escapeHtml(columnId)}">Copiar lista</button>
@@ -1068,7 +1104,26 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         `;
     }
 
-    function renderCard(card) {
+    function renderColumnMenuLayer() {
+        if (state.screen !== 'board') {
+            return '';
+        }
+
+        const columnId = String(state.columnMenu.columnId || '');
+        const column = columnId !== '' ? getColumnById(columnId) : null;
+
+        if (!column) {
+            return '';
+        }
+
+        return `
+            <div class="task-boards-floating-layer" aria-hidden="true">
+                ${renderColumnMenu(column, { floating: true })}
+            </div>
+        `;
+    }
+
+    function renderCard(card, options = {}) {
         const dueDate = String(card.due_date || '').trim();
         const overdue = isDateOverdue(dueDate);
         const commentsCount = getCommentsForCard(String(card.id || '')).length;
@@ -1076,10 +1131,11 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         const checklistDone = checklist.filter((item) => item.is_done).length;
         const assignedMembers = getAssignedMembers(card);
         const labels = getCardLabels(card);
+        const isDragPreview = Boolean(options.isDragPreview);
 
         return `
             <article
-                class="task-boards-card ${overdue ? 'is-overdue' : ''}"
+                class="task-boards-card ${overdue ? 'is-overdue' : ''} ${isDragPreview ? 'task-boards-card--drag-preview' : ''}"
                 draggable="true"
                 data-task-card-id="${escapeHtml(String(card.id || ''))}"
                 data-task-card-open="${escapeHtml(String(card.id || ''))}"
@@ -2098,14 +2154,20 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         render();
     }
 
-    async function openBoard(boardId) {
+    async function openBoard(boardId, options = {}) {
         const normalizedBoardId = String(boardId || '').trim();
+        const syncHistory = options.syncHistory !== false;
+        const replaceHistory = options.replaceHistory === true;
 
         if (normalizedBoardId === '') {
             return;
         }
 
         state.dashboardSection = 'boards';
+
+        if (syncHistory) {
+            updateBoardUrl(normalizedBoardId, replaceHistory);
+        }
 
         if (normalizedBoardId === String(state.activeBoard?.board?.id || '') && state.activeBoard) {
             state.screen = 'board';
@@ -2328,6 +2390,64 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         }
     }
 
+    function openColumnMenu(columnId) {
+        state.columnMenu.columnId = columnId;
+        render();
+    }
+
+    function closeColumnMenu() {
+        if (state.columnMenu.columnId === '') {
+            return;
+        }
+
+        state.columnMenu.columnId = '';
+        render();
+    }
+
+    function startCardDrag(cardId) {
+        if (!state.activeBoard) {
+            return;
+        }
+
+        const card = state.activeBoard.cards.find((item) => String(item.id || '') === cardId);
+
+        if (!card) {
+            return;
+        }
+
+        const sourceColumnId = String(card.column_id || '');
+        const sourceCards = getCardsForColumn(sourceColumnId, { previewDrag: false });
+        const sourceIndex = sourceCards.findIndex((item) => String(item.id || '') === cardId);
+
+        state.drag = {
+            cardId,
+            sourceColumnId,
+            overColumnId: sourceColumnId,
+            overIndex: sourceIndex >= 0 ? sourceIndex : sourceCards.length,
+        };
+    }
+
+    function clearDragState(options = {}) {
+        const renderNow = options.renderNow !== false;
+        state.drag = createDragState();
+        root.querySelectorAll('.task-boards-card.is-dragging').forEach((card) => card.classList.remove('is-dragging'));
+
+        if (renderNow) {
+            render();
+        }
+    }
+
+    function applyLocalCardMove(cardId, columnId, sortOrder) {
+        const card = state.activeBoard?.cards.find((item) => String(item.id || '') === String(cardId || ''));
+
+        if (!card) {
+            return;
+        }
+
+        card.column_id = String(columnId || '');
+        card.sort_order = Number(sortOrder || 0);
+    }
+
     function applyBootstrap(response) {
         const rawPayload = isObject(response?.data) ? response.data : (isObject(response) ? response : {});
         const payload = normalizeBootstrap({
@@ -2347,9 +2467,12 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         state.searchQuery = '';
         state.cardPanel.dirty = false;
         state.columnMenu.columnId = '';
+        state.drag = createDragState();
+        pendingBoardViewportRestore = null;
 
         if (!state.activeBoard) {
             state.screen = 'overview';
+            updateBoardUrl('', true);
         }
 
         subscribeRealtime();
@@ -2359,6 +2482,7 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         const payload = normalizeBoardPayload(response?.data ?? response ?? {});
         state.activeBoard = payload;
         state.columnMenu.columnId = '';
+        state.drag = createDragState();
 
         if (state.cardPanel.open && state.cardPanel.draft.id) {
             const cardId = String(state.cardPanel.draft.id || '');
@@ -2428,13 +2552,39 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         renderNotice();
     }
 
-    function getCardsForColumn(columnId) {
+    function getCardsForColumn(columnId, options = {}) {
         const query = state.searchQuery;
-
-        return (state.activeBoard?.cards ?? [])
+        const previewDrag = options.previewDrag !== false;
+        let cards = (state.activeBoard?.cards ?? [])
             .filter((card) => String(card.column_id || '') === columnId && !Boolean(card.is_archived))
             .filter((card) => matchesCardSearch(card, query))
             .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0));
+
+        if (!previewDrag || state.drag.cardId === '') {
+            return cards;
+        }
+
+        const draggedCard = (state.activeBoard?.cards ?? []).find((card) => String(card.id || '') === state.drag.cardId && !Boolean(card.is_archived));
+
+        if (!draggedCard || !matchesCardSearch(draggedCard, query)) {
+            return cards;
+        }
+
+        const dragId = String(draggedCard.id || '');
+        cards = cards.filter((card) => String(card.id || '') !== dragId);
+
+        if (String(state.drag.overColumnId || '') !== columnId) {
+            return cards;
+        }
+
+        const insertIndex = clampNumber(state.drag.overIndex, 0, cards.length);
+        const previewCard = {
+            ...draggedCard,
+            column_id: columnId,
+            _drag_preview: true,
+        };
+        cards.splice(insertIndex, 0, previewCard);
+        return cards;
     }
 
     function getActiveColumns() {
@@ -2629,17 +2779,29 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
         boardChannel = realtime
             .channel(`task-boards-board:${activeBoardId}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_columns', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_column_follows', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_column_rules', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_labels', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_cards', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_comments', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_activity', filter: `board_id=eq.${activeBoardId}` }, () => scheduleRealtimeRefresh(true))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_columns', filter: `board_id=eq.${activeBoardId}` }, () => queueBoardRealtimeRefresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_column_follows', filter: `board_id=eq.${activeBoardId}` }, () => queueBoardRealtimeRefresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_column_rules', filter: `board_id=eq.${activeBoardId}` }, () => queueBoardRealtimeRefresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_labels', filter: `board_id=eq.${activeBoardId}` }, () => queueBoardRealtimeRefresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_cards', filter: `board_id=eq.${activeBoardId}` }, () => queueBoardRealtimeRefresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_comments', filter: `board_id=eq.${activeBoardId}` }, () => queueBoardRealtimeRefresh())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'task_board_activity', filter: `board_id=eq.${activeBoardId}` }, () => queueBoardRealtimeRefresh())
             .subscribe();
     }
 
+    function queueBoardRealtimeRefresh() {
+        if (Date.now() < suppressBoardRealtimeUntil) {
+            return;
+        }
+
+        scheduleRealtimeRefresh(true);
+    }
+
     function scheduleRealtimeRefresh(preserveBoard = false) {
+        if (state.drag.cardId !== '') {
+            return;
+        }
+
         if (state.cardPanel.open && state.cardPanel.dirty) {
             showNotice('info', 'Hay cambios nuevos en el tablero. Guarda o cierra la ficha para recargar la vista.');
             return;
@@ -2649,6 +2811,77 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
         refreshTimeout = window.setTimeout(() => {
             void reloadBootstrap(preserveBoard ? String(state.activeBoard?.board?.id || '') : '');
         }, 350);
+    }
+
+    function rememberBoardViewport() {
+        const canvas = root.querySelector('.task-boards-canvas-scroll');
+        const lists = [...root.querySelectorAll('[data-task-cell-list]')];
+
+        pendingBoardViewportRestore = {
+            scrollLeft: canvas instanceof HTMLElement ? canvas.scrollLeft : 0,
+            columnScrollTops: Object.fromEntries(lists.map((list) => [String(list instanceof HTMLElement ? list.dataset.columnId || '' : ''), list instanceof HTMLElement ? list.scrollTop : 0])),
+        };
+    }
+
+    function restoreBoardViewport() {
+        if (!pendingBoardViewportRestore) {
+            return;
+        }
+
+        const restoreState = pendingBoardViewportRestore;
+        pendingBoardViewportRestore = null;
+        const canvas = root.querySelector('.task-boards-canvas-scroll');
+
+        if (canvas instanceof HTMLElement) {
+            canvas.scrollLeft = restoreState.scrollLeft;
+        }
+
+        Object.entries(restoreState.columnScrollTops).forEach(([columnId, scrollTop]) => {
+            const list = root.querySelector(`[data-task-cell-list="true"][data-column-id="${escapeAttribute(columnId)}"]`);
+
+            if (list instanceof HTMLElement) {
+                list.scrollTop = Number(scrollTop || 0);
+            }
+        });
+    }
+
+    function syncFloatingColumnMenu() {
+        if (state.columnMenu.columnId === '') {
+            return;
+        }
+
+        const menu = root.querySelector('.task-boards-column-menu--floating');
+        const anchor = root.querySelector(`[data-task-column-menu-toggle][data-column-id="${escapeAttribute(state.columnMenu.columnId)}"]`);
+
+        if (!(menu instanceof HTMLElement) || !(anchor instanceof HTMLElement)) {
+            return;
+        }
+
+        const spacing = 8;
+        const anchorRect = anchor.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        let left = anchorRect.right - menuRect.width;
+        let top = anchorRect.bottom + spacing;
+
+        if (left < spacing) {
+            left = Math.min(anchorRect.left, window.innerWidth - menuRect.width - spacing);
+        }
+
+        if ((left + menuRect.width) > (window.innerWidth - spacing)) {
+            left = window.innerWidth - menuRect.width - spacing;
+        }
+
+        if ((top + menuRect.height) > (window.innerHeight - spacing)) {
+            top = anchorRect.top - menuRect.height - spacing;
+        }
+
+        if (top < spacing) {
+            top = spacing;
+        }
+
+        menu.style.left = `${Math.max(spacing, left)}px`;
+        menu.style.top = `${top}px`;
+        menu.style.visibility = 'visible';
     }
 
     function rememberCardPanelState(options = {}) {
@@ -2711,6 +2944,30 @@ if (!(root instanceof HTMLElement) || root.dataset.taskBoardsReady === 'true') {
 
         if (boardChannel) {
             realtime.removeChannel(boardChannel);
+        }
+    }
+
+    function readBoardIdFromUrl() {
+        try {
+            return String(new URL(window.location.href).searchParams.get('board_id') || '').trim();
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function updateBoardUrl(boardId = '', replace = false) {
+        try {
+            const url = new URL(window.location.href);
+
+            if (String(boardId || '').trim() === '') {
+                url.searchParams.delete('board_id');
+            } else {
+                url.searchParams.set('board_id', String(boardId || '').trim());
+            }
+
+            window.history[replace ? 'replaceState' : 'pushState']({ boardId }, '', url);
+        } catch (error) {
+            console.error(error);
         }
     }
 }
@@ -2944,6 +3201,15 @@ function createColumnDialogDraft(column = {}, overrides = {}) {
     };
 }
 
+function createDragState() {
+    return {
+        cardId: '',
+        sourceColumnId: '',
+        overColumnId: '',
+        overIndex: null,
+    };
+}
+
 function createChecklistItem() {
     return {
         id: ensureId('check'),
@@ -3000,25 +3266,25 @@ function countCardsByColumn(cards) {
     }, {});
 }
 
-function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.task-boards-card:not(.is-dragging)')];
+function resolveDragPreviewIndex(container, y, draggingCardId) {
+    const cards = [...container.querySelectorAll('.task-boards-card')]
+        .filter((card) => String(card.dataset.taskCardId || '') !== String(draggingCardId || ''));
 
-    return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
+    for (let index = 0; index < cards.length; index += 1) {
+        const box = cards[index].getBoundingClientRect();
 
-        if (offset < 0 && offset > closest.offset) {
-            return { offset, element: child };
+        if (y < box.top + (box.height / 2)) {
+            return index;
         }
+    }
 
-        return closest;
-    }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+    return cards.length;
 }
 
 function resolveDroppedSortOrder(list, cardId) {
-    const cards = [...list.querySelectorAll('.task-boards-card')].map((card, index) => ({
-        id: String(card.dataset.taskCardId || ''),
-        sortOrder: Number.parseFloat(String(card.dataset.taskSortOrder || 0)) || ((index + 1) * 1024),
+    const cards = list.map((card, index) => ({
+        id: String(card.id || ''),
+        sortOrder: Number.parseFloat(String(card.sort_order || 0)) || ((index + 1) * 1024),
     }));
     const droppedIndex = cards.findIndex((card) => card.id === cardId);
 
@@ -3192,6 +3458,16 @@ function normalizeNumber(value) {
 
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
+}
+
+function clampNumber(value, min, max) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+        return min;
+    }
+
+    return Math.min(Math.max(numeric, min), max);
 }
 
 function humanizeError(error) {

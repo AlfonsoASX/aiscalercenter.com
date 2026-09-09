@@ -47,13 +47,17 @@ final class HttpClient
 
         if ($responseBody === false) {
             $error = curl_error($curl);
-            curl_close($curl);
+            if (PHP_VERSION_ID < 80500) {
+                curl_close($curl);
+            }
 
             throw new RuntimeException('Error de conexion HTTP: ' . $error);
         }
 
         $statusCode = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
-        curl_close($curl);
+        if (PHP_VERSION_ID < 80500) {
+            curl_close($curl);
+        }
 
         $decoded = json_decode($responseBody, true);
 

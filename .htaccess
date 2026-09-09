@@ -35,6 +35,63 @@
     RewriteRule ^app/?$ index.php?view=app [L,QSA]
 
     RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^cuenta/?$ account.php [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^(cuenta/suscripcion|cuenta/facturacion)/?$ account.php [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^formularios/?$ private-app.php?app=formularios [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^landings/?$ private-app.php?app=landings [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^tableros/?$ private-app.php?app=tableros [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^seguimiento-clientes/?$ private-app.php?app=seguimiento-clientes [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^bots-whatsapp/?$ private-app.php?app=bots-whatsapp [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^planificador-publicaciones/?$ private-app.php?app=planificador-publicaciones [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^google/?$ private-app.php?app=google [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^youtube/?$ private-app.php?app=youtube [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^mercado-libre/?$ private-app.php?app=mercado-libre [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^amazon/?$ private-app.php?app=amazon [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^ai-image-studio/?$ private-app.php?app=ai-image-studio [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^semaforo-trafico/?$ private-app.php?app=semaforo-trafico [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^termometro-cpl/?$ private-app.php?app=termometro-cpl [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^auditor-campanas/?$ private-app.php?app=auditor-campanas [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^rastreador-inteligente/?$ private-app.php?app=rastreador-inteligente [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^vision-rayos-x/?$ private-app.php?app=vision-rayos-x [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
+    RewriteRule ^conecta/?$ private-app.php?app=conecta [L,QSA]
+
+    RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]
     RewriteRule ^blog/([^/]+)/?$ blog.php?slug=$1 [L,QSA]
 
     RewriteCond %{HTTP_HOST} ^aiscaler\.asx\.mx$ [NC]

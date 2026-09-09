@@ -16,6 +16,8 @@ import {
     updateUserPassword,
     updateUserProfile,
     humanizeAuthError,
+    syncServerSessions,
+    clearServerSessions,
 } from './supabase-auth.js';
 import {
     bindForm,
@@ -146,19 +148,8 @@ async function getAccessToken() {
 }
 
 async function syncToolsPhpSession(accessToken) {
-    const token = String(accessToken ?? '').trim();
-
-    if (!token) {
-        return;
-    }
-
     try {
-        await fetch('api/tools-session.php', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${token}`,
-            },
-        });
+        await syncServerSessions(accessToken);
     } catch (error) {
         console.error(error);
     }
@@ -166,9 +157,7 @@ async function syncToolsPhpSession(accessToken) {
 
 async function clearToolsPhpSession() {
     try {
-        await fetch('api/tools-session.php', {
-            method: 'DELETE',
-        });
+        await clearServerSessions();
     } catch (error) {
         console.error(error);
     }

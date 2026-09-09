@@ -4,7 +4,7 @@ declare(strict_types=1);
 use AiScaler\LandingPages\LandingPageRepository;
 
 require_once __DIR__ . '/lib/pwa.php';
-require_once __DIR__ . '/modules/landing-pages/bootstrap.php';
+require_once __DIR__ . '/apps/landing-builder/bootstrap.php';
 
 $repository = new LandingPageRepository();
 $identifier = trim((string) ($_GET['p'] ?? appCurrentPublicIdentifier()));

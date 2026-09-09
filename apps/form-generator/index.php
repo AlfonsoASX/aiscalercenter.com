@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 use AiScaler\Forms\FormRepository;
 
-require_once __DIR__ . '/../../modules/forms/bootstrap.php';
+require_once __DIR__ . '/bootstrap.php';
 
 $toolContext = is_array($toolRuntimeContext ?? null) ? $toolRuntimeContext : [];
 $accessToken = trim((string) ($toolContext['access_token'] ?? ''));
@@ -21,6 +21,8 @@ $forms = [];
 $mode = trim((string) ($_GET['builder'] ?? 'list'));
 $currentForm = null;
 $formInsights = formBuilderEmptyInsightsSummary();
+$privateBaseUrl = trim((string) ($toolContext['private_base_url'] ?? ''));
+$writeBlockedMessage = trim((string) ($toolContext['write_blocked_message'] ?? ''));
 
 try {
     if ($accessToken === '' || $userId === '') {
@@ -130,7 +132,7 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentForm);
                 <p>Crea formularios publicos, compartelos sin login y revisa respuestas completas, visitas y abandono en tiempo real.</p>
             </div>
 
-            <a href="tool.php?launch=<?= htmlspecialchars(rawurlencode((string) ($toolContext['launch_token'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>&builder=new" class="form-builder-primary">
+            <a href="<?= htmlspecialchars(formBuilderEditorUrl($toolContext, ['builder' => 'new']), ENT_QUOTES, 'UTF-8'); ?>" class="form-builder-primary">
                 <span class="material-symbols-rounded">add_circle</span>
                 <span>Nuevo formulario</span>
             </a>
@@ -139,6 +141,10 @@ $isEditorMode = ($mode === 'edit' || $mode === 'new') && is_array($currentForm);
 
     <?php if ($error !== null): ?>
         <div class="form-builder-notice form-builder-notice--error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8'); ?></div>
+    <?php endif; ?>
+
+    <?php if ($writeBlockedMessage !== ''): ?>
+        <div class="form-builder-notice form-builder-notice--error"><?= htmlspecialchars($writeBlockedMessage, ENT_QUOTES, 'UTF-8'); ?></div>
     <?php endif; ?>
 
     <?php if (is_array($notice)): ?>
@@ -185,6 +191,30 @@ function formBuilderFieldTypeIcons(): array
         'phone' => 'call',
         'number' => 'pin',
     ];
+}
+
+function formBuilderBaseUrl(array $toolContext): string
+{
+    $privateBaseUrl = trim((string) ($toolContext['private_base_url'] ?? ''));
+
+    if ($privateBaseUrl !== '') {
+        return $privateBaseUrl;
+    }
+
+    return 'tool.php?launch=' . rawurlencode((string) ($toolContext['launch_token'] ?? ''));
+}
+
+function formBuilderEditorUrl(array $toolContext, array $query = []): string
+{
+    $baseUrl = formBuilderBaseUrl($toolContext);
+
+    if ($query === []) {
+        return $baseUrl;
+    }
+
+    $separator = str_contains($baseUrl, '?') ? '&' : '?';
+
+    return $baseUrl . $separator . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
 }
 
 function formBuilderEmptyForm(): array
@@ -488,8 +518,8 @@ function formBuilderRenderList(array $forms, array $toolContext): string
                                 </td>
                                 <td>
                                     <div class="form-builder-actions">
-                                        <a class="form-builder-secondary" href="tool.php?launch=<?= htmlspecialchars(rawurlencode((string) ($toolContext['launch_token'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>&builder=edit&id=<?= htmlspecialchars(rawurlencode((string) ($form['id'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>">Editar</a>
-                                        <form method="post" action="tool.php?launch=<?= htmlspecialchars(rawurlencode((string) ($toolContext['launch_token'] ?? '')), ENT_QUOTES, 'UTF-8'); ?>">
+                                        <a class="form-builder-secondary" href="<?= htmlspecialchars(formBuilderEditorUrl($toolContext, ['builder' => 'edit', 'id' => (string) ($form['id'] ?? '')]), ENT_QUOTES, 'UTF-8'); ?>">Editar</a>
+                                        <form method="post" action="<?= htmlspecialchars(formBuilderBaseUrl($toolContext), ENT_QUOTES, 'UTF-8'); ?>">
                                             <input type="hidden" name="form_action" value="delete_form">
                                             <input type="hidden" name="form_id" value="<?= htmlspecialchars((string) ($form['id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
                                             <button type="submit" class="form-builder-danger">Eliminar</button>
@@ -524,7 +554,7 @@ function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolCont
     <section class="form-builder-card form-builder-card--canvas">
         <form
             method="post"
-            action="tool.php?launch=<?= htmlspecialchars($launch, ENT_QUOTES, 'UTF-8'); ?>&builder=edit"
+            action="<?= htmlspecialchars(formBuilderEditorUrl($toolContext, ['builder' => 'edit']), ENT_QUOTES, 'UTF-8'); ?>"
             class="form-builder-editor"
             data-form-builder
             data-api-url="<?= htmlspecialchars($apiUrl, ENT_QUOTES, 'UTF-8'); ?>"
@@ -640,7 +670,7 @@ function formBuilderRenderEditor(array $form, array $fieldTypes, array $toolCont
             </div>
 
             <div class="form-builder-footer-actions">
-                <a href="tool.php?launch=<?= htmlspecialchars($launch, ENT_QUOTES, 'UTF-8'); ?>" class="form-builder-secondary">Volver a formularios</a>
+                <a href="<?= htmlspecialchars(formBuilderBaseUrl($toolContext), ENT_QUOTES, 'UTF-8'); ?>" class="form-builder-secondary">Volver a formularios</a>
                 <button type="submit" name="builder_action" value="save" class="form-builder-secondary">Guardar borrador</button>
                 <button type="submit" name="builder_action" value="publish" class="form-builder-primary">Publicar</button>
             </div>

@@ -4,7 +4,7 @@ declare(strict_types=1);
 use AiScaler\Forms\FormRepository;
 
 require_once __DIR__ . '/lib/pwa.php';
-require_once __DIR__ . '/modules/forms/bootstrap.php';
+require_once __DIR__ . '/apps/form-generator/bootstrap.php';
 
 $repository = new FormRepository();
 $action = trim((string) ($_GET['action'] ?? ''));
